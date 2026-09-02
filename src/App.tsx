@@ -1,6 +1,7 @@
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { Toaster } from "@/components/ui/sonner"
-import { AuthProvider, useAuth } from "@/lib/auth"
+import { AuthProvider } from "@/lib/auth"
+import { useAuth } from "@/lib/use-auth"
 import { RouterProvider, useRouter } from "@/lib/router"
 import { AppSidebar } from "@/components/app-sidebar"
 import { AuthScreen } from "@/pages/auth"
@@ -14,6 +15,8 @@ import { ReportsPage } from "@/pages/reports"
 import { ConfigPage } from "@/pages/config"
 import { UsersPage, AuditPage } from "@/pages/admin"
 import { Spinner } from "@/components/ui/spinner"
+import { fetchBusinessSettings, setDocumentTitleFromSettings } from "@/lib/config"
+import * as React from "react"
 
 function RouteRenderer() {
   const { route } = useRouter()
@@ -74,6 +77,12 @@ function AppContent() {
 }
 
 export function App() {
+  React.useEffect(() => {
+    void fetchBusinessSettings().then((settings) => {
+      setDocumentTitleFromSettings(settings)
+    })
+  }, [])
+
   return (
     <AuthProvider>
       <RouterProvider>

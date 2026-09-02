@@ -1,3 +1,4 @@
+import * as React from "react"
 import {
   LayoutDashboard,
   Users,
@@ -24,7 +25,8 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { useRouter, type Route } from "@/lib/router"
-import { useAuth } from "@/lib/auth"
+import { fetchBusinessSettings } from "@/lib/config"
+import { useAuth } from "@/lib/use-auth"
 import { cn } from "@/lib/utils"
 
 interface NavItem {
@@ -73,18 +75,46 @@ function routeMatches(current: Route, item: Route): boolean {
 
 export function AppSidebar() {
   const { route, navigate } = useRouter()
-  const { profile, signOut } = useAuth()
+  const { profile, user, signOut } = useAuth()
+  const [companyName, setCompanyName] = React.useState("Embroidery Shop Manager")
+  const [companyLogo, setCompanyLogo] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    let isMounted = true
+
+    void fetchBusinessSettings().then((settings) => {
+      if (!isMounted) return
+      setCompanyName((settings.company_name || "Embroidery Shop Manager").trim() || "Embroidery Shop Manager")
+      setCompanyLogo(settings.company_logo_data_url || null)
+    })
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  const displayName =
+    profile?.display_name ||
+    user?.user_metadata?.full_name ||
+    user?.email?.split("@")[0] ||
+    "User"
+
+  const userRole = profile?.role || user?.user_metadata?.role || "User"
 
   return (
     <Sidebar>
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-1">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-            <Scissors className="size-5" />
+          <div className="flex size-9 items-center justify-center overflow-hidden rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+            {companyLogo ? (
+              <img src={companyLogo} alt={companyName} className="h-full w-full object-cover" />
+            ) : (
+              <Scissors className="size-5" />
+            )}
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-bold text-sidebar-foreground">Paavai</span>
-            <span className="text-xs text-sidebar-foreground/60">Embroidery Manager</span>
+            <span className="text-sm font-bold text-sidebar-foreground">{companyName}</span>
+            <span className="text-xs text-sidebar-foreground/60">Embroidery Shop Manager</span>
           </div>
         </div>
       </SidebarHeader>
@@ -124,10 +154,10 @@ export function AppSidebar() {
         <div className="flex items-center justify-between gap-2 px-2 py-1">
           <div className="flex min-w-0 flex-col">
             <span className="truncate text-sm font-medium text-sidebar-foreground">
-              {profile?.display_name || "User"}
+              {displayName}
             </span>
             <span className="truncate text-xs text-sidebar-foreground/60">
-              {profile?.role || "—"}
+              {userRole}
             </span>
           </div>
           <button

@@ -1,7 +1,7 @@
 import * as React from "react"
-import { Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react"
+import { Plus, Trash2, ArrowUp, ArrowDown, Building2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import { clearConfigCache } from "@/lib/config"
+import { BUSINESS_PROFILE_FIELDS, clearConfigCache, fetchBusinessSettings, saveBusinessSettings, setDocumentTitleFromSettings } from "@/lib/config"
 import type { ConfigItem } from "@/lib/types"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
@@ -39,16 +39,71 @@ const CATEGORIES = [
   { key: "operator", label: "Operators" },
 ]
 
+const profileFields = [
+  { key: "company_name", label: "Company Name" },
+  { key: "company_tagline", label: "Tagline" },
+  { key: "company_email", label: "Business Email" },
+  { key: "company_phone", label: "Phone" },
+  { key: "company_website", label: "Website" },
+  { key: "company_gst_number", label: "GST Number" },
+  { key: "company_address", label: "Address" },
+  { key: "company_city", label: "City" },
+  { key: "company_state", label: "State" },
+  { key: "company_pincode", label: "Pincode" },
+] as const
+
 export function ConfigPage() {
   const [activeCategory, setActiveCategory] = React.useState("order_status")
   const [items, setItems] = React.useState<ConfigItem[]>([])
   const [loading, setLoading] = React.useState(true)
   const [showAdd, setShowAdd] = React.useState(false)
   const [newName, setNewName] = React.useState("")
+  const [profile, setProfile] = React.useState<Record<string, string>>({})
+  const [savingProfile, setSavingProfile] = React.useState(false)
 
   React.useEffect(() => {
     loadItems()
+    loadBusinessProfile()
   }, [activeCategory])
+
+  async function loadBusinessProfile() {
+    const settings = await fetchBusinessSettings()
+    const nextProfile: Record<string, string> = {}
+    for (const field of BUSINESS_PROFILE_FIELDS) {
+      nextProfile[field] = settings[field] || ""
+    }
+    setProfile(nextProfile)
+  }
+
+  async function handleSaveProfile() {
+    setSavingProfile(true)
+    try {
+      await saveBusinessSettings(profile)
+      setDocumentTitleFromSettings(profile)
+      toast.success("Business profile saved")
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to save business profile")
+    } finally {
+      setSavingProfile(false)
+    }
+  }
+
+  function handleProfileChange(key: string, value: string) {
+    setProfile((current) => ({ ...current, [key]: value }))
+  }
+
+  function handleLogoUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : ""
+      setProfile((current) => ({ ...current, company_logo_data_url: result }))
+    }
+    reader.readAsDataURL(file)
+  }
 
   async function loadItems() {
     setLoading(true)
@@ -134,6 +189,59 @@ export function ConfigPage() {
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
       <PageHeader title="Configuration" description="Manage dropdown values and business settings" />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="size-4" /> Business Profile
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="md:col-span-2 xl:col-span-3 flex items-center gap-4 rounded-lg border bg-muted/30 p-4">
+              <div className="flex size-20 items-center justify-center overflow-hidden rounded-lg border bg-background">
+                {profile.company_logo_data_url ? (
+                  <img src={profile.company_logo_data_url} alt="Company logo" className="h-full w-full object-cover" />
+                ) : (
+                  <Building2 className="size-8 text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="company-logo-upload">Company Logo</Label>
+                <div className="flex items-center gap-2">
+                  <Input id="company-logo-upload" type="file" accept="image/*" onChange={handleLogoUpload} className="max-w-xs" />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setProfile((current) => ({ ...current, company_logo_data_url: "" }))}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {profileFields.map((field) => (
+              <div key={field.key} className="space-y-2">
+                <Label htmlFor={field.key}>{field.label}</Label>
+                <Input
+                  id={field.key}
+                  value={profile[field.key] || ""}
+                  onChange={(e) => handleProfileChange(field.key, e.target.value)}
+                  placeholder={field.label}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-end">
+            <Button onClick={handleSaveProfile} disabled={savingProfile}>
+              {savingProfile ? "Saving..." : "Save Business Profile"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="flex flex-wrap gap-2">
         {CATEGORIES.map((c) => (

@@ -1,7 +1,7 @@
 import * as React from "react"
 import { Search, Plus, Pencil } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import { useAuth } from "@/lib/auth"
+import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
 import {
   formatCurrency,

@@ -1,7 +1,7 @@
 import * as React from "react"
 import { Plus, Search, Pencil, Trash2, Phone, Mail, MapPin, Archive, ArchiveRestore } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import { useAuth } from "@/lib/auth"
+import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
 import { formatCurrency, formatDate, generateCustomerCode } from "@/lib/helpers"
 import type { Customer, Order, OrderItem, Payment } from "@/lib/types"

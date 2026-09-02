@@ -1,7 +1,7 @@
 import * as React from "react"
 import { Plus, Shield } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import { useAuth } from "@/lib/auth"
+import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
 import { formatDateTime } from "@/lib/helpers"
 import type { UserProfile, UserRole, AuditLog } from "@/lib/types"

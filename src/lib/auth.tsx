@@ -3,7 +3,7 @@ import type { Session, User } from "@supabase/supabase-js"
 import { supabase } from "./supabase"
 import type { UserProfile, UserRole } from "./types"
 
-interface AuthContextValue {
+export interface AuthContextValue {
   session: Session | null
   user: User | null
   profile: UserProfile | null
@@ -19,7 +19,7 @@ interface AuthContextValue {
   refreshProfile: () => Promise<void>
 }
 
-const AuthContext = React.createContext<AuthContextValue | undefined>(undefined)
+export const AuthContext = React.createContext<AuthContextValue | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = React.useState<Session | null>(null)
@@ -128,8 +128,3 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
-export function useAuth() {
-  const ctx = React.useContext(AuthContext)
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider")
-  return ctx
-}
