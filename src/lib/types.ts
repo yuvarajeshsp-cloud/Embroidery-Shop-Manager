@@ -89,40 +89,6 @@ export interface Payment {
   updated_by: string | null
 }
 
-export interface ProductionRecord {
-  id: string
-  order_id: string
-  assigned_operator: string
-  overall_stage: string
-  design_received_date: string | null
-  digitizing_status: string
-  digitizing_date: string | null
-  sampling_status: string
-  sample_approval_date: string | null
-  production_status: string
-  production_start_date: string | null
-  production_complete_date: string | null
-  qc_status: string
-  packing_status: string
-  delivery_status: string
-  remarks: string | null
-  is_active: boolean
-  created_at: string
-  updated_at: string
-  updated_by: string | null
-}
-
-export interface ProductionStageHistory {
-  id: string
-  production_id: string
-  field_name: string
-  previous_value: string | null
-  new_value: string | null
-  changed_by: string | null
-  changed_at: string
-  reason: string | null
-}
-
 export interface AuditLog {
   id: string
   user_id: string | null
@@ -173,7 +139,6 @@ export interface OrderWithDetails extends Order {
   customer?: Customer
   order_items?: OrderItem[]
   payments?: Payment[]
-  production_records?: ProductionRecord[]
 }
 
 export interface PaymentWithRelations extends Payment {

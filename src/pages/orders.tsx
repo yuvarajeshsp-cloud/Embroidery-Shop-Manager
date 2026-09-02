@@ -18,7 +18,7 @@ import {
   derivePaymentStatus,
   isOverdue,
 } from "@/lib/helpers"
-import type { Order, OrderItem, Payment, Customer, ProductionRecord } from "@/lib/types"
+import type { Order, OrderItem, Payment, Customer } from "@/lib/types"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -228,7 +228,6 @@ export function OrderDetailPage({ id }: { id: string }) {
   const [customer, setCustomer] = React.useState<Customer | null>(null)
   const [items, setItems] = React.useState<OrderItem[]>([])
   const [payments, setPayments] = React.useState<Payment[]>([])
-  const [, setProduction] = React.useState<ProductionRecord[]>([])
   const [loading, setLoading] = React.useState(true)
   const [editingItem, setEditingItem] = React.useState<OrderItem | null>(null)
   const [showItemForm, setShowItemForm] = React.useState(false)
@@ -249,16 +248,14 @@ export function OrderDetailPage({ id }: { id: string }) {
     if (!orderData) { setLoading(false); return }
     setOrder(orderData as Order)
 
-    const [custRes, itemsRes, payRes, prodRes] = await Promise.all([
+    const [custRes, itemsRes, payRes] = await Promise.all([
       supabase.from("customers").select("*").eq("id", orderData.customer_id).maybeSingle(),
       supabase.from("order_items").select("*").eq("order_id", id).order("item_number"),
       supabase.from("payments").select("*").eq("order_id", id).order("payment_date", { ascending: false }),
-      supabase.from("production_records").select("*").eq("order_id", id),
     ])
     setCustomer(custRes.data as Customer | null)
     setItems(itemsRes.data || [])
     setPayments(payRes.data || [])
-    setProduction(prodRes.data || [])
     setLoading(false)
   }
 

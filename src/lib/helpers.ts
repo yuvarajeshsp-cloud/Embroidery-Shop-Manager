@@ -1,9 +1,4 @@
-import type {
-  OrderItem,
-  Payment,
-  ProductionRecord,
-  ProductionStageHistory,
-} from "./types"
+import type { OrderItem, Payment } from "./types"
 
 export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-IN", {
@@ -128,65 +123,3 @@ export function generateTaskNumber(): string {
   return `PRD-${year}-${random}`
 }
 
-export function productionStages(): string[] {
-  return [
-    "Not Scheduled",
-    "Digitizing",
-    "Confirmation",
-    "Production",
-    "Quality Check",
-    "Ready for Delivery",
-    "Delivered",
-  ]
-}
-
-export function stageFields(): { key: string; label: string; dateKey: string | null }[] {
-  return [
-    { key: "digitizing_status", label: "Digitizing", dateKey: "digitizing_date" },
-    { key: "sampling_status", label: "Sampling", dateKey: "sample_approval_date" },
-    { key: "production_status", label: "Production", dateKey: "production_start_date" },
-    { key: "qc_status", label: "Quality Check", dateKey: null },
-    { key: "packing_status", label: "Packing", dateKey: null },
-    { key: "delivery_status", label: "Delivery", dateKey: null },
-  ]
-}
-
-export function stageToOverallStage(record: ProductionRecord): string {
-  const stages = stageFields()
-  for (const stage of stages) {
-    const status = record[stage.key as keyof ProductionRecord] as string
-    if (
-      status === "In Progress" ||
-      status === "Waiting" ||
-      (status === "Not Started" && stage.key === "digitizing_status")
-    ) {
-      if (status === "In Progress") return stage.label
-      if (status === "Waiting") return stage.label
-    }
-  }
-  if (record.delivery_status === "Completed") return "Delivered"
-  if (record.packing_status === "Completed") return "Ready for Delivery"
-  if (record.qc_status === "Completed") return "Quality Check"
-  if (record.production_status === "Completed") return "Quality Check"
-  if (record.production_status === "In Progress") return "Production"
-  if (record.sampling_status === "In Progress") return "Confirmation"
-  if (record.sampling_status === "Completed") return "Production"
-  if (record.digitizing_status === "In Progress") return "Digitizing"
-  if (record.digitizing_status === "Completed") return "Confirmation"
-  return "Not Scheduled"
-}
-
-export function summarizeStageHistory(
-  history: ProductionStageHistory[],
-): { field: string; previous: string; newValue: string; changedAt: string; reason: string | null }[] {
-  return history
-    .slice()
-    .sort((a, b) => new Date(b.changed_at).getTime() - new Date(a.changed_at).getTime())
-    .map((h) => ({
-      field: h.field_name,
-      previous: h.previous_value || "—",
-      newValue: h.new_value || "—",
-      changedAt: h.changed_at,
-      reason: h.reason,
-    }))
-}

@@ -3,6 +3,8 @@ import type { ConfigItem } from "./types"
 
 const cache = new Map<string, ConfigItem[]>()
 
+export const PRODUCTION_BOARD_STAGE_CATEGORY = "production_board_stage"
+
 export const BUSINESS_PROFILE_FIELDS = [
   "company_name",
   "company_tagline",

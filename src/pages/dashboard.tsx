@@ -2,7 +2,7 @@ import * as React from "react"
 import { Link2, TrendingUp, AlertTriangle, Clock, Package, IndianRupee } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { formatCurrency, formatDate, isOverdue, isDueSoon, orderAmountPaid, orderBalanceDue } from "@/lib/helpers"
-import type { Order, OrderItem, Payment, Customer, ProductionRecord } from "@/lib/types"
+import type { Order, OrderItem, Payment, Customer } from "@/lib/types"
 import { PageHeader } from "@/components/page-header"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
@@ -38,12 +38,11 @@ export function DashboardPage() {
   async function loadDashboard() {
     setLoading(true)
     try {
-      const [ordersRes, customersRes, itemsRes, paymentsRes, productionRes] = await Promise.all([
+      const [ordersRes, customersRes, itemsRes, paymentsRes] = await Promise.all([
         supabase.from("orders").select("*").order("created_at", { ascending: false }),
         supabase.from("customers").select("*"),
         supabase.from("order_items").select("*"),
         supabase.from("payments").select("*").eq("payment_status", "Completed"),
-        supabase.from("production_records").select("*").eq("is_active", true),
       ])
 
       const orders = (ordersRes.data || []) as Order[]
@@ -83,9 +82,7 @@ export function DashboardPage() {
 
       const overdueOrders = activeOrders.filter((o) => isOverdue(o.required_date))
       const dueSoonOrders = activeOrders.filter((o) => isDueSoon(o.required_date) && !isOverdue(o.required_date))
-      const inProduction = (productionRes.data || []).filter(
-        (p: ProductionRecord) => p.overall_stage !== "Delivered" && p.overall_stage !== "Not Scheduled",
-      )
+      const inProduction = orders.filter((o) => o.order_status === "In Production")
 
       const recentOrders = orders.slice(0, 5).map((o) => ({
         ...o,

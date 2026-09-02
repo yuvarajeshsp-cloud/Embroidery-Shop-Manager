@@ -1,7 +1,7 @@
 import * as React from "react"
 import { Plus, Trash2, ArrowUp, ArrowDown, Building2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import { BUSINESS_PROFILE_FIELDS, clearConfigCache, fetchBusinessSettings, saveBusinessSettings, setDocumentTitleFromSettings } from "@/lib/config"
+import { BUSINESS_PROFILE_FIELDS, PRODUCTION_BOARD_STAGE_CATEGORY, clearConfigCache, fetchBusinessSettings, saveBusinessSettings, setDocumentTitleFromSettings } from "@/lib/config"
 import type { ConfigItem } from "@/lib/types"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
@@ -24,20 +24,32 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
 
+const PRODUCTION_BOARD_CATEGORY = PRODUCTION_BOARD_STAGE_CATEGORY
+
 const CATEGORIES = [
   { key: "order_status", label: "Order Statuses" },
+  { key: PRODUCTION_BOARD_CATEGORY, label: "Production Stages" },
   { key: "payment_status", label: "Payment Statuses" },
   { key: "priority", label: "Priorities" },
-  { key: "production_stage", label: "Production Stages" },
-  { key: "stage_status", label: "Stage Statuses" },
   { key: "payment_method", label: "Payment Methods" },
   { key: "customer_type", label: "Customer Types" },
   { key: "product_type", label: "Product Types" },
-  { key: "operator", label: "Operators" },
 ]
+
+const CATEGORY_DESCRIPTIONS: Record<string, string> = {
+  [PRODUCTION_BOARD_CATEGORY]:
+    "Pick which order statuses show up as columns on the Production Board, and in what order. Manage the full status list itself under Order Statuses.",
+}
 
 const profileFields = [
   { key: "company_name", label: "Company Name" },
@@ -60,11 +72,24 @@ export function ConfigPage() {
   const [newName, setNewName] = React.useState("")
   const [profile, setProfile] = React.useState<Record<string, string>>({})
   const [savingProfile, setSavingProfile] = React.useState(false)
+  const [orderStatusNames, setOrderStatusNames] = React.useState<string[]>([])
+
+  const isProductionBoardCategory = activeCategory === PRODUCTION_BOARD_CATEGORY
 
   React.useEffect(() => {
     loadItems()
     loadBusinessProfile()
+    if (activeCategory === PRODUCTION_BOARD_CATEGORY) loadOrderStatusNames()
   }, [activeCategory])
+
+  async function loadOrderStatusNames() {
+    const { data } = await supabase
+      .from("config_items")
+      .select("name")
+      .eq("category", "order_status")
+      .order("sort_order")
+    setOrderStatusNames((data || []).map((r: { name: string }) => r.name))
+  }
 
   async function loadBusinessProfile() {
     const settings = await fetchBusinessSettings()
@@ -258,8 +283,13 @@ export function ConfigPage() {
 
       <Card>
         <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>{activeLabel}</CardTitle>
-          <Button size="sm" onClick={() => setShowAdd(true)}>
+          <div>
+            <CardTitle>{activeLabel}</CardTitle>
+            {CATEGORY_DESCRIPTIONS[activeCategory] && (
+              <p className="mt-1 text-sm text-muted-foreground">{CATEGORY_DESCRIPTIONS[activeCategory]}</p>
+            )}
+          </div>
+          <Button size="sm" onClick={() => { setNewName(""); setShowAdd(true) }}>
             <Plus className="size-4" /> Add Value
           </Button>
         </CardHeader>
@@ -321,17 +351,42 @@ export function ConfigPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add {activeLabel}</DialogTitle>
-              <DialogDescription>Enter a new value for this category</DialogDescription>
+              <DialogDescription>
+                {isProductionBoardCategory
+                  ? "Choose an order status to show as a column on the Production Board"
+                  : "Enter a new value for this category"}
+              </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-2 py-2">
-              <Label>Value Name</Label>
-              <Input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="e.g. New Status, New Product Type..."
-                autoFocus
-                onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-              />
+              {isProductionBoardCategory ? (
+                <>
+                  <Label>Order Status</Label>
+                  <Select value={newName} onValueChange={setNewName}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Select a status..." /></SelectTrigger>
+                    <SelectContent>
+                      {orderStatusNames
+                        .filter((name) => !items.some((i) => i.name === name))
+                        .map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {orderStatusNames.filter((name) => !items.some((i) => i.name === name)).length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      All order statuses are already on the board. Add more under Order Statuses first.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Label>Value Name</Label>
+                  <Input
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="e.g. New Status, New Product Type..."
+                    autoFocus
+                    onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+                  />
+                </>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
