@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Search, Plus, Pencil } from "lucide-react"
+import { Search, Plus, Pencil, Download } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
@@ -9,6 +9,8 @@ import {
   generatePaymentNumber,
 } from "@/lib/helpers"
 import type { Payment, Order, Customer } from "@/lib/types"
+import type { ExportField } from "@/lib/export"
+import { computeDateRange, isWithinRange, type DateRangePreset } from "@/lib/date-range"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -42,17 +44,32 @@ import { Badge } from "@/components/ui/badge"
 import { useRouter } from "@/lib/router"
 import { fetchConfigItems } from "@/lib/config"
 import { toast } from "sonner"
+import { MultiSelectFilter } from "@/components/multi-select-filter"
+import { DateRangeFilter } from "@/components/date-range-filter"
+import { ExportDialog } from "@/components/export-dialog"
+
+const PAYMENT_STATUSES = ["Completed", "Pending", "Reversed", "Refunded"]
+
+type EnrichedPayment = Payment & { order?: Order; customer?: Customer }
 
 export function PaymentsPage() {
   const { navigate } = useRouter()
-  const [payments, setPayments] = React.useState<(Payment & { order?: Order; customer?: Customer })[]>([])
+  const [payments, setPayments] = React.useState<EnrichedPayment[]>([])
   const [loading, setLoading] = React.useState(true)
   const [search, setSearch] = React.useState("")
-  const [statusFilter, setStatusFilter] = React.useState("all")
+  const [statusFilter, setStatusFilter] = React.useState<Set<string>>(new Set())
+  const [methodFilter, setMethodFilter] = React.useState<Set<string>>(new Set())
+  const [customerFilter, setCustomerFilter] = React.useState<Set<string>>(new Set())
+  const [paymentMethods, setPaymentMethods] = React.useState<string[]>([])
+  const [datePreset, setDatePreset] = React.useState<DateRangePreset>("all_time")
+  const [customFrom, setCustomFrom] = React.useState("")
+  const [customTo, setCustomTo] = React.useState("")
+  const [showExport, setShowExport] = React.useState(false)
   const [showForm, setShowForm] = React.useState(false)
   const [editing, setEditing] = React.useState<Payment | null>(null)
 
   React.useEffect(() => {
+    fetchConfigItems("payment_method").then((items) => setPaymentMethods(items.map((i) => i.name)))
     loadPayments()
   }, [])
 
@@ -85,25 +102,56 @@ export function PaymentsPage() {
     setLoading(false)
   }
 
+  const dateRange = computeDateRange(datePreset, customFrom, customTo)
+
+  const customerOptions = React.useMemo(() => {
+    const map = new Map<string, string>()
+    for (const p of payments) {
+      if (p.customer) map.set(p.customer.id, `${p.customer.customer_business_name} (${p.customer.customer_code})`)
+    }
+    return [...map.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [payments])
+
   const filtered = payments.filter((p) => {
     const matchesSearch =
       !search ||
       p.payment_number.toLowerCase().includes(search.toLowerCase()) ||
       (p.customer?.customer_business_name || "").toLowerCase().includes(search.toLowerCase()) ||
       (p.order?.order_number || "").toLowerCase().includes(search.toLowerCase())
-    const matchesStatus = statusFilter === "all" || p.payment_status === statusFilter
-    return matchesSearch && matchesStatus
+    const matchesStatus = statusFilter.size === 0 || statusFilter.has(p.payment_status)
+    const matchesMethod = methodFilter.size === 0 || methodFilter.has(p.payment_method)
+    const matchesCustomer = customerFilter.size === 0 || customerFilter.has(p.customer_id)
+    const matchesDate = isWithinRange(p.payment_date, dateRange)
+    return matchesSearch && matchesStatus && matchesMethod && matchesCustomer && matchesDate
   })
+
+  const paymentExportFields: ExportField<EnrichedPayment>[] = [
+    { key: "payment_number", label: "Payment Number", value: (p) => p.payment_number },
+    { key: "payment_date", label: "Payment Date", value: (p) => formatDate(p.payment_date) },
+    { key: "order_number", label: "Order Number", value: (p) => p.order?.order_number || "" },
+    { key: "customer", label: "Customer", value: (p) => p.customer?.customer_business_name || "" },
+    { key: "customer_code", label: "Customer Code", value: (p) => p.customer?.customer_code || "" },
+    { key: "payment_method", label: "Payment Method", value: (p) => p.payment_method },
+    { key: "amount", label: "Amount", value: (p) => p.amount },
+    { key: "payment_status", label: "Status", value: (p) => p.payment_status },
+    { key: "transaction_reference", label: "Transaction Reference", value: (p) => p.transaction_reference || "" },
+    { key: "notes", label: "Notes", value: (p) => p.notes || "" },
+  ]
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
       <PageHeader title="Payments" description="Track all customer payments">
+        <Button variant="outline" size="sm" onClick={() => setShowExport(true)}>
+          <Download className="size-4" /> Export
+        </Button>
         <Button size="sm" onClick={() => { setEditing(null); setShowForm(true) }}>
           <Plus className="size-4" /> Record Payment
         </Button>
       </PageHeader>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -113,18 +161,32 @@ export function PaymentsPage() {
             className="pl-9"
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="All Statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="Completed">Completed</SelectItem>
-            <SelectItem value="Pending">Pending</SelectItem>
-            <SelectItem value="Reversed">Reversed</SelectItem>
-            <SelectItem value="Refunded">Refunded</SelectItem>
-          </SelectContent>
-        </Select>
+        <MultiSelectFilter
+          label="Status"
+          options={PAYMENT_STATUSES.map((s) => ({ value: s, label: s }))}
+          selected={statusFilter}
+          onChange={setStatusFilter}
+        />
+        <MultiSelectFilter
+          label="Method"
+          options={paymentMethods.map((m) => ({ value: m, label: m }))}
+          selected={methodFilter}
+          onChange={setMethodFilter}
+        />
+        <MultiSelectFilter
+          label="Customer"
+          options={customerOptions}
+          selected={customerFilter}
+          onChange={setCustomerFilter}
+        />
+        <DateRangeFilter
+          preset={datePreset}
+          onPresetChange={setDatePreset}
+          customFrom={customFrom}
+          customTo={customTo}
+          onCustomFromChange={setCustomFrom}
+          onCustomToChange={setCustomTo}
+        />
       </div>
 
       <Card>
@@ -184,6 +246,16 @@ export function PaymentsPage() {
           onSaved={() => { setShowForm(false); loadPayments() }}
         />
       )}
+
+      <ExportDialog
+        open={showExport}
+        onOpenChange={setShowExport}
+        title="Export Payments"
+        filename="payments"
+        sheetName="Payments"
+        rows={filtered}
+        fields={paymentExportFields}
+      />
     </div>
   )
 }
@@ -238,7 +310,7 @@ function PaymentForm({
       toast.error("Please select an order")
       return
     }
-    if (form.amount <= 0) {
+    if (!form.amount || form.amount <= 0) {
       toast.error("Amount must be greater than 0")
       return
     }
@@ -315,8 +387,8 @@ function PaymentForm({
               <Input
                 type="number"
                 step="0.01"
-                value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: parseFloat(e.target.value) || 0 })}
+                value={Number.isNaN(form.amount) ? "" : form.amount}
+                onChange={(e) => setForm({ ...form, amount: e.target.value === "" ? NaN : parseFloat(e.target.value) })}
               />
             </div>
           </div>

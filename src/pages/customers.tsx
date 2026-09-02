@@ -1,10 +1,13 @@
 import * as React from "react"
-import { Plus, Search, Pencil, Trash2, Phone, Mail, MapPin, Archive, ArchiveRestore } from "lucide-react"
+import { Download, Plus, Search, Pencil, Trash2, Phone, Mail, MapPin, Archive, ArchiveRestore } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
 import { formatCurrency, formatDate, generateCustomerCode } from "@/lib/helpers"
 import type { Customer, Order, OrderItem, Payment } from "@/lib/types"
+import type { ExportField } from "@/lib/export"
+import { ExportDialog } from "@/components/export-dialog"
+import { MultiSelectFilter } from "@/components/multi-select-filter"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -45,11 +48,12 @@ export function CustomersPage() {
   const [customers, setCustomers] = React.useState<Customer[]>([])
   const [loading, setLoading] = React.useState(true)
   const [search, setSearch] = React.useState("")
-  const [typeFilter, setTypeFilter] = React.useState<string>("all")
+  const [typeFilter, setTypeFilter] = React.useState<Set<string>>(new Set())
   const [customerTypes, setCustomerTypes] = React.useState<string[]>([])
   const [showArchived, setShowArchived] = React.useState(false)
   const [editing, setEditing] = React.useState<Customer | null>(null)
   const [showForm, setShowForm] = React.useState(false)
+  const [showExport, setShowExport] = React.useState(false)
 
   React.useEffect(() => {
     fetchConfigItems("customer_type").then((items) =>
@@ -81,9 +85,25 @@ export function CustomersPage() {
       c.customer_code.toLowerCase().includes(search.toLowerCase()) ||
       (c.contact_person || "").toLowerCase().includes(search.toLowerCase()) ||
       (c.phone || "").includes(search)
-    const matchesType = typeFilter === "all" || c.customer_type === typeFilter
+    const matchesType = typeFilter.size === 0 || typeFilter.has(c.customer_type)
     return matchesSearch && matchesType
   })
+
+  const customerExportFields: ExportField<Customer>[] = [
+    { key: "customer_code", label: "Customer Code", value: (c) => c.customer_code },
+    { key: "customer_business_name", label: "Business Name", value: (c) => c.customer_business_name },
+    { key: "contact_person", label: "Contact Person", value: (c) => c.contact_person || "" },
+    { key: "phone", label: "Phone", value: (c) => c.phone || "" },
+    { key: "whatsapp", label: "WhatsApp", value: (c) => c.whatsapp || "" },
+    { key: "email", label: "Email", value: (c) => c.email || "" },
+    { key: "customer_type", label: "Customer Type", value: (c) => c.customer_type },
+    { key: "gst_tax_number", label: "GST/Tax Number", value: (c) => c.gst_tax_number || "" },
+    { key: "billing_address", label: "Billing Address", value: (c) => c.billing_address || "" },
+    { key: "delivery_address", label: "Delivery Address", value: (c) => c.delivery_address || "" },
+    { key: "date_added", label: "Date Added", value: (c) => formatDate(c.date_added) },
+    { key: "notes", label: "Notes", value: (c) => c.notes || "" },
+    { key: "archived", label: "Archived", value: (c) => (c.archived ? "Yes" : "No") },
+  ]
 
   function handleNew() {
     setEditing(null)
@@ -122,13 +142,17 @@ export function CustomersPage() {
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
       <PageHeader title="Customers" description="Manage your customer database">
+        <Button variant="outline" onClick={() => setShowExport(true)} size="sm">
+          <Download className="size-4" />
+          Export
+        </Button>
         <Button onClick={handleNew} size="sm">
           <Plus className="size-4" />
           New Customer
         </Button>
       </PageHeader>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -138,17 +162,12 @@ export function CustomersPage() {
             className="pl-9"
           />
         </div>
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="All Types" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            {customerTypes.map((t) => (
-              <SelectItem key={t} value={t}>{t}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <MultiSelectFilter
+          label="Type"
+          options={customerTypes.map((t) => ({ value: t, label: t }))}
+          selected={typeFilter}
+          onChange={setTypeFilter}
+        />
         <Button
           variant={showArchived ? "default" : "outline"}
           onClick={() => {
@@ -227,6 +246,16 @@ export function CustomersPage() {
           }}
         />
       )}
+
+      <ExportDialog
+        open={showExport}
+        onOpenChange={setShowExport}
+        title="Export Customers"
+        filename="customers"
+        sheetName="Customers"
+        rows={filtered}
+        fields={customerExportFields}
+      />
     </div>
   )
 }
@@ -245,7 +274,7 @@ function CustomerForm({
   const { profile } = useAuth()
   const [saving, setSaving] = React.useState(false)
   const [form, setForm] = React.useState({
-    customer_code: customer?.customer_code || generateCustomerCode("CUS"),
+    customer_code: customer?.customer_code || "",
     customer_business_name: customer?.customer_business_name || "",
     contact_person: customer?.contact_person || "",
     phone: customer?.phone || "",
@@ -257,6 +286,12 @@ function CustomerForm({
     gst_tax_number: customer?.gst_tax_number || "",
     notes: customer?.notes || "",
   })
+
+  React.useEffect(() => {
+    if (!customer) {
+      generateCustomerCode().then((code) => setForm((f) => ({ ...f, customer_code: code })))
+    }
+  }, [customer])
 
   async function handleSave() {
     if (!form.customer_business_name.trim()) {
@@ -274,13 +309,26 @@ function CustomerForm({
         await logAudit(profile, "customers", customer.id, "UPDATE", customer as unknown as Record<string, unknown>, form as unknown as Record<string, unknown>)
         toast.success("Customer updated")
       } else {
-        const { data, error } = await supabase
-          .from("customers")
-          .insert({ ...form, created_by: profile?.id, updated_by: profile?.id })
-          .select()
-          .single()
-        if (error) throw error
-        await logAudit(profile, "customers", data.id, "INSERT", null, form as unknown as Record<string, unknown>)
+        let code = form.customer_code
+        let data
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const { data: insertData, error } = await supabase
+            .from("customers")
+            .insert({ ...form, customer_code: code, created_by: profile?.id, updated_by: profile?.id })
+            .select()
+            .single()
+          if (!error) {
+            data = insertData
+            break
+          }
+          if (error.code === "23505" && attempt === 0) {
+            code = await generateCustomerCode()
+            continue
+          }
+          throw error
+        }
+        if (!data) throw new Error("Failed to create customer")
+        await logAudit(profile, "customers", data.id, "INSERT", null, { ...form, customer_code: code } as unknown as Record<string, unknown>)
         toast.success("Customer created")
       }
       onSaved()
@@ -307,7 +355,9 @@ function CustomerForm({
               <Label>Customer Code</Label>
               <Input
                 value={form.customer_code}
-                onChange={(e) => setForm({ ...form, customer_code: e.target.value })}
+                placeholder={form.customer_code ? undefined : "Generating..."}
+                disabled
+                readOnly
               />
             </div>
             <div className="flex flex-col gap-2">

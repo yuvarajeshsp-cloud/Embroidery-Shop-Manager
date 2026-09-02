@@ -44,6 +44,7 @@ const CATEGORIES = [
   { key: "payment_method", label: "Payment Methods" },
   { key: "customer_type", label: "Customer Types" },
   { key: "product_type", label: "Product Types" },
+  { key: "sales_channel", label: "Sales Channels" },
 ]
 
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {

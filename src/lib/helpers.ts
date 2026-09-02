@@ -1,3 +1,4 @@
+import { supabase } from "./supabase"
 import type { OrderItem, Payment } from "./types"
 
 export function formatCurrency(amount: number): string {
@@ -99,10 +100,24 @@ export function derivePaymentStatus(
   return "Part Paid"
 }
 
-export function generateOrderNumber(): string {
+export async function generateOrderNumber(): Promise<string> {
   const year = new Date().getFullYear()
-  const random = Math.floor(1000 + Math.random() * 9000)
-  return `ORD-${year}-${random}`
+  const prefix = `ORD-${year}-`
+
+  const { data, error } = await supabase
+    .from("orders")
+    .select("order_number")
+    .ilike("order_number", `${prefix}%`)
+    .order("order_number", { ascending: false })
+    .limit(1)
+
+  let next = 1
+  if (!error && data && data.length > 0) {
+    const lastSeq = parseInt(data[0].order_number.slice(prefix.length), 10)
+    if (!isNaN(lastSeq)) next = lastSeq + 1
+  }
+
+  return `${prefix}${String(next).padStart(4, "0")}`
 }
 
 export function generatePaymentNumber(): string {
@@ -111,10 +126,23 @@ export function generatePaymentNumber(): string {
   return `PAY-${year}-${random}`
 }
 
-export function generateCustomerCode(name: string): string {
-  const prefix = name.substring(0, 3).toUpperCase().replace(/[^A-Z]/g, "X")
-  const random = Math.floor(100 + Math.random() * 900)
-  return `${prefix}${random}`
+export async function generateCustomerCode(): Promise<string> {
+  const prefix = "CUST-"
+
+  const { data, error } = await supabase
+    .from("customers")
+    .select("customer_code")
+    .ilike("customer_code", `${prefix}%`)
+    .order("customer_code", { ascending: false })
+    .limit(1)
+
+  let next = 1001
+  if (!error && data && data.length > 0) {
+    const lastSeq = parseInt(data[0].customer_code.slice(prefix.length), 10)
+    if (!isNaN(lastSeq)) next = lastSeq + 1
+  }
+
+  return `${prefix}${String(next).padStart(4, "0")}`
 }
 
 export function generateTaskNumber(): string {

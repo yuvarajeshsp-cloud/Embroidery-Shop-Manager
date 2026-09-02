@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Plus, Search, Pencil, Trash2, FileDown, Share2 } from "lucide-react"
+import { Download, Plus, Search, Pencil, Trash2, FileDown, Share2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
@@ -19,6 +19,8 @@ import {
   isOverdue,
 } from "@/lib/helpers"
 import type { Order, OrderItem, Payment, Customer } from "@/lib/types"
+import type { ExportField } from "@/lib/export"
+import { computeDateRange, isWithinRange, type DateRangePreset } from "@/lib/date-range"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -55,18 +57,34 @@ import { useRouter } from "@/lib/router"
 import { fetchConfigItems, getDefaultStitchRate } from "@/lib/config"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { MultiSelectFilter } from "@/components/multi-select-filter"
+import { DateRangeFilter } from "@/components/date-range-filter"
+import { ExportDialog } from "@/components/export-dialog"
+
+type EnrichedOrder = Order & { customer?: Customer; order_items?: OrderItem[]; payments?: Payment[] }
 
 export function OrdersPage() {
   const { navigate } = useRouter()
-  const [orders, setOrders] = React.useState<(Order & { customer?: Customer; order_items?: OrderItem[]; payments?: Payment[] })[]>([])
+  const [orders, setOrders] = React.useState<EnrichedOrder[]>([])
   const [loading, setLoading] = React.useState(true)
   const [search, setSearch] = React.useState("")
-  const [statusFilter, setStatusFilter] = React.useState("all")
+  const [statusFilter, setStatusFilter] = React.useState<Set<string>>(new Set())
+  const [priorityFilter, setPriorityFilter] = React.useState<Set<string>>(new Set())
+  const [customerFilter, setCustomerFilter] = React.useState<Set<string>>(new Set())
+  const [channelFilter, setChannelFilter] = React.useState<Set<string>>(new Set())
   const [showArchived, setShowArchived] = React.useState(false)
   const [orderStatuses, setOrderStatuses] = React.useState<string[]>([])
+  const [priorities, setPriorities] = React.useState<string[]>([])
+  const [salesChannels, setSalesChannels] = React.useState<string[]>([])
+  const [datePreset, setDatePreset] = React.useState<DateRangePreset>("all_time")
+  const [customFrom, setCustomFrom] = React.useState("")
+  const [customTo, setCustomTo] = React.useState("")
+  const [showExport, setShowExport] = React.useState(false)
 
   React.useEffect(() => {
     fetchConfigItems("order_status").then((items) => setOrderStatuses(items.map((i) => i.name)))
+    fetchConfigItems("priority").then((items) => setPriorities(items.map((i) => i.name)))
+    fetchConfigItems("sales_channel").then((items) => setSalesChannels(items.map((i) => i.name)))
     loadOrders()
   }, [])
 
@@ -109,25 +127,62 @@ export function OrdersPage() {
     setLoading(false)
   }
 
+  const dateRange = computeDateRange(datePreset, customFrom, customTo)
+
+  const customerOptions = React.useMemo(() => {
+    const map = new Map<string, string>()
+    for (const o of orders) {
+      if (o.customer) map.set(o.customer.id, `${o.customer.customer_business_name} (${o.customer.customer_code})`)
+    }
+    return [...map.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [orders])
+
   const filtered = orders.filter((o) => {
     const matchesSearch =
       !search ||
       o.order_number.toLowerCase().includes(search.toLowerCase()) ||
       (o.customer?.customer_business_name || "").toLowerCase().includes(search.toLowerCase())
-    const matchesStatus = statusFilter === "all" || o.order_status === statusFilter
-    return matchesSearch && matchesStatus
+    const matchesStatus = statusFilter.size === 0 || statusFilter.has(o.order_status)
+    const matchesPriority = priorityFilter.size === 0 || priorityFilter.has(o.priority)
+    const matchesCustomer = customerFilter.size === 0 || customerFilter.has(o.customer_id)
+    const matchesChannel = channelFilter.size === 0 || channelFilter.has(o.sales_channel || "")
+    const matchesDate = isWithinRange(o.order_date, dateRange)
+    return matchesSearch && matchesStatus && matchesPriority && matchesCustomer && matchesChannel && matchesDate
   })
+
+  const orderExportFields: ExportField<EnrichedOrder>[] = [
+    { key: "order_number", label: "Order Number", value: (o) => o.order_number },
+    { key: "order_date", label: "Order Date", value: (o) => formatDate(o.order_date) },
+    { key: "customer", label: "Customer", value: (o) => o.customer?.customer_business_name || "" },
+    { key: "customer_code", label: "Customer Code", value: (o) => o.customer?.customer_code || "" },
+    { key: "order_status", label: "Status", value: (o) => o.order_status },
+    { key: "priority", label: "Priority", value: (o) => o.priority },
+    { key: "required_date", label: "Delivery Date", value: (o) => (o.required_date ? formatDate(o.required_date) : "") },
+    { key: "sales_channel", label: "Sales Channel", value: (o) => o.sales_channel || "" },
+    { key: "customer_po_reference", label: "PO Reference", value: (o) => o.customer_po_reference || "" },
+    { key: "order_total", label: "Order Total", value: (o) => orderTotal(o.order_items || []) },
+    { key: "amount_paid", label: "Amount Paid", value: (o) => orderAmountPaid(o.payments || []) },
+    { key: "balance_due", label: "Balance Due", value: (o) => orderBalanceDue(o.order_items || [], o.payments || []) },
+    { key: "payment_status", label: "Payment Status", value: (o) => derivePaymentStatus(o.order_items || [], o.payments || []) },
+    { key: "item_count", label: "Item Count", value: (o) => (o.order_items || []).length },
+  ]
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
       <PageHeader title="Orders" description="Manage all embroidery orders">
+        <Button variant="outline" onClick={() => setShowExport(true)} size="sm">
+          <Download className="size-4" />
+          Export
+        </Button>
         <Button onClick={() => navigate({ name: "order-new" })} size="sm">
           <Plus className="size-4" />
           New Order
         </Button>
       </PageHeader>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -137,17 +192,38 @@ export function OrdersPage() {
             className="pl-9"
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="All Statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            {orderStatuses.map((s) => (
-              <SelectItem key={s} value={s}>{s}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <MultiSelectFilter
+          label="Status"
+          options={orderStatuses.map((s) => ({ value: s, label: s }))}
+          selected={statusFilter}
+          onChange={setStatusFilter}
+        />
+        <MultiSelectFilter
+          label="Priority"
+          options={priorities.map((p) => ({ value: p, label: p }))}
+          selected={priorityFilter}
+          onChange={setPriorityFilter}
+        />
+        <MultiSelectFilter
+          label="Customer"
+          options={customerOptions}
+          selected={customerFilter}
+          onChange={setCustomerFilter}
+        />
+        <MultiSelectFilter
+          label="Sales Channel"
+          options={salesChannels.map((s) => ({ value: s, label: s }))}
+          selected={channelFilter}
+          onChange={setChannelFilter}
+        />
+        <DateRangeFilter
+          preset={datePreset}
+          onPresetChange={setDatePreset}
+          customFrom={customFrom}
+          customTo={customTo}
+          onCustomFromChange={setCustomFrom}
+          onCustomToChange={setCustomTo}
+        />
         <Button
           variant={showArchived ? "default" : "outline"}
           onClick={() => { setShowArchived(!showArchived); setTimeout(loadOrders, 0) }}
@@ -213,6 +289,16 @@ export function OrdersPage() {
           )}
         </CardContent>
       </Card>
+
+      <ExportDialog
+        open={showExport}
+        onOpenChange={setShowExport}
+        title="Export Orders"
+        filename="orders"
+        sheetName="Orders"
+        rows={filtered}
+        fields={orderExportFields}
+      />
     </div>
   )
 }
@@ -642,10 +728,10 @@ function OrderItemForm({
     }
   }, [defaultRate, item])
 
-  const calculatedPrice = (form.stitches_per_unit / 1000) * form.rate_per_1000_stitches
+  const calculatedPrice = ((form.stitches_per_unit || 0) / 1000) * (form.rate_per_1000_stitches || 0)
   const useManual = form.manual_unit_price !== "" && form.manual_unit_price !== null
   const unitPrice = useManual ? parseFloat(form.manual_unit_price as string) : calculatedPrice
-  const lineTotal = unitPrice * form.quantity
+  const lineTotal = unitPrice * (form.quantity || 0)
 
   async function handleSave() {
     if (!form.product_description.trim() && form.product_type === "Other") {
@@ -661,11 +747,11 @@ function OrderItemForm({
         product_description: form.product_description || null,
         design_name_number: form.design_name_number || null,
         size_placement: form.size_placement || null,
-        quantity: form.quantity,
-        stitches_per_unit: form.stitches_per_unit,
-        rate_per_1000_stitches: form.rate_per_1000_stitches,
+        quantity: form.quantity || 1,
+        stitches_per_unit: form.stitches_per_unit || 0,
+        rate_per_1000_stitches: form.rate_per_1000_stitches || 0,
         manual_unit_price: useManual ? parseFloat(form.manual_unit_price as string) : null,
-        setup_digitizing_charge: form.setup_digitizing_charge,
+        setup_digitizing_charge: form.setup_digitizing_charge || 0,
         notes: form.notes || null,
       }
       if (item) {
@@ -733,8 +819,8 @@ function OrderItemForm({
               <Input
                 type="number"
                 min={1}
-                value={form.quantity}
-                onChange={(e) => setForm({ ...form, quantity: parseInt(e.target.value) || 1 })}
+                value={Number.isNaN(form.quantity) ? "" : form.quantity}
+                onChange={(e) => setForm({ ...form, quantity: e.target.value === "" ? NaN : parseInt(e.target.value, 10) })}
               />
             </div>
             <div className="flex flex-col gap-2">
@@ -742,8 +828,8 @@ function OrderItemForm({
               <Input
                 type="number"
                 min={0}
-                value={form.stitches_per_unit}
-                onChange={(e) => setForm({ ...form, stitches_per_unit: parseInt(e.target.value) || 0 })}
+                value={Number.isNaN(form.stitches_per_unit) ? "" : form.stitches_per_unit}
+                onChange={(e) => setForm({ ...form, stitches_per_unit: e.target.value === "" ? NaN : parseInt(e.target.value, 10) })}
               />
             </div>
             <div className="flex flex-col gap-2">
@@ -751,8 +837,8 @@ function OrderItemForm({
               <Input
                 type="number"
                 step="0.01"
-                value={form.rate_per_1000_stitches}
-                onChange={(e) => setForm({ ...form, rate_per_1000_stitches: parseFloat(e.target.value) || 0 })}
+                value={Number.isNaN(form.rate_per_1000_stitches) ? "" : form.rate_per_1000_stitches}
+                onChange={(e) => setForm({ ...form, rate_per_1000_stitches: e.target.value === "" ? NaN : parseFloat(e.target.value) })}
               />
             </div>
           </div>
@@ -772,8 +858,8 @@ function OrderItemForm({
               <Input
                 type="number"
                 step="0.01"
-                value={form.setup_digitizing_charge}
-                onChange={(e) => setForm({ ...form, setup_digitizing_charge: parseFloat(e.target.value) || 0 })}
+                value={Number.isNaN(form.setup_digitizing_charge) ? "" : form.setup_digitizing_charge}
+                onChange={(e) => setForm({ ...form, setup_digitizing_charge: e.target.value === "" ? NaN : parseFloat(e.target.value) })}
               />
             </div>
           </div>
@@ -787,7 +873,7 @@ function OrderItemForm({
               <span className="font-medium">{formatCurrency(unitPrice)}</span>
             </div>
             <div className="flex justify-between border-t pt-1 text-sm font-bold">
-              <span>Line Total ({form.quantity} × {formatCurrency(unitPrice)}):</span>
+              <span>Line Total ({form.quantity || 0} × {formatCurrency(unitPrice)}):</span>
               <span>{formatCurrency(lineTotal)}</span>
             </div>
           </div>
@@ -845,7 +931,7 @@ function PaymentForm({
   }, [])
 
   async function handleSave() {
-    if (form.amount <= 0) {
+    if (!form.amount || form.amount <= 0) {
       toast.error("Amount must be greater than 0")
       return
     }
@@ -897,8 +983,8 @@ function PaymentForm({
               <Input
                 type="number"
                 step="0.01"
-                value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: parseFloat(e.target.value) || 0 })}
+                value={Number.isNaN(form.amount) ? "" : form.amount}
+                onChange={(e) => setForm({ ...form, amount: e.target.value === "" ? NaN : parseFloat(e.target.value) })}
               />
             </div>
             <div className="flex flex-col gap-2">
