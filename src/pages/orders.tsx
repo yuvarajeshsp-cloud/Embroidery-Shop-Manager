@@ -1,8 +1,9 @@
 import * as React from "react"
-import { Plus, Search, Pencil, Trash2 } from "lucide-react"
+import { Plus, Search, Pencil, Trash2, FileDown, Share2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
+import { downloadOrderPdf, shareOrderPdf } from "@/lib/pdf"
 import {
   formatCurrency,
   formatDate,
@@ -49,6 +50,7 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { OrderStatusBadge, PriorityBadge, PaymentStatusBadge } from "@/components/status-badges"
+import { Spinner } from "@/components/ui/spinner"
 import { useRouter } from "@/lib/router"
 import { fetchConfigItems, getDefaultStitchRate } from "@/lib/config"
 import { toast } from "sonner"
@@ -232,6 +234,7 @@ export function OrderDetailPage({ id }: { id: string }) {
   const [showItemForm, setShowItemForm] = React.useState(false)
   const [showPaymentForm, setShowPaymentForm] = React.useState(false)
   const [showStatusChange, setShowStatusChange] = React.useState(false)
+  const [generatingPdf, setGeneratingPdf] = React.useState(false)
   const [orderStatuses, setOrderStatuses] = React.useState<string[]>([])
 
   React.useEffect(() => {
@@ -398,6 +401,43 @@ export function OrderDetailPage({ id }: { id: string }) {
             </Button>
             <Button variant="outline" size="sm" onClick={() => navigate({ name: "production" })}>
               View Production
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={generatingPdf}
+              onClick={async () => {
+                setGeneratingPdf(true)
+                try {
+                  await downloadOrderPdf({ order, customer, items, payments })
+                  toast.success("PDF downloaded")
+                } catch {
+                  toast.error("Failed to generate PDF")
+                } finally {
+                  setGeneratingPdf(false)
+                }
+              }}
+            >
+              {generatingPdf ? <Spinner className="size-4" /> : <FileDown className="size-4" />}
+              Download PDF
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={generatingPdf}
+              onClick={async () => {
+                setGeneratingPdf(true)
+                try {
+                  await shareOrderPdf({ order, customer, items, payments })
+                } catch {
+                  toast.error("Failed to share PDF")
+                } finally {
+                  setGeneratingPdf(false)
+                }
+              }}
+            >
+              {generatingPdf ? <Spinner className="size-4" /> : <Share2 className="size-4" />}
+              Share to Customer
             </Button>
           </CardContent>
         </Card>
