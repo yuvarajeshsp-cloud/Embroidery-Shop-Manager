@@ -45,6 +45,7 @@ export async function generateOrderPdf(data: OrderPdfData): Promise<Blob> {
   const companyState = (settings.company_state || "").trim()
   const companyPincode = (settings.company_pincode || "").trim()
   const companyGst = (settings.company_gst_number || "").trim()
+  const companyLogoDataUrl = (settings.company_logo_data_url || "").trim()
 
   const doc = new jsPDF({ unit: "pt", format: "a4" })
   const pageWidth = doc.internal.pageSize.getWidth()
@@ -66,16 +67,31 @@ export async function generateOrderPdf(data: OrderPdfData): Promise<Blob> {
   doc.setFillColor(...gold)
   doc.rect(0, 90, pageWidth, 3, "F")
 
+  // Logo (if configured) in left side of header
+  const logoSize = 54
+  const logoX = margin
+  const logoY = (90 - logoSize) / 2
+  const textOffsetX = companyLogoDataUrl ? logoX + logoSize + 12 : margin
+
+  if (companyLogoDataUrl && companyLogoDataUrl.startsWith("data:image/")) {
+    try {
+      const logoFormat = companyLogoDataUrl.includes("image/png") ? "PNG" : "JPEG"
+      doc.addImage(companyLogoDataUrl, logoFormat, logoX, logoY, logoSize, logoSize)
+    } catch {
+      // If logo fails to embed, continue without it
+    }
+  }
+
   doc.setTextColor(255, 255, 255)
   doc.setFont("helvetica", "bold")
   doc.setFontSize(20)
-  doc.text(companyName, margin, 38)
+  doc.text(companyName, textOffsetX, 38)
 
   if (companyTagline) {
     doc.setFont("helvetica", "normal")
     doc.setFontSize(9)
     doc.setTextColor(200, 200, 200)
-    doc.text(companyTagline, margin, 54)
+    doc.text(companyTagline, textOffsetX, 54)
   }
 
   doc.setFontSize(8)

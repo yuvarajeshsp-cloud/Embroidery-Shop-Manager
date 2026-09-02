@@ -234,7 +234,8 @@ export function OrderDetailPage({ id }: { id: string }) {
   const [showItemForm, setShowItemForm] = React.useState(false)
   const [showPaymentForm, setShowPaymentForm] = React.useState(false)
   const [showStatusChange, setShowStatusChange] = React.useState(false)
-  const [generatingPdf, setGeneratingPdf] = React.useState(false)
+  const [downloadingPdf, setDownloadingPdf] = React.useState(false)
+  const [sharingPdf, setSharingPdf] = React.useState(false)
   const [orderStatuses, setOrderStatuses] = React.useState<string[]>([])
 
   React.useEffect(() => {
@@ -405,38 +406,38 @@ export function OrderDetailPage({ id }: { id: string }) {
             <Button
               variant="outline"
               size="sm"
-              disabled={generatingPdf}
+              disabled={downloadingPdf}
               onClick={async () => {
-                setGeneratingPdf(true)
+                setDownloadingPdf(true)
                 try {
                   await downloadOrderPdf({ order, customer, items, payments })
                   toast.success("PDF downloaded")
                 } catch {
                   toast.error("Failed to generate PDF")
                 } finally {
-                  setGeneratingPdf(false)
+                  setDownloadingPdf(false)
                 }
               }}
             >
-              {generatingPdf ? <Spinner className="size-4" /> : <FileDown className="size-4" />}
+              {downloadingPdf ? <Spinner className="size-4" /> : <FileDown className="size-4" />}
               Download PDF
             </Button>
             <Button
               variant="outline"
               size="sm"
-              disabled={generatingPdf}
+              disabled={sharingPdf}
               onClick={async () => {
-                setGeneratingPdf(true)
+                setSharingPdf(true)
                 try {
                   await shareOrderPdf({ order, customer, items, payments })
                 } catch {
                   toast.error("Failed to share PDF")
                 } finally {
-                  setGeneratingPdf(false)
+                  setSharingPdf(false)
                 }
               }}
             >
-              {generatingPdf ? <Spinner className="size-4" /> : <Share2 className="size-4" />}
+              {sharingPdf ? <Spinner className="size-4" /> : <Share2 className="size-4" />}
               Share to Customer
             </Button>
           </CardContent>
