@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Download, Plus, Search, Pencil, Trash2, FileDown, Share2 } from "lucide-react"
+import { Download, Plus, Search, Pencil, Trash2, FileDown, Share2, Printer, Eye } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
@@ -67,6 +67,12 @@ import { getAttachmentUrl } from "@/lib/attachments"
 import { fetchAttachmentsForItems } from "@/lib/attachments"
 import { sendOrderStatusUpdate, sendWhatsAppFile, getWhatsAppMediaType } from "@/lib/whatsapp"
 import { uploadOrderInvoicePdf } from "@/lib/pdf"
+import {
+  printThermalInvoice,
+  printThermalOrderTag,
+  getThermalInvoiceHtml,
+  getThermalOrderTagHtml,
+} from "@/lib/thermal-print"
 import type { OrderItemAttachment } from "@/lib/types"
 
 type EnrichedOrder = Order & { customer?: Customer; order_items?: OrderItem[]; payments?: Payment[] }
@@ -332,6 +338,7 @@ export function OrderDetailPage({ id }: { id: string }) {
   const [showShareToCustomer, setShowShareToCustomer] = React.useState(false)
   const [downloadingPdf, setDownloadingPdf] = React.useState(false)
   const [orderStatuses, setOrderStatuses] = React.useState<string[]>([])
+  const [thermalPreview, setThermalPreview] = React.useState<{ title: string; html: string } | null>(null)
 
   React.useEffect(() => {
     fetchConfigItems("order_status").then((items) => setOrderStatuses(items.map((i) => i.name)))
@@ -525,6 +532,44 @@ export function OrderDetailPage({ id }: { id: string }) {
             >
               {downloadingPdf ? <Spinner className="size-4" /> : <FileDown className="size-4" />}
               Download PDF
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                const html = await getThermalInvoiceHtml({ order, customer, items, payments })
+                setThermalPreview({ title: `Invoice ${order.order_number}`, html })
+              }}
+            >
+              <Eye className="size-4" />
+              Preview Invoice
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => printThermalInvoice({ order, customer, items, payments })}
+            >
+              <Printer className="size-4" />
+              Print Invoice
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                const html = await getThermalOrderTagHtml(order, customer)
+                setThermalPreview({ title: `Order Tag ${order.order_number}`, html })
+              }}
+            >
+              <Eye className="size-4" />
+              Preview Order Tag
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => printThermalOrderTag(order, customer)}
+            >
+              <Printer className="size-4" />
+              Print Order Tag
             </Button>
             <Button
               variant="outline"
@@ -735,6 +780,24 @@ export function OrderDetailPage({ id }: { id: string }) {
       )}
 
       <AttachmentViewerDialog attachment={viewingAttachment} onClose={() => setViewingAttachment(null)} />
+
+      {thermalPreview && (
+        <Dialog open onOpenChange={() => setThermalPreview(null)}>
+          <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>{thermalPreview.title}</DialogTitle>
+              <DialogDescription>Preview of what will print on the 80mm thermal roll.</DialogDescription>
+            </DialogHeader>
+            <div className="flex-1 overflow-auto rounded-md border bg-white">
+              <iframe
+                srcDoc={thermalPreview.html}
+                title={thermalPreview.title}
+                className="h-[500px] w-full"
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {showShareToCustomer && (
         <ShareToCustomerDialog
