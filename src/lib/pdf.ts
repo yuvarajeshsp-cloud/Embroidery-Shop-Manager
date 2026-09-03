@@ -1,4 +1,5 @@
 import { jsPDF } from "jspdf"
+import { supabase } from "./supabase"
 import type { Order, OrderItem, Payment, Customer } from "./types"
 import {
   formatDate,
@@ -364,4 +365,21 @@ export async function shareOrderPdf(data: OrderPdfData) {
   }
 
   await downloadOrderPdf(data)
+}
+
+const INVOICE_BUCKET = "order-attachments"
+
+export async function uploadOrderInvoicePdf(data: OrderPdfData): Promise<{ url: string; fileName: string }> {
+  const blob = await generateOrderPdf(data)
+  const fileName = getPdfFileName(data.order)
+  const path = `invoices/${data.order.id}/${fileName}`
+
+  const { error } = await supabase.storage.from(INVOICE_BUCKET).upload(path, blob, {
+    contentType: "application/pdf",
+    upsert: true,
+  })
+  if (error) throw error
+
+  const { data: urlData } = supabase.storage.from(INVOICE_BUCKET).getPublicUrl(path)
+  return { url: urlData.publicUrl, fileName }
 }

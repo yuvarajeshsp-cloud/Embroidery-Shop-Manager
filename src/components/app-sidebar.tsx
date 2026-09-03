@@ -10,6 +10,7 @@ import {
   UserCog,
   ScrollText,
   Scissors,
+  MessageCircle,
 } from "lucide-react"
 
 import {
@@ -57,6 +58,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     label: "Admin",
     items: [
       { label: "Configuration", icon: Settings, route: { name: "config" } },
+      { label: "WhatsApp", icon: MessageCircle, route: { name: "whatsapp" } },
       { label: "Users & Roles", icon: UserCog, route: { name: "users" } },
       { label: "Audit Log", icon: ScrollText, route: { name: "audit" } },
     ],

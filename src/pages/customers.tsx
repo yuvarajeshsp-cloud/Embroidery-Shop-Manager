@@ -38,6 +38,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
 import { useRouter } from "@/lib/router"
 import { fetchConfigItems } from "@/lib/config"
 import { toast } from "sonner"
@@ -285,6 +286,7 @@ function CustomerForm({
     customer_type: customer?.customer_type || customerTypes[0] || "Retail",
     gst_tax_number: customer?.gst_tax_number || "",
     notes: customer?.notes || "",
+    whatsapp_opt_in: customer?.whatsapp_opt_in ?? true,
   })
 
   React.useEffect(() => {
@@ -416,6 +418,13 @@ function CustomerForm({
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
               />
             </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={form.whatsapp_opt_in}
+              onCheckedChange={(v) => setForm({ ...form, whatsapp_opt_in: v })}
+            />
+            <Label className="font-normal">Send WhatsApp updates to this customer</Label>
           </div>
           <div className="flex flex-col gap-2">
             <Label>Billing Address</Label>

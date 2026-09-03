@@ -11,6 +11,7 @@ export type Route =
   | { name: "production" }
   | { name: "reports" }
   | { name: "config" }
+  | { name: "whatsapp" }
   | { name: "users" }
   | { name: "audit" }
   | { name: "login" }

@@ -13,6 +13,7 @@ import { PaymentsPage } from "@/pages/payments"
 import { ProductionPage } from "@/pages/production"
 import { ReportsPage } from "@/pages/reports"
 import { ConfigPage } from "@/pages/config"
+import { WhatsAppPage } from "@/pages/whatsapp"
 import { UsersPage, AuditPage } from "@/pages/admin"
 import { Spinner } from "@/components/ui/spinner"
 import { fetchBusinessSettings, setDocumentTitleFromSettings } from "@/lib/config"
@@ -42,6 +43,8 @@ function RouteRenderer() {
       return <ReportsPage />
     case "config":
       return <ConfigPage />
+    case "whatsapp":
+      return <WhatsAppPage />
     case "users":
       return <UsersPage />
     case "audit":

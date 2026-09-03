@@ -28,6 +28,7 @@ export interface Customer {
   notes: string | null
   is_active: boolean
   archived: boolean
+  whatsapp_opt_in: boolean
   created_at: string
   updated_at: string
   created_by: string | null
@@ -143,6 +144,36 @@ export interface BusinessSetting {
   key: string
   value: string
   updated_at: string
+}
+
+export type WhatsAppTemplateCategory = "utility" | "marketing" | "authentication"
+
+export interface WhatsAppTemplate {
+  id: string
+  name: string
+  category: WhatsAppTemplateCategory
+  language: string
+  description: string | null
+  variable_count: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type WhatsAppMessageKind = "status_update" | "invoice" | "design_confirmation" | "customer_material" | "test"
+
+export interface WhatsAppMessageLog {
+  id: string
+  customer_id: string | null
+  order_id: string | null
+  message_kind: WhatsAppMessageKind
+  template_name: string | null
+  recipient_phone: string
+  status: "pending" | "sent" | "failed"
+  error_message: string | null
+  whatsapp_message_id: string | null
+  sent_by: string | null
+  created_at: string
 }
 
 export interface OrderWithCustomer extends Order {

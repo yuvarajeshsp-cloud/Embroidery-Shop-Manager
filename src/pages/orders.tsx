@@ -3,7 +3,7 @@ import { Download, Plus, Search, Pencil, Trash2, FileDown, Share2 } from "lucide
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
-import { downloadOrderPdf, shareOrderPdf } from "@/lib/pdf"
+import { downloadOrderPdf } from "@/lib/pdf"
 import {
   formatCurrency,
   formatDate,
@@ -62,7 +62,11 @@ import { DateRangeFilter } from "@/components/date-range-filter"
 import { ExportDialog } from "@/components/export-dialog"
 import { AttachmentSection, AttachmentThumb } from "@/components/attachment-section"
 import { AttachmentViewerDialog } from "@/components/attachment-viewer"
+import { Checkbox } from "@/components/ui/checkbox"
+import { getAttachmentUrl } from "@/lib/attachments"
 import { fetchAttachmentsForItems } from "@/lib/attachments"
+import { sendOrderStatusUpdate, sendWhatsAppFile, getWhatsAppMediaType } from "@/lib/whatsapp"
+import { uploadOrderInvoicePdf } from "@/lib/pdf"
 import type { OrderItemAttachment } from "@/lib/types"
 
 type EnrichedOrder = Order & { customer?: Customer; order_items?: OrderItem[]; payments?: Payment[] }
@@ -325,8 +329,8 @@ export function OrderDetailPage({ id }: { id: string }) {
   const [showItemForm, setShowItemForm] = React.useState(false)
   const [showPaymentForm, setShowPaymentForm] = React.useState(false)
   const [showStatusChange, setShowStatusChange] = React.useState(false)
+  const [showShareToCustomer, setShowShareToCustomer] = React.useState(false)
   const [downloadingPdf, setDownloadingPdf] = React.useState(false)
-  const [sharingPdf, setSharingPdf] = React.useState(false)
   const [orderStatuses, setOrderStatuses] = React.useState<string[]>([])
 
   React.useEffect(() => {
@@ -365,7 +369,16 @@ export function OrderDetailPage({ id }: { id: string }) {
     } else {
       await logAudit(profile, "orders", order.id, "UPDATE", { order_status: order.order_status } as Record<string, unknown>, { order_status: newStatus } as Record<string, unknown>, `Status changed to ${newStatus}`)
       toast.success(`Order status changed to ${newStatus}`)
-      setOrder({ ...order, ...updates } as Order)
+      const updatedOrder = { ...order, ...updates } as Order
+      setOrder(updatedOrder)
+
+      if (customer?.whatsapp_opt_in) {
+        sendOrderStatusUpdate(customer, updatedOrder, newStatus, profile?.id).then((result) => {
+          if (!result.success) {
+            toast.error(`WhatsApp update not sent: ${result.error}`)
+          }
+        })
+      }
     }
     setShowStatusChange(false)
   }
@@ -516,19 +529,9 @@ export function OrderDetailPage({ id }: { id: string }) {
             <Button
               variant="outline"
               size="sm"
-              disabled={sharingPdf}
-              onClick={async () => {
-                setSharingPdf(true)
-                try {
-                  await shareOrderPdf({ order, customer, items, payments })
-                } catch {
-                  toast.error("Failed to share PDF")
-                } finally {
-                  setSharingPdf(false)
-                }
-              }}
+              onClick={() => setShowShareToCustomer(true)}
             >
-              {sharingPdf ? <Spinner className="size-4" /> : <Share2 className="size-4" />}
+              <Share2 className="size-4" />
               Share to Customer
             </Button>
           </CardContent>
@@ -732,7 +735,139 @@ export function OrderDetailPage({ id }: { id: string }) {
       )}
 
       <AttachmentViewerDialog attachment={viewingAttachment} onClose={() => setViewingAttachment(null)} />
+
+      {showShareToCustomer && (
+        <ShareToCustomerDialog
+          order={order}
+          customer={customer}
+          items={items}
+          payments={payments}
+          attachments={attachments}
+          onClose={() => setShowShareToCustomer(false)}
+        />
+      )}
     </div>
+  )
+}
+
+// ============================================================
+// SHARE TO CUSTOMER DIALOG
+// ============================================================
+
+function ShareToCustomerDialog({
+  order,
+  customer,
+  items,
+  payments,
+  attachments,
+  onClose,
+}: {
+  order: Order
+  customer: Customer | null
+  items: OrderItem[]
+  payments: Payment[]
+  attachments: OrderItemAttachment[]
+  onClose: () => void
+}) {
+  const { profile } = useAuth()
+  const [sendInvoice, setSendInvoice] = React.useState(true)
+  const [sendDesign, setSendDesign] = React.useState(false)
+  const [sendMaterial, setSendMaterial] = React.useState(false)
+  const [sending, setSending] = React.useState(false)
+
+  const designFiles = attachments.filter((a) => a.category === "design_confirmation")
+  const materialFiles = attachments.filter((a) => a.category === "material")
+  const recipient = customer?.whatsapp || customer?.phone || ""
+  const canSend = !!customer && !!recipient
+
+  async function sendFile(file: OrderItemAttachment, kind: "design_confirmation" | "customer_material") {
+    if (!customer) return false
+    const mediaType = getWhatsAppMediaType(file.file_type)
+    if (!mediaType) {
+      toast.error(`"${file.file_name}" isn't a file type WhatsApp supports (only JPEG/PNG images or PDF/Office documents) — skipped`)
+      return false
+    }
+    const result = await sendWhatsAppFile(customer, order, mediaType, getAttachmentUrl(file.file_path), file.file_name, kind, profile?.id)
+    return result.success
+  }
+
+  async function handleSend() {
+    if (!customer || !canSend) return
+    setSending(true)
+    let successCount = 0
+    let failCount = 0
+    try {
+      if (sendInvoice) {
+        try {
+          const { url, fileName } = await uploadOrderInvoicePdf({ order, customer, items, payments })
+          const result = await sendWhatsAppFile(customer, order, "document", url, fileName, "invoice", profile?.id)
+          if (result.success) successCount++
+          else failCount++
+        } catch (err) {
+          console.error(err)
+          failCount++
+        }
+      }
+      if (sendDesign) {
+        for (const file of designFiles) {
+          const ok = await sendFile(file, "design_confirmation")
+          ok ? successCount++ : failCount++
+        }
+      }
+      if (sendMaterial) {
+        for (const file of materialFiles) {
+          const ok = await sendFile(file, "customer_material")
+          ok ? successCount++ : failCount++
+        }
+      }
+
+      if (successCount > 0) toast.success(`Sent ${successCount} file(s) via WhatsApp`)
+      if (failCount > 0) toast.error(`${failCount} file(s) failed to send`)
+      if (successCount > 0 && failCount === 0) onClose()
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Share to Customer via WhatsApp</DialogTitle>
+          <DialogDescription>
+            {canSend ? `Sending to ${recipient}` : "This customer has no phone/WhatsApp number on file"}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-3 py-2">
+          <div className="flex items-center gap-2">
+            <Checkbox checked={sendInvoice} onCheckedChange={(v) => setSendInvoice(!!v)} />
+            <Label className="font-normal">Invoice (PDF)</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={sendDesign}
+              disabled={designFiles.length === 0}
+              onCheckedChange={(v) => setSendDesign(!!v)}
+            />
+            <Label className="font-normal">Design Confirmation files ({designFiles.length})</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={sendMaterial}
+              disabled={materialFiles.length === 0}
+              onCheckedChange={(v) => setSendMaterial(!!v)}
+            />
+            <Label className="font-normal">Customer Material Photos ({materialFiles.length})</Label>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSend} disabled={sending || !canSend || (!sendInvoice && !sendDesign && !sendMaterial)}>
+            {sending ? "Sending..." : "Send via WhatsApp"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
