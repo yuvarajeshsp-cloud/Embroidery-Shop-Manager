@@ -72,6 +72,20 @@ export interface OrderItem {
   updated_at: string
 }
 
+export type AttachmentCategory = "material" | "design_confirmation"
+
+export interface OrderItemAttachment {
+  id: string
+  order_item_id: string
+  category: AttachmentCategory
+  file_name: string
+  file_path: string
+  file_type: string | null
+  file_size: number | null
+  uploaded_by: string | null
+  created_at: string
+}
+
 export interface Payment {
   id: string
   payment_number: string

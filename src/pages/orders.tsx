@@ -26,7 +26,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -60,6 +60,10 @@ import { cn } from "@/lib/utils"
 import { MultiSelectFilter } from "@/components/multi-select-filter"
 import { DateRangeFilter } from "@/components/date-range-filter"
 import { ExportDialog } from "@/components/export-dialog"
+import { AttachmentSection, AttachmentThumb } from "@/components/attachment-section"
+import { AttachmentViewerDialog } from "@/components/attachment-viewer"
+import { fetchAttachmentsForItems } from "@/lib/attachments"
+import type { OrderItemAttachment } from "@/lib/types"
 
 type EnrichedOrder = Order & { customer?: Customer; order_items?: OrderItem[]; payments?: Payment[] }
 
@@ -313,6 +317,8 @@ export function OrderDetailPage({ id }: { id: string }) {
   const [order, setOrder] = React.useState<Order | null>(null)
   const [customer, setCustomer] = React.useState<Customer | null>(null)
   const [items, setItems] = React.useState<OrderItem[]>([])
+  const [attachments, setAttachments] = React.useState<OrderItemAttachment[]>([])
+  const [viewingAttachment, setViewingAttachment] = React.useState<OrderItemAttachment | null>(null)
   const [payments, setPayments] = React.useState<Payment[]>([])
   const [loading, setLoading] = React.useState(true)
   const [editingItem, setEditingItem] = React.useState<OrderItem | null>(null)
@@ -340,8 +346,10 @@ export function OrderDetailPage({ id }: { id: string }) {
       supabase.from("payments").select("*").eq("order_id", id).order("payment_date", { ascending: false }),
     ])
     setCustomer(custRes.data as Customer | null)
-    setItems(itemsRes.data || [])
+    const orderItems = itemsRes.data || []
+    setItems(orderItems)
     setPayments(payRes.data || [])
+    setAttachments(await fetchAttachmentsForItems(orderItems.map((i: OrderItem) => i.id)))
     setLoading(false)
   }
 
@@ -584,6 +592,48 @@ export function OrderDetailPage({ id }: { id: string }) {
         </CardContent>
       </Card>
 
+      {/* Attachments across all items */}
+      {attachments.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Attachments</CardTitle>
+            <CardDescription>Customer material and design confirmation files across all order items</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {items.map((item, idx) => {
+              const itemAttachments = attachments.filter((a) => a.order_item_id === item.id)
+              if (itemAttachments.length === 0) return null
+              const material = itemAttachments.filter((a) => a.category === "material")
+              const design = itemAttachments.filter((a) => a.category === "design_confirmation")
+              return (
+                <div key={item.id} className="flex flex-col gap-2 rounded-lg border p-3">
+                  <span className="text-sm font-medium">
+                    Item {idx + 1} — {item.product_type}
+                    {item.product_description ? `: ${item.product_description}` : ""}
+                  </span>
+                  {material.length > 0 && (
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-muted-foreground">Customer Material</span>
+                      <div className="flex flex-wrap gap-2">
+                        {material.map((a) => <AttachmentThumb key={a.id} attachment={a} onView={() => setViewingAttachment(a)} />)}
+                      </div>
+                    </div>
+                  )}
+                  {design.length > 0 && (
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-muted-foreground">Design Confirmation</span>
+                      <div className="flex flex-wrap gap-2">
+                        {design.map((a) => <AttachmentThumb key={a.id} attachment={a} onView={() => setViewingAttachment(a)} />)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Payments */}
       <Card>
         <CardHeader className="flex-row items-center justify-between">
@@ -680,6 +730,8 @@ export function OrderDetailPage({ id }: { id: string }) {
           </DialogContent>
         </Dialog>
       )}
+
+      <AttachmentViewerDialog attachment={viewingAttachment} onClose={() => setViewingAttachment(null)} />
     </div>
   )
 }
@@ -701,7 +753,9 @@ function OrderItemForm({
   onClose: () => void
   onSaved: () => void
 }) {
+  const wasNew = item === null
   const [saving, setSaving] = React.useState(false)
+  const [savedItemId, setSavedItemId] = React.useState<string | null>(item?.id ?? null)
   const [productTypes, setProductTypes] = React.useState<string[]>([])
   const [defaultRate, setDefaultRate] = React.useState(10)
   const [form, setForm] = React.useState({
@@ -754,16 +808,21 @@ function OrderItemForm({
         setup_digitizing_charge: form.setup_digitizing_charge || 0,
         notes: form.notes || null,
       }
-      if (item) {
-        const { error } = await supabase.from("order_items").update(payload).eq("id", item.id)
+      if (savedItemId) {
+        const { error } = await supabase.from("order_items").update(payload).eq("id", savedItemId)
         if (error) throw error
-        toast.success("Item updated")
+        if (wasNew) {
+          toast.success("Changes saved")
+        } else {
+          toast.success("Item updated")
+          onSaved()
+        }
       } else {
-        const { error } = await supabase.from("order_items").insert(payload)
+        const { data, error } = await supabase.from("order_items").insert(payload).select().single()
         if (error) throw error
-        toast.success("Item added")
+        setSavedItemId(data.id)
+        toast.success("Item added — attach photos or documents below, then click Done")
       }
-      onSaved()
     } catch (err) {
       console.error(err)
       toast.error("Failed to save item")
@@ -776,7 +835,10 @@ function OrderItemForm({
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{item ? "Edit Item" : "Add Item"}</DialogTitle>
+          <DialogTitle>{savedItemId ? "Edit Item" : "Add Item"}</DialogTitle>
+          {wasNew && !savedItemId && (
+            <DialogDescription>Save the item first to unlock photo/document attachments.</DialogDescription>
+          )}
         </DialogHeader>
         <div className="grid gap-4 py-2">
           <div className="grid grid-cols-2 gap-4">
@@ -885,12 +947,30 @@ function OrderItemForm({
               rows={2}
             />
           </div>
+
+          {savedItemId && (
+            <div className="flex flex-col gap-4 rounded-lg border p-3">
+              <AttachmentSection orderItemId={savedItemId} category="material" label="Customer Material Photos" />
+              <AttachmentSection orderItemId={savedItemId} category="design_confirmation" label="Design Confirmation" />
+            </div>
+          )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Saving..." : "Save"}
-          </Button>
+          {wasNew && savedItemId ? (
+            <>
+              <Button variant="outline" onClick={handleSave} disabled={saving}>
+                {saving ? "Saving..." : "Save Changes"}
+              </Button>
+              <Button onClick={onSaved}>Done</Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={onClose}>Cancel</Button>
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? "Saving..." : "Save"}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
