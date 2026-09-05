@@ -4,6 +4,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 import { ModeToggle } from "@/components/mode-toggle"
 import { fetchBusinessSettings } from "@/lib/config"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
 
 interface PageHeaderProps {
@@ -14,6 +15,7 @@ interface PageHeaderProps {
 }
 
 export function PageHeader({ title, description, children, className }: PageHeaderProps) {
+  const isMobile = useIsMobile()
   const [companyName, setCompanyName] = React.useState("Embroidery Shop Manager")
   const [companyLogo, setCompanyLogo] = React.useState<string | null>(null)
 
@@ -34,30 +36,34 @@ export function PageHeader({ title, description, children, className }: PageHead
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <SidebarTrigger />
-          <Separator orientation="vertical" className="h-4" />
-          <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center overflow-hidden rounded-md border bg-background">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          {!isMobile && (
+            <>
+              <SidebarTrigger />
+              <Separator orientation="vertical" className="h-4" />
+            </>
+          )}
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-background">
               {companyLogo ? (
                 <img src={companyLogo} alt={companyName} className="h-full w-full object-cover" />
               ) : (
                 <Scissors className="size-4" />
               )}
             </div>
-            <div className="flex flex-col">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            <div className="flex min-w-0 flex-col">
+              <span className="truncate text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 {companyName}
               </span>
-              <h1 className="text-xl font-bold tracking-tight">{title}</h1>
+              <h1 className="truncate text-xl font-bold tracking-tight">{title}</h1>
               {description && (
-                <p className="text-sm text-muted-foreground">{description}</p>
+                <p className="truncate text-sm text-muted-foreground">{description}</p>
               )}
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {children}
           <ModeToggle />
         </div>

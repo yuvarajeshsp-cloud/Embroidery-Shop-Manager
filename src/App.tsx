@@ -4,6 +4,8 @@ import { AuthProvider } from "@/lib/auth"
 import { useAuth } from "@/lib/use-auth"
 import { RouterProvider, useRouter } from "@/lib/router"
 import { AppSidebar } from "@/components/app-sidebar"
+import { BottomNav } from "@/components/bottom-nav"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { AuthScreen } from "@/pages/auth"
 import { DashboardPage } from "@/pages/dashboard"
 import { CustomersPage, CustomerDetailPage } from "@/pages/customers"
@@ -56,6 +58,7 @@ function RouteRenderer() {
 
 function AppContent() {
   const { session, loading } = useAuth()
+  const isMobile = useIsMobile()
 
   if (loading) {
     return (
@@ -67,6 +70,17 @@ function AppContent() {
 
   if (!session) {
     return <AuthScreen />
+  }
+
+  if (isMobile) {
+    return (
+      <div className="flex min-h-svh flex-col">
+        <div className="flex-1 pb-16">
+          <RouteRenderer />
+        </div>
+        <BottomNav />
+      </div>
+    )
   }
 
   return (

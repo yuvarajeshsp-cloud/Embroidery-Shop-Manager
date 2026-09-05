@@ -55,11 +55,13 @@ import {
 import { OrderStatusBadge } from "@/components/status-badges"
 import { Badge } from "@/components/ui/badge"
 import { useRouter } from "@/lib/router"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 type ReportOrder = Order & { customer?: Customer; order_items?: OrderItem[]; payments?: Payment[] }
 
 export function ReportsPage() {
   const { navigate } = useRouter()
+  const isMobile = useIsMobile()
   const [loading, setLoading] = React.useState(true)
   const [orders, setOrders] = React.useState<ReportOrder[]>([])
   const [customers, setCustomers] = React.useState<Customer[]>([])
@@ -206,7 +208,7 @@ export function ReportsPage() {
   ]
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+    <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
       <PageHeader title="Reports" description="Business analytics and insights" />
 
       {/* Global date-range filter */}
@@ -374,6 +376,27 @@ export function ReportsPage() {
             <CardContent className="p-0">
               {topCustomers.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">No data</p>
+              ) : isMobile ? (
+                <div className="flex flex-col divide-y">
+                  {topCustomers.map((c, i) => (
+                    <button
+                      key={i}
+                      onClick={() => c.customer && navigate({ name: "customer-detail", id: c.customer.id })}
+                      className="flex flex-col gap-2 p-4 text-left active:bg-accent"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium">
+                          #{i + 1} {c.customer?.customer_business_name || "—"}
+                        </span>
+                        <span className="font-semibold">{formatCurrency(c.total)}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <Badge variant="outline">{c.customer?.customer_type || "—"}</Badge>
+                        <span className="text-xs text-muted-foreground">{c.count} order(s)</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               ) : (
                 <Table>
                   <TableHeader>
@@ -416,6 +439,26 @@ export function ReportsPage() {
             <CardContent className="p-0">
               {outstanding.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">No outstanding balances</p>
+              ) : isMobile ? (
+                <div className="flex flex-col divide-y">
+                  {outstanding.map((o) => (
+                    <button
+                      key={o.id}
+                      onClick={() => navigate({ name: "order-detail", id: o.id })}
+                      className="flex flex-col gap-2 p-4 text-left active:bg-accent"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-sm">{o.order_number}</span>
+                        <span className="font-semibold text-amber-600">{formatCurrency(o.balance)}</span>
+                      </div>
+                      <div className="text-sm text-muted-foreground">{o.customer?.customer_business_name || "—"}</div>
+                      <div className="flex items-center justify-between gap-2">
+                        <OrderStatusBadge status={o.order_status} />
+                        <span className="text-xs text-muted-foreground">Due {formatDate(o.required_date)}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               ) : (
                 <Table>
                   <TableHeader>

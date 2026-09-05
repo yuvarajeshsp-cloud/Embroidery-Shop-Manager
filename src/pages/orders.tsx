@@ -54,6 +54,7 @@ import { Badge } from "@/components/ui/badge"
 import { OrderStatusBadge, PriorityBadge, PaymentStatusBadge } from "@/components/status-badges"
 import { Spinner } from "@/components/ui/spinner"
 import { useRouter } from "@/lib/router"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { fetchConfigItems, getDefaultStitchRate } from "@/lib/config"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -79,6 +80,7 @@ type EnrichedOrder = Order & { customer?: Customer; order_items?: OrderItem[]; p
 
 export function OrdersPage() {
   const { navigate } = useRouter()
+  const isMobile = useIsMobile()
   const [orders, setOrders] = React.useState<EnrichedOrder[]>([])
   const [loading, setLoading] = React.useState(true)
   const [search, setSearch] = React.useState("")
@@ -184,7 +186,7 @@ export function OrdersPage() {
   ]
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+    <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
       <PageHeader title="Orders" description="Manage all embroidery orders">
         <Button variant="outline" onClick={() => setShowExport(true)} size="sm">
           <Download className="size-4" />
@@ -255,6 +257,43 @@ export function OrdersPage() {
             <div className="p-8 text-center text-muted-foreground">
               No orders found. Click "New Order" to create one.
             </div>
+          ) : isMobile ? (
+            <div className="flex flex-col divide-y">
+              {filtered.map((o) => {
+                const total = orderTotal(o.order_items || [])
+                const payStatus = derivePaymentStatus(o.order_items || [], o.payments || [])
+                const overdue = isOverdue(o.required_date) && o.order_status !== "Delivered" && o.order_status !== "Cancelled"
+                return (
+                  <button
+                    key={o.id}
+                    onClick={() => navigate({ name: "order-detail", id: o.id })}
+                    className="flex flex-col gap-2 p-4 text-left active:bg-accent"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-sm font-medium">{o.order_number}</span>
+                      <span className="font-semibold">{formatCurrency(total)}</span>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {o.customer?.customer_business_name || "—"}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                      <span>{formatDate(o.order_date)}</span>
+                      {o.required_date && (
+                        <span className={cn(overdue && "font-medium text-red-600")}>
+                          Due {formatDate(o.required_date)}
+                          {overdue && " (Overdue)"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <OrderStatusBadge status={o.order_status} />
+                      <PriorityBadge priority={o.priority} />
+                      <PaymentStatusBadge status={payStatus} />
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -324,6 +363,7 @@ export function OrdersPage() {
 export function OrderDetailPage({ id }: { id: string }) {
   const { navigate } = useRouter()
   const { profile } = useAuth()
+  const isMobile = useIsMobile()
   const [order, setOrder] = React.useState<Order | null>(null)
   const [customer, setCustomer] = React.useState<Customer | null>(null)
   const [items, setItems] = React.useState<OrderItem[]>([])
@@ -416,7 +456,7 @@ export function OrderDetailPage({ id }: { id: string }) {
   const payStatus = derivePaymentStatus(items, payments)
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+    <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
       <PageHeader title={order.order_number} description={`Ordered ${formatDate(order.order_date)}`}>
         <Button variant="outline" size="sm" onClick={() => navigate({ name: "orders" })}>
           Back to Orders
@@ -594,6 +634,44 @@ export function OrderDetailPage({ id }: { id: string }) {
         <CardContent className="p-0">
           {items.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">No items added yet</p>
+          ) : isMobile ? (
+            <div className="flex flex-col divide-y">
+              {items.map((item, idx) => (
+                <div key={item.id} className="flex flex-col gap-2 p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">#{idx + 1}</span>
+                      <Badge variant="outline">{item.product_type}</Badge>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon-sm" onClick={() => { setEditingItem(item); setShowItemForm(true) }}>
+                        <Pencil className="size-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon-sm" onClick={() => handleDeleteItem(item.id)}>
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                  {item.product_description && (
+                    <div className="text-sm">{item.product_description}</div>
+                  )}
+                  {item.design_name_number && (
+                    <div className="text-xs text-muted-foreground">Design: {item.design_name_number}</div>
+                  )}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span>Qty {item.quantity}</span>
+                    <span>{formatNumber(item.stitches_per_unit)} stitches</span>
+                    <span>Rate {item.rate_per_1000_stitches.toFixed(2)}/1K</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      Unit {formatCurrency(orderItemUnitPrice(item))}
+                    </span>
+                    <span className="font-semibold">{formatCurrency(orderItemTotal(item))}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -690,6 +768,25 @@ export function OrderDetailPage({ id }: { id: string }) {
         <CardContent className="p-0">
           {payments.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">No payments recorded yet</p>
+          ) : isMobile ? (
+            <div className="flex flex-col divide-y">
+              {payments.map((p) => (
+                <div key={p.id} className="flex flex-col gap-2 p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-sm">{p.payment_number}</span>
+                    <span className="font-semibold">{formatCurrency(p.amount)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+                    <span>{formatDate(p.payment_date)}</span>
+                    {p.transaction_reference && <span>{p.transaction_reference}</span>}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant="outline">{p.payment_method}</Badge>
+                    <Badge variant="outline">{p.payment_status}</Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <Table>
               <TableHeader>

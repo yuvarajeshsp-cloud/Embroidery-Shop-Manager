@@ -158,7 +158,7 @@ export function WhatsAppPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+    <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
       <PageHeader title="WhatsApp" description="Configure WhatsApp Business messaging and templates" />
 
       <Card>

@@ -29,3 +29,16 @@ dist-ssr
 
 # Local Supabase CLI cache
 supabase/.temp
+
+# Capacitor / Android native build artifacts (machine-specific paths, generated builds)
+android/local.properties
+android/.gradle
+android/build
+android/app/build
+android/captures
+android/.idea
+*.keystore
+*.jks
+
+# Tauri desktop build artifacts
+src-tauri/target

@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { useRouter } from "@/lib/router"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { fetchConfigItems } from "@/lib/config"
 import { toast } from "sonner"
 import { MultiSelectFilter } from "@/components/multi-select-filter"
@@ -54,6 +55,7 @@ type EnrichedPayment = Payment & { order?: Order; customer?: Customer }
 
 export function PaymentsPage() {
   const { navigate } = useRouter()
+  const isMobile = useIsMobile()
   const [payments, setPayments] = React.useState<EnrichedPayment[]>([])
   const [loading, setLoading] = React.useState(true)
   const [search, setSearch] = React.useState("")
@@ -141,7 +143,7 @@ export function PaymentsPage() {
   ]
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+    <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
       <PageHeader title="Payments" description="Track all customer payments">
         <Button variant="outline" size="sm" onClick={() => setShowExport(true)}>
           <Download className="size-4" /> Export
@@ -195,6 +197,36 @@ export function PaymentsPage() {
             <div className="p-8 text-center text-muted-foreground">Loading...</div>
           ) : filtered.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">No payments found</div>
+          ) : isMobile ? (
+            <div className="flex flex-col divide-y">
+              {filtered.map((p) => (
+                <div key={p.id} className="flex flex-col gap-2 p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-sm">{p.payment_number}</span>
+                    <span className="font-semibold">{formatCurrency(p.amount)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+                    <button
+                      className="font-mono text-xs text-primary hover:underline"
+                      onClick={() => p.order && navigate({ name: "order-detail", id: p.order.id })}
+                    >
+                      {p.order?.order_number || "—"}
+                    </button>
+                    <span>{formatDate(p.payment_date)}</span>
+                  </div>
+                  <div className="text-sm text-muted-foreground">{p.customer?.customer_business_name || "—"}</div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap gap-1.5">
+                      <Badge variant="outline">{p.payment_method}</Badge>
+                      <Badge variant="outline">{p.payment_status}</Badge>
+                    </div>
+                    <Button variant="ghost" size="icon-sm" onClick={() => { setEditing(p); setShowForm(true) }}>
+                      <Pencil className="size-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <Table>
               <TableHeader>

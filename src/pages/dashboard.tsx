@@ -164,7 +164,7 @@ export function DashboardPage() {
   const pieColors = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"]
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+    <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
       <PageHeader title="Dashboard" description="Overview of your embroidery business">
         <Button onClick={() => navigate({ name: "order-new" })} size="sm">
           <Plus className="size-4" />
@@ -173,11 +173,11 @@ export function DashboardPage() {
       </PageHeader>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+      <div className="grid min-w-0 grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
         {kpis.map((kpi) => {
           const Icon = kpi.icon
           return (
-            <Card key={kpi.label}>
+            <Card key={kpi.label} className="min-w-0">
               <CardContent className="flex flex-col gap-2 p-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">{kpi.label}</span>
@@ -191,14 +191,14 @@ export function DashboardPage() {
       </div>
 
       {/* Charts */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-3">
+        <Card className="min-w-0 lg:col-span-2">
           <CardHeader>
             <CardTitle>Monthly Trends</CardTitle>
             <CardDescription>Orders and revenue over the last 6 months</CardDescription>
           </CardHeader>
-          <CardContent>
-            <ChartContainer config={chartConfig} className="h-[280px] w-full">
+          <CardContent className="min-w-0">
+            <ChartContainer config={chartConfig} className="h-[280px] w-full min-w-0">
               <BarChart data={data.monthlyData}>
                 <CartesianGrid vertical={false} />
                 <XAxis dataKey="month" tickLine={false} axisLine={false} />
@@ -209,14 +209,14 @@ export function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle>Order Status</CardTitle>
             <CardDescription>Distribution by status</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="min-w-0">
             {data.statusBreakdown.length > 0 ? (
-              <ChartContainer config={chartConfig} className="h-[280px] w-full">
+              <ChartContainer config={chartConfig} className="h-[280px] w-full min-w-0">
                 <PieChart>
                   <ChartTooltip content={<ChartTooltipContent />} />
                   <Pie
@@ -244,7 +244,7 @@ export function DashboardPage() {
       </div>
 
       {/* Recent + Urgent Orders */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Recent Orders</CardTitle>

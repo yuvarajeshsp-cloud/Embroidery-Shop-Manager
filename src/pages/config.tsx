@@ -213,7 +213,7 @@ export function ConfigPage() {
   const activeLabel = CATEGORIES.find((c) => c.key === activeCategory)?.label || ""
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+    <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
       <PageHeader title="Configuration" description="Manage dropdown values and business settings" />
 
       <Card>

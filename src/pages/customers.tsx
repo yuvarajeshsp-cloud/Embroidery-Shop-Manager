@@ -40,12 +40,14 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { useRouter } from "@/lib/router"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { fetchConfigItems } from "@/lib/config"
 import { toast } from "sonner"
 import { orderTotal, orderBalanceDue } from "@/lib/helpers"
 
 export function CustomersPage() {
   const { navigate } = useRouter()
+  const isMobile = useIsMobile()
   const [customers, setCustomers] = React.useState<Customer[]>([])
   const [loading, setLoading] = React.useState(true)
   const [search, setSearch] = React.useState("")
@@ -141,7 +143,7 @@ export function CustomersPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+    <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
       <PageHeader title="Customers" description="Manage your customer database">
         <Button variant="outline" onClick={() => setShowExport(true)} size="sm">
           <Download className="size-4" />
@@ -189,6 +191,41 @@ export function CustomersPage() {
           ) : filtered.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">
               No customers found. Click "New Customer" to add one.
+            </div>
+          ) : isMobile ? (
+            <div className="flex flex-col divide-y">
+              {filtered.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => navigate({ name: "customer-detail", id: c.id })}
+                  className="flex flex-col gap-2 p-4 text-left active:bg-accent"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">
+                      {c.customer_business_name}
+                      {c.archived && <Badge variant="secondary" className="ml-2 text-xs">Archived</Badge>}
+                    </span>
+                    <Badge variant="outline">{c.customer_type}</Badge>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {c.contact_person || "—"} · {c.phone || "—"}
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-xs text-muted-foreground">{c.customer_code}</span>
+                    <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon-sm" onClick={() => handleEdit(c)}>
+                        <Pencil className="size-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon-sm" onClick={() => handleArchive(c, !c.archived)}>
+                        {c.archived ? <ArchiveRestore className="size-3.5" /> : <Archive className="size-3.5" />}
+                      </Button>
+                      <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(c)}>
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </button>
+              ))}
             </div>
           ) : (
             <Table>
@@ -514,7 +551,7 @@ export function CustomerDetailPage({ id }: { id: string }) {
   const totalDue = orders.reduce((sum, o) => sum + orderBalanceDue(o.order_items || [], o.payments || []), 0)
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+    <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
       <PageHeader title={customer.customer_business_name} description={`Customer Code: ${customer.customer_code}`}>
         <Button variant="outline" size="sm" onClick={() => navigate({ name: "customers" })}>
           Back to List

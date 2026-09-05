@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Paavai Embroidery</string>
+    <string name="title_activity_main">Paavai Embroidery</string>
+    <string name="package_name">com.paavaiembroidery.shopmanager</string>
+    <string name="custom_url_scheme">com.paavaiembroidery.shopmanager</string>
+</resources>

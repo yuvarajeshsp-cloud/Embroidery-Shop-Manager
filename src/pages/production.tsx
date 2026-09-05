@@ -79,7 +79,7 @@ export function ProductionPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+    <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
       <PageHeader
         title="Production Board"
         description="Kanban-style board tracking orders by status. Configure stages under Configuration → Production Stages."

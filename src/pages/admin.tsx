@@ -112,7 +112,7 @@ export function UsersPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+    <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
       <PageHeader title="Users & Roles" description="Manage team members and their permissions">
         <Button size="sm" onClick={() => setShowForm(true)}>
           <Plus className="size-4" /> Invite User
@@ -271,7 +271,7 @@ export function AuditPage() {
   const filtered = tableFilter === "all" ? logs : logs.filter((l) => l.table_name === tableFilter)
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+    <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
       <PageHeader title="Audit Log" description="Immutable record of all changes" />
 
       <div className="flex gap-2">
