@@ -229,11 +229,11 @@ export function ReportsPage() {
             <>
               <div className="flex flex-col gap-1">
                 <Label className="text-xs text-muted-foreground">From</Label>
-                <Input type="date" className="w-[160px]" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
+                <Input type="date" className="w-[190px]" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
               </div>
               <div className="flex flex-col gap-1">
                 <Label className="text-xs text-muted-foreground">To</Label>
-                <Input type="date" className="w-[160px]" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
+                <Input type="date" className="w-[190px]" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
               </div>
             </>
           )}

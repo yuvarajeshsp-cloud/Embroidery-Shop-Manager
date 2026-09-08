@@ -131,6 +131,18 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* WebKit forces content-box (plus its own internal padding) on native
+     date/time inputs regardless of a border-box reset elsewhere, which
+     makes them render wider than same-row siblings and overflow their
+     container. Force border-box so they respect width:100% like any
+     other input. */
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"],
+  input[type="month"],
+  input[type="week"] {
+    box-sizing: border-box;
+  }
 }
 
 /* Custom scrollbar */

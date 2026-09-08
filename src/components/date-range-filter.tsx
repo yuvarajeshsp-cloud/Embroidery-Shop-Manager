@@ -35,8 +35,8 @@ export function DateRangeFilter({
       </Select>
       {preset === "custom" && (
         <>
-          <Input type="date" className="w-[150px]" value={customFrom} onChange={(e) => onCustomFromChange(e.target.value)} />
-          <Input type="date" className="w-[150px]" value={customTo} onChange={(e) => onCustomToChange(e.target.value)} />
+          <Input type="date" className="w-[190px]" value={customFrom} onChange={(e) => onCustomFromChange(e.target.value)} />
+          <Input type="date" className="w-[190px]" value={customTo} onChange={(e) => onCustomToChange(e.target.value)} />
         </>
       )}
     </>
