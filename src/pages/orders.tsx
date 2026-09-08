@@ -1,5 +1,22 @@
 import * as React from "react"
-import { Download, Plus, Search, Pencil, Trash2, FileDown, Share2, Printer, Eye } from "lucide-react"
+import {
+  Download,
+  Plus,
+  Search,
+  Pencil,
+  Trash2,
+  FileDown,
+  Share2,
+  Printer,
+  Eye,
+  Shirt,
+  Palette,
+  Ruler,
+  Hash,
+  Sparkles,
+  IndianRupee,
+  StickyNote,
+} from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
@@ -1135,10 +1152,12 @@ function OrderItemForm({
             <DialogDescription>Save the item first to unlock photo/document attachments.</DialogDescription>
           )}
         </DialogHeader>
-        <div className="grid gap-4 py-2">
-          <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-6 py-2">
+          <div className="grid grid-cols-2 items-end gap-5">
             <div className="flex flex-col gap-2">
-              <Label>Product Type</Label>
+              <Label className="flex items-center gap-1.5 font-normal text-muted-foreground">
+                <Shirt className="size-3.5" /> Product Type
+              </Label>
               <Select value={form.product_type} onValueChange={(v) => setForm({ ...form, product_type: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -1147,7 +1166,9 @@ function OrderItemForm({
               </Select>
             </div>
             <div className="flex flex-col gap-2">
-              <Label>Design Name/Number</Label>
+              <Label className="flex items-center gap-1.5 font-normal text-muted-foreground">
+                <Palette className="size-3.5" /> Design Name/Number
+              </Label>
               <Input
                 value={form.design_name_number}
                 onChange={(e) => setForm({ ...form, design_name_number: e.target.value })}
@@ -1155,7 +1176,7 @@ function OrderItemForm({
             </div>
           </div>
           <div className="flex flex-col gap-2">
-            <Label>Product Description</Label>
+            <Label className="font-normal text-muted-foreground">Product Description</Label>
             <Textarea
               value={form.product_description}
               onChange={(e) => setForm({ ...form, product_description: e.target.value })}
@@ -1163,16 +1184,20 @@ function OrderItemForm({
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label>Size / Placement</Label>
+            <Label className="flex items-center gap-1.5 font-normal text-muted-foreground">
+              <Ruler className="size-3.5" /> Size / Placement
+            </Label>
             <Input
               value={form.size_placement}
               onChange={(e) => setForm({ ...form, size_placement: e.target.value })}
               placeholder="e.g. Left Chest 4 inch"
             />
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 items-end gap-5">
             <div className="flex flex-col gap-2">
-              <Label>Quantity</Label>
+              <Label className="flex items-center gap-1.5 font-normal text-muted-foreground">
+                <Hash className="size-3.5" /> Quantity
+              </Label>
               <Input
                 type="number"
                 min={1}
@@ -1181,7 +1206,9 @@ function OrderItemForm({
               />
             </div>
             <div className="flex flex-col gap-2">
-              <Label>Stitches/Unit</Label>
+              <Label className="flex items-center gap-1.5 font-normal text-muted-foreground">
+                <Sparkles className="size-3.5" /> Stitches/Unit
+              </Label>
               <Input
                 type="number"
                 min={0}
@@ -1190,7 +1217,9 @@ function OrderItemForm({
               />
             </div>
             <div className="flex flex-col gap-2">
-              <Label>Rate per 1K Stitches</Label>
+              <Label className="flex items-center gap-1.5 font-normal text-muted-foreground">
+                <IndianRupee className="size-3.5" /> Rate/1K Stitches
+              </Label>
               <Input
                 type="number"
                 step="0.01"
@@ -1199,9 +1228,9 @@ function OrderItemForm({
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 items-end gap-5">
             <div className="flex flex-col gap-2">
-              <Label>Manual Unit Price (override)</Label>
+              <Label className="font-normal text-muted-foreground">Unit Price (Manual)</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -1211,7 +1240,7 @@ function OrderItemForm({
               />
             </div>
             <div className="flex flex-col gap-2">
-              <Label>Setup/Digitizing Charge</Label>
+              <Label className="font-normal text-muted-foreground">Setup/Digitizing Charge</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -1220,22 +1249,24 @@ function OrderItemForm({
               />
             </div>
           </div>
-          <div className="rounded-lg border bg-muted/50 p-3">
-            <div className="flex justify-between text-sm">
-              <span>Calculated Price (stitch-based):</span>
-              <span className="font-medium">{formatCurrency(calculatedPrice)}</span>
+          <div className="flex flex-col gap-1 border-t pt-4 text-sm">
+            <div className="flex justify-between text-muted-foreground">
+              <span>Calculated Price (stitch-based)</span>
+              <span>{formatCurrency(calculatedPrice)}</span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span>Unit Price ({useManual ? "Manual" : "Calculated"}):</span>
-              <span className="font-medium">{formatCurrency(unitPrice)}</span>
+            <div className="flex justify-between text-muted-foreground">
+              <span>Unit Price ({useManual ? "Manual" : "Calculated"})</span>
+              <span>{formatCurrency(unitPrice)}</span>
             </div>
-            <div className="flex justify-between border-t pt-1 text-sm font-bold">
-              <span>Line Total ({form.quantity || 0} × {formatCurrency(unitPrice)}):</span>
+            <div className="flex justify-between pt-1.5 text-base font-semibold">
+              <span>Line Total ({form.quantity || 0} × {formatCurrency(unitPrice)})</span>
               <span>{formatCurrency(lineTotal)}</span>
             </div>
           </div>
           <div className="flex flex-col gap-2">
-            <Label>Notes</Label>
+            <Label className="flex items-center gap-1.5 font-normal text-muted-foreground">
+              <StickyNote className="size-3.5" /> Notes
+            </Label>
             <Textarea
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
@@ -1244,7 +1275,7 @@ function OrderItemForm({
           </div>
 
           {savedItemId && (
-            <div className="flex flex-col gap-4 rounded-lg border p-3">
+            <div className="flex flex-col gap-4 border-t pt-4">
               <AttachmentSection orderItemId={savedItemId} category="material" label="Customer Material Photos" />
               <AttachmentSection orderItemId={savedItemId} category="design_confirmation" label="Design Confirmation" />
             </div>

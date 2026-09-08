@@ -1,8 +1,9 @@
+import { App as CapacitorApp } from "@capacitor/app"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { Toaster } from "@/components/ui/sonner"
 import { AuthProvider } from "@/lib/auth"
 import { useAuth } from "@/lib/use-auth"
-import { RouterProvider, useRouter } from "@/lib/router"
+import { RouterProvider, useRouter, canGoBackInApp } from "@/lib/router"
 import { AppSidebar } from "@/components/app-sidebar"
 import { BottomNav } from "@/components/bottom-nav"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -98,6 +99,19 @@ export function App() {
     void fetchBusinessSettings().then((settings) => {
       setDocumentTitleFromSettings(settings)
     })
+  }, [])
+
+  React.useEffect(() => {
+    const sub = CapacitorApp.addListener("backButton", () => {
+      if (canGoBackInApp()) {
+        window.history.back()
+      } else {
+        void CapacitorApp.exitApp()
+      }
+    })
+    return () => {
+      void sub.then((s) => s.remove())
+    }
   }, [])
 
   return (
