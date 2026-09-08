@@ -56,12 +56,11 @@ export function BottomNav() {
   const { route, navigate } = useRouter()
   const { signOut } = useAuth()
   const [showMore, setShowMore] = React.useState(false)
-
   const isMoreActive = moreRouteNames.has(route.name)
 
   return (
     <>
-      <nav className="fixed inset-x-0 bottom-0 z-50 flex h-16 items-stretch border-t bg-background pb-[env(safe-area-inset-bottom)]">
+      <nav className="fixed inset-x-0 bottom-0 z-50 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-stretch border-t bg-background pb-[env(safe-area-inset-bottom)]">
         {tabs.map((tab) => {
           const Icon = tab.icon
           const isActive = routeMatches(route, tab.route)

@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { toast } from "sonner"
 
 const ROLES: UserRole[] = ["Administrator", "Manager", "Operator", "Accounts"]
@@ -47,6 +48,7 @@ const roleColors: Record<string, string> = {
 }
 
 export function UsersPage() {
+  const isMobile = useIsMobile()
   const { profile: currentUser } = useAuth()
   const [users, setUsers] = React.useState<UserProfile[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -125,6 +127,46 @@ export function UsersPage() {
             <div className="p-8 text-center text-muted-foreground">Loading...</div>
           ) : users.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">No users found</div>
+          ) : isMobile ? (
+            <div className="flex flex-col divide-y">
+              {users.map((u) => (
+                <div key={u.id} className="flex flex-col gap-2 p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">
+                      {u.display_name}
+                      {u.id === currentUser?.id && <span className="ml-2 text-xs text-muted-foreground">(You)</span>}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={u.is_active}
+                        onCheckedChange={() => handleToggleActive(u)}
+                        disabled={u.id === currentUser?.id}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        {u.is_active ? "Active" : "Inactive"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-sm text-muted-foreground">{u.email}</div>
+                  <div className="text-sm text-muted-foreground">{u.phone || "—"}</div>
+                  <div className="flex items-center justify-between gap-2">
+                    {u.id === currentUser?.id ? (
+                      <Badge variant="outline" className={roleColors[u.role] || ""}>{u.role}</Badge>
+                    ) : (
+                      <Select value={u.role} onValueChange={(v) => handleRoleChange(u, v as UserRole)}>
+                        <SelectTrigger className="h-8 w-[140px] text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    <span className="text-xs text-muted-foreground">{formatDateTime(u.created_at)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -244,6 +286,7 @@ export function UsersPage() {
 }
 
 export function AuditPage() {
+  const isMobile = useIsMobile()
   const [logs, setLogs] = React.useState<AuditLog[]>([])
   const [loading, setLoading] = React.useState(true)
   const [tableFilter, setTableFilter] = React.useState("all")
@@ -292,6 +335,31 @@ export function AuditPage() {
             <div className="p-8 text-center text-muted-foreground">Loading...</div>
           ) : filtered.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">No audit entries yet</div>
+          ) : isMobile ? (
+            <div className="flex flex-col divide-y">
+              {filtered.map((log) => {
+                const actionClass =
+                  log.action === "INSERT" ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300" :
+                  log.action === "UPDATE" ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300" :
+                  log.action === "DELETE" ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300" : ""
+                return (
+                  <div key={log.id} className="flex flex-col gap-2 p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="outline" className="text-xs">{log.table_name}</Badge>
+                        <Badge variant="outline" className={actionClass}>{log.action}</Badge>
+                      </div>
+                      <span className="text-xs text-muted-foreground">{formatDateTime(log.changed_at)}</span>
+                    </div>
+                    <div className="text-sm text-muted-foreground">{log.user_name || "—"}</div>
+                    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <span className="font-mono">{log.record_id.substring(0, 8)}...</span>
+                      {log.reason && <span>{log.reason}</span>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           ) : (
             <Table>
               <TableHeader>

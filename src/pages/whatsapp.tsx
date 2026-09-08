@@ -41,11 +41,13 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { toast } from "sonner"
 
 const CATEGORIES: WhatsAppTemplateCategory[] = ["utility", "marketing", "authentication"]
 
 export function WhatsAppPage() {
+  const isMobile = useIsMobile()
   const { profile } = useAuth()
   const [loading, setLoading] = React.useState(true)
   const [templates, setTemplates] = React.useState<WhatsAppTemplate[]>([])
@@ -273,6 +275,30 @@ export function WhatsAppPage() {
         <CardContent className="p-0">
           {templates.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">No templates registered yet</div>
+          ) : isMobile ? (
+            <div className="flex flex-col divide-y">
+              {templates.map((t) => (
+                <div key={t.id} className="flex flex-col gap-2 p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-sm font-medium">{t.name}</span>
+                    <Button variant="ghost" size="icon-sm" onClick={() => handleDeleteTemplate(t)}>
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                  {t.description && <div className="text-sm text-muted-foreground">{t.description}</div>}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="outline">{t.category}</Badge>
+                      <span className="text-xs text-muted-foreground">{t.language}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch checked={t.is_active} onCheckedChange={() => handleToggleTemplateActive(t)} />
+                      <span className="text-xs text-muted-foreground">{t.is_active ? "Active" : "Inactive"}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -351,6 +377,26 @@ export function WhatsAppPage() {
         <CardContent className="p-0">
           {logs.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">No messages sent yet</div>
+          ) : isMobile ? (
+            <div className="flex flex-col divide-y">
+              {logs.map((l) => (
+                <div key={l.id} className="flex flex-col gap-2 p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-sm">{l.recipient_phone}</span>
+                    <Badge variant={l.status === "sent" ? "default" : l.status === "failed" ? "destructive" : "outline"}>
+                      {l.status}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+                    <span>{l.message_kind}{l.template_name ? ` · ${l.template_name}` : ""}</span>
+                    <span className="text-xs">{formatDateTime(l.created_at)}</span>
+                  </div>
+                  {l.status === "failed" && l.error_message && (
+                    <div className="text-xs text-destructive">{l.error_message}</div>
+                  )}
+                </div>
+              ))}
+            </div>
           ) : (
             <Table>
               <TableHeader>

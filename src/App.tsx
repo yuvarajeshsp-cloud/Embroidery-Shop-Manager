@@ -76,7 +76,7 @@ function AppContent() {
   if (isMobile) {
     return (
       <div className="flex min-h-svh flex-col pt-[env(safe-area-inset-top)]">
-        <div className="flex-1 pb-16">
+        <div className="flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))]">
           <RouteRenderer />
         </div>
         <BottomNav />
@@ -100,6 +100,8 @@ export function App() {
       setDocumentTitleFromSettings(settings)
     })
   }, [])
+
+
 
   React.useEffect(() => {
     const sub = CapacitorApp.addListener("backButton", () => {
