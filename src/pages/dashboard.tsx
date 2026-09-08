@@ -11,6 +11,7 @@ import { useRouter } from "@/lib/router"
 import { BarChart, Bar, XAxis, CartesianGrid, PieChart, Pie, Cell } from "recharts"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
+import { toast } from "sonner"
 
 interface DashboardData {
   totalOrders: number
@@ -44,6 +45,9 @@ export function DashboardPage() {
         supabase.from("order_items").select("*"),
         supabase.from("payments").select("*").eq("payment_status", "Completed"),
       ])
+
+      const firstError = ordersRes.error || customersRes.error || itemsRes.error || paymentsRes.error
+      if (firstError) throw firstError
 
       const orders = (ordersRes.data || []) as Order[]
       const customers = (customersRes.data || []) as Customer[]
@@ -134,6 +138,7 @@ export function DashboardPage() {
       })
     } catch (err) {
       console.error("Dashboard load error:", err)
+      toast.error(err instanceof Error ? err.message : "Failed to load dashboard data")
     } finally {
       setLoading(false)
     }

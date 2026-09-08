@@ -75,7 +75,7 @@ function AppContent() {
 
   if (isMobile) {
     return (
-      <div className="flex min-h-svh flex-col">
+      <div className="flex min-h-svh flex-col pt-[env(safe-area-inset-top)]">
         <div className="flex-1 pb-16">
           <RouteRenderer />
         </div>
