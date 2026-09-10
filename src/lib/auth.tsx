@@ -13,7 +13,6 @@ export interface AuthContextValue {
     email: string,
     password: string,
     displayName: string,
-    role?: UserRole,
   ) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
@@ -76,23 +75,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 
   const signUp = React.useCallback(
-    async (
-      email: string,
-      password: string,
-      displayName: string,
-      role: UserRole = "Administrator",
-    ) => {
+    async (email: string, password: string, displayName: string) => {
       const { data, error } = await supabase.auth.signUp({ email, password })
       if (error) return { error: error.message }
 
       if (data.user) {
+        // New self-signups always land as the lowest-privilege role. An
+        // Administrator promotes them from the Users & Roles page — the
+        // database also rejects a self-inserted 'Administrator' row outright.
         const { error: profileError } = await supabase
           .from("user_profiles")
           .insert({
             id: data.user.id,
             display_name: displayName,
             email,
-            role,
+            role: "Operator" satisfies UserRole,
           })
         if (profileError) {
           return { error: profileError.message }

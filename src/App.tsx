@@ -8,6 +8,8 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { BottomNav } from "@/components/bottom-nav"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { AuthScreen } from "@/pages/auth"
+import { SetPasswordScreen } from "@/pages/set-password"
+import { ProfilePage } from "@/pages/profile"
 import { DashboardPage } from "@/pages/dashboard"
 import { CustomersPage, CustomerDetailPage } from "@/pages/customers"
 import { OrdersPage, OrderDetailPage } from "@/pages/orders"
@@ -18,12 +20,28 @@ import { ReportsPage } from "@/pages/reports"
 import { ConfigPage } from "@/pages/config"
 import { WhatsAppPage } from "@/pages/whatsapp"
 import { UsersPage, AuditPage } from "@/pages/admin"
-import { Spinner } from "@/components/ui/spinner"
-import { fetchBusinessSettings, setDocumentTitleFromSettings } from "@/lib/config"
+import { AppLoader } from "@/components/app-loader"
+import { useBusinessProfile } from "@/lib/business-profile"
+import { setFavicon } from "@/lib/favicon"
+import { canAccessRoute } from "@/lib/permissions"
 import * as React from "react"
+
+function AccessDenied() {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
+      <h2 className="text-lg font-semibold">Access Denied</h2>
+      <p className="text-sm text-muted-foreground">Your role doesn't have permission to view this page.</p>
+    </div>
+  )
+}
 
 function RouteRenderer() {
   const { route } = useRouter()
+  const { profile } = useAuth()
+
+  if (!canAccessRoute(profile?.role, route.name)) {
+    return <AccessDenied />
+  }
 
   switch (route.name) {
     case "dashboard":
@@ -52,6 +70,8 @@ function RouteRenderer() {
       return <UsersPage />
     case "audit":
       return <AuditPage />
+    case "profile":
+      return <ProfilePage />
     default:
       return <DashboardPage />
   }
@@ -60,13 +80,25 @@ function RouteRenderer() {
 function AppContent() {
   const { session, loading } = useAuth()
   const isMobile = useIsMobile()
+  const businessProfile = useBusinessProfile()
+  const [pendingAuthType, setPendingAuthType] = React.useState<string | null>(
+    () => sessionStorage.getItem("pendingAuthType"),
+  )
+
+  React.useEffect(() => {
+    setFavicon(session ? businessProfile.companyLogo : null)
+  }, [session, businessProfile.companyLogo])
+
+  React.useEffect(() => {
+    document.title = businessProfile.companyName
+  }, [businessProfile.companyName])
 
   if (loading) {
-    return (
-      <div className="flex min-h-svh items-center justify-center">
-        <Spinner className="size-8" />
-      </div>
-    )
+    return <AppLoader />
+  }
+
+  if (session && pendingAuthType) {
+    return <SetPasswordScreen onDone={() => setPendingAuthType(null)} />
   }
 
   if (!session) {
@@ -95,14 +127,6 @@ function AppContent() {
 }
 
 export function App() {
-  React.useEffect(() => {
-    void fetchBusinessSettings().then((settings) => {
-      setDocumentTitleFromSettings(settings)
-    })
-  }, [])
-
-
-
   React.useEffect(() => {
     const sub = CapacitorApp.addListener("backButton", () => {
       if (canGoBackInApp()) {

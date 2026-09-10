@@ -6,6 +6,7 @@ import { logAudit } from "@/lib/audit"
 import { formatDate } from "@/lib/helpers"
 import type { Order, Customer } from "@/lib/types"
 import { PageHeader } from "@/components/page-header"
+import { PageLoader } from "@/components/app-loader"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -204,7 +205,7 @@ function OrderStageDialog({
   if (loading || !order) {
     return (
       <Dialog open onOpenChange={onClose}>
-        <DialogContent><div className="py-8 text-center text-muted-foreground">Loading...</div></DialogContent>
+        <DialogContent><PageLoader size="sm" /></DialogContent>
       </Dialog>
     )
   }

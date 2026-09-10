@@ -101,23 +101,20 @@ export function derivePaymentStatus(
 }
 
 export async function generateOrderNumber(): Promise<string> {
-  const year = new Date().getFullYear()
-  const prefix = `ORD-${year}-`
+  const { data, error } = await supabase.from("orders").select("order_number")
 
-  const { data, error } = await supabase
-    .from("orders")
-    .select("order_number")
-    .ilike("order_number", `${prefix}%`)
-    .order("order_number", { ascending: false })
-    .limit(1)
-
-  let next = 1
-  if (!error && data && data.length > 0) {
-    const lastSeq = parseInt(data[0].order_number.slice(prefix.length), 10)
-    if (!isNaN(lastSeq)) next = lastSeq + 1
+  let maxSeq = 0
+  if (!error && data) {
+    for (const row of data) {
+      const match = row.order_number?.match(/(\d+)\s*$/)
+      if (match) {
+        const seq = parseInt(match[1], 10)
+        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq
+      }
+    }
   }
 
-  return `${prefix}${String(next).padStart(4, "0")}`
+  return String(maxSeq + 1).padStart(4, "0")
 }
 
 export function generatePaymentNumber(): string {

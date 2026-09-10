@@ -1,3 +1,5 @@
+import "./lib/capture-auth-redirect.ts"
+
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 

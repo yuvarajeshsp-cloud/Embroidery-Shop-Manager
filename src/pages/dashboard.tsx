@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase"
 import { formatCurrency, formatDate, isOverdue, isDueSoon, orderAmountPaid, orderBalanceDue } from "@/lib/helpers"
 import type { Order, OrderItem, Payment, Customer } from "@/lib/types"
 import { PageHeader } from "@/components/page-header"
+import { PageLoader } from "@/components/app-loader"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { OrderStatusBadge, PriorityBadge } from "@/components/status-badges"
@@ -145,11 +146,7 @@ export function DashboardPage() {
   }
 
   if (loading || !data) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <div className="text-muted-foreground">Loading dashboard...</div>
-      </div>
-    )
+    return <PageLoader label="Loading dashboard..." />
   }
 
   const kpis = [

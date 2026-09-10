@@ -49,6 +49,7 @@ export interface Order {
   special_instructions: string | null
   internal_notes: string | null
   archived: boolean
+  assigned_to: string | null
   created_at: string
   updated_at: string
   created_by: string | null

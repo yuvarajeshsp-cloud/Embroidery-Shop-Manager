@@ -12,6 +12,7 @@ import { saveBusinessSettings } from "@/lib/config"
 import { formatDateTime } from "@/lib/helpers"
 import type { WhatsAppTemplate, WhatsAppTemplateCategory, WhatsAppMessageLog } from "@/lib/types"
 import { PageHeader } from "@/components/page-header"
+import { PageLoader } from "@/components/app-loader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -156,7 +157,7 @@ export function WhatsAppPage() {
   }
 
   if (loading) {
-    return <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">Loading...</div>
+    return <PageLoader />
   }
 
   return (

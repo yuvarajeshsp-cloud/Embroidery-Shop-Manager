@@ -6,6 +6,7 @@ import { logAudit } from "@/lib/audit"
 import { formatDateTime } from "@/lib/helpers"
 import type { UserProfile, UserRole, AuditLog } from "@/lib/types"
 import { PageHeader } from "@/components/page-header"
+import { PageLoader } from "@/components/app-loader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -56,6 +57,7 @@ export function UsersPage() {
   const [inviteEmail, setInviteEmail] = React.useState("")
   const [inviteName, setInviteName] = React.useState("")
   const [inviteRole, setInviteRole] = React.useState<UserRole>("Operator")
+  const [inviting, setInviting] = React.useState(false)
 
   React.useEffect(() => {
     loadUsers()
@@ -105,12 +107,31 @@ export function UsersPage() {
       toast.error("Name and email are required")
       return
     }
-    // Note: In Supabase, inviting users requires the admin API.
-    // For this app, we create the profile entry — the user would need to sign up.
-    toast.info("User profiles are created automatically when someone signs up. Share the signup link with your team member.")
-    setInviteEmail("")
-    setInviteName("")
-    setShowForm(false)
+    setInviting(true)
+    try {
+      const { data, error } = await supabase.functions.invoke("invite-user", {
+        body: {
+          email: inviteEmail.trim(),
+          display_name: inviteName.trim(),
+          role: inviteRole,
+        },
+      })
+      if (error) throw error
+      if (!data?.success) throw new Error(data?.error || "Failed to send invite")
+
+      await logAudit(currentUser, "user_profiles", data.user_id, "INSERT", null, { email: inviteEmail.trim(), role: inviteRole } as Record<string, unknown>, "Invited")
+      toast.success(`Invite sent to ${inviteEmail.trim()}`)
+      setInviteEmail("")
+      setInviteName("")
+      setInviteRole("Operator")
+      setShowForm(false)
+      loadUsers()
+    } catch (err) {
+      console.error(err)
+      toast.error(err instanceof Error ? err.message : "Failed to send invite")
+    } finally {
+      setInviting(false)
+    }
   }
 
   return (
@@ -124,7 +145,7 @@ export function UsersPage() {
       <Card>
         <CardContent className="p-0">
           {loading ? (
-            <div className="p-8 text-center text-muted-foreground">Loading...</div>
+            <PageLoader size="sm" />
           ) : users.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">No users found</div>
           ) : isMobile ? (
@@ -249,34 +270,34 @@ export function UsersPage() {
             <DialogHeader>
               <DialogTitle>Invite Team Member</DialogTitle>
               <DialogDescription>
-                Users are created when they sign up. Share the signup link with your team member and ask them to register with this email.
+                Sends an email invite with a sign-in link. Their account is created with the role you pick below —
+                they won't need to self sign-up.
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-3 py-2">
               <div className="flex flex-col gap-2">
                 <Label>Name</Label>
-                <Input value={inviteName} onChange={(e) => setInviteName(e.target.value)} />
+                <Input value={inviteName} onChange={(e) => setInviteName(e.target.value)} disabled={inviting} />
               </div>
               <div className="flex flex-col gap-2">
                 <Label>Email</Label>
-                <Input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} />
+                <Input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} disabled={inviting} />
               </div>
               <div className="flex flex-col gap-2">
-                <Label>Suggested Role</Label>
-                <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as UserRole)}>
+                <Label>Role</Label>
+                <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as UserRole)} disabled={inviting}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
-                  After they sign up, you can assign their role from the user list above.
-                </p>
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowForm(false)}>Close</Button>
-              <Button onClick={handleInvite}>Got it</Button>
+              <Button variant="outline" onClick={() => setShowForm(false)} disabled={inviting}>Cancel</Button>
+              <Button onClick={handleInvite} disabled={inviting}>
+                {inviting ? "Sending..." : "Send Invite"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -332,7 +353,7 @@ export function AuditPage() {
       <Card>
         <CardContent className="p-0">
           {loading ? (
-            <div className="p-8 text-center text-muted-foreground">Loading...</div>
+            <PageLoader size="sm" />
           ) : filtered.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">No audit entries yet</div>
           ) : isMobile ? (

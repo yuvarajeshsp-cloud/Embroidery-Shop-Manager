@@ -12,6 +12,7 @@ import type { Payment, Order, Customer } from "@/lib/types"
 import type { ExportField } from "@/lib/export"
 import { computeDateRange, isWithinRange, type DateRangePreset } from "@/lib/date-range"
 import { PageHeader } from "@/components/page-header"
+import { PageLoader } from "@/components/app-loader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -146,15 +147,17 @@ export function PaymentsPage() {
     <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
       <PageHeader title="Payments" description="Track all customer payments">
         <Button variant="outline" size="sm" onClick={() => setShowExport(true)}>
-          <Download className="size-4" /> Export
+          <Download className="size-4" /> <span className="hidden sm:inline">Export</span>
         </Button>
         <Button size="sm" onClick={() => { setEditing(null); setShowForm(true) }}>
-          <Plus className="size-4" /> Record Payment
+          <Plus className="size-4" />
+          <span className="hidden sm:inline">Record Payment</span>
+          <span className="sm:hidden">Payment</span>
         </Button>
       </PageHeader>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+        <div className="relative col-span-2 sm:flex-1 sm:min-w-[200px]">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search by payment #, customer, order..."
@@ -168,18 +171,21 @@ export function PaymentsPage() {
           options={PAYMENT_STATUSES.map((s) => ({ value: s, label: s }))}
           selected={statusFilter}
           onChange={setStatusFilter}
+          className="w-full sm:w-auto"
         />
         <MultiSelectFilter
           label="Method"
           options={paymentMethods.map((m) => ({ value: m, label: m }))}
           selected={methodFilter}
           onChange={setMethodFilter}
+          className="w-full sm:w-auto"
         />
         <MultiSelectFilter
           label="Customer"
           options={customerOptions}
           selected={customerFilter}
           onChange={setCustomerFilter}
+          className="w-full sm:w-auto"
         />
         <DateRangeFilter
           preset={datePreset}
@@ -194,7 +200,7 @@ export function PaymentsPage() {
       <Card>
         <CardContent className="p-0">
           {loading ? (
-            <div className="p-8 text-center text-muted-foreground">Loading...</div>
+            <PageLoader size="sm" />
           ) : filtered.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">No payments found</div>
           ) : isMobile ? (

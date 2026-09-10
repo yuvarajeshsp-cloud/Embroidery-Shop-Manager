@@ -1,11 +1,13 @@
 import * as React from "react"
-import { ArrowLeft, ArrowRight, Check, ChevronsUpDown, Plus, Trash2 } from "lucide-react"
+import { ArrowLeft, ArrowRight, Camera, Check, ChevronsUpDown, Plus, Trash2, X } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
 import { formatCurrency, generateOrderNumber } from "@/lib/helpers"
+import { uploadAttachment } from "@/lib/attachments"
 import { cn } from "@/lib/utils"
-import type { Customer } from "@/lib/types"
+import type { Customer, UserProfile } from "@/lib/types"
+import { ASSIGNABLE_ROLES } from "@/lib/permissions"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -44,6 +46,8 @@ interface DraftItem {
   manual_unit_price: string
   setup_digitizing_charge: number
   notes: string
+  photoFile: File | null
+  photoPreviewUrl: string
 }
 
 export function NewOrderPage() {
@@ -52,6 +56,7 @@ export function NewOrderPage() {
   const [step, setStep] = React.useState(1)
   const [saving, setSaving] = React.useState(false)
   const [customers, setCustomers] = React.useState<Customer[]>([])
+  const [assignableUsers, setAssignableUsers] = React.useState<UserProfile[]>([])
   const [customerPickerOpen, setCustomerPickerOpen] = React.useState(false)
   const [orderStatuses, setOrderStatuses] = React.useState<string[]>([])
   const [priorities, setPriorities] = React.useState<string[]>([])
@@ -66,18 +71,28 @@ export function NewOrderPage() {
     required_date: "",
     priority: "Normal",
     order_status: "Quotation",
-    customer_po_reference: "",
     sales_channel: "",
     special_instructions: "",
-    internal_notes: "",
+    assigned_to: "",
   })
 
   const [items, setItems] = React.useState<DraftItem[]>([])
+  const itemsRef = React.useRef<DraftItem[]>(items)
+  itemsRef.current = items
+
+  React.useEffect(() => {
+    return () => {
+      itemsRef.current.forEach((i) => {
+        if (i.photoPreviewUrl) URL.revokeObjectURL(i.photoPreviewUrl)
+      })
+    }
+  }, [])
 
   React.useEffect(() => {
     async function init() {
-      const [custRes, statusItems, priorityItems, typeItems, channelItems, rate, orderNumber] = await Promise.all([
+      const [custRes, usersRes, statusItems, priorityItems, typeItems, channelItems, rate, orderNumber] = await Promise.all([
         supabase.from("customers").select("*").eq("archived", false).order("customer_business_name"),
+        supabase.from("user_profiles").select("*").in("role", ASSIGNABLE_ROLES).eq("is_active", true).order("display_name"),
         fetchConfigItems("order_status"),
         fetchConfigItems("priority"),
         fetchConfigItems("product_type"),
@@ -86,6 +101,7 @@ export function NewOrderPage() {
         generateOrderNumber(),
       ])
       setCustomers(custRes.data || [])
+      setAssignableUsers(usersRes.data || [])
       setOrderStatuses(statusItems.map((i) => i.name))
       setPriorities(priorityItems.map((i) => i.name))
       setProductTypes(typeItems.map((i) => i.name))
@@ -105,6 +121,8 @@ export function NewOrderPage() {
           manual_unit_price: "",
           setup_digitizing_charge: 0,
           notes: "",
+          photoFile: null,
+          photoPreviewUrl: "",
         },
       ])
     }
@@ -126,6 +144,8 @@ export function NewOrderPage() {
         manual_unit_price: "",
         setup_digitizing_charge: 0,
         notes: "",
+        photoFile: null,
+        photoPreviewUrl: "",
       },
     ])
   }
@@ -135,7 +155,21 @@ export function NewOrderPage() {
   }
 
   function removeItem(tempId: string) {
-    setItems((prev) => prev.filter((i) => i.tempId !== tempId))
+    setItems((prev) => {
+      const item = prev.find((i) => i.tempId === tempId)
+      if (item?.photoPreviewUrl) URL.revokeObjectURL(item.photoPreviewUrl)
+      return prev.filter((i) => i.tempId !== tempId)
+    })
+  }
+
+  function setItemPhoto(tempId: string, file: File | null) {
+    setItems((prev) =>
+      prev.map((i) => {
+        if (i.tempId !== tempId) return i
+        if (i.photoPreviewUrl) URL.revokeObjectURL(i.photoPreviewUrl)
+        return { ...i, photoFile: file, photoPreviewUrl: file ? URL.createObjectURL(file) : "" }
+      }),
+    )
   }
 
   const subtotal = items.reduce((s, i) => {
@@ -172,10 +206,9 @@ export function NewOrderPage() {
             required_date: orderForm.required_date || null,
             priority: orderForm.priority,
             order_status: orderForm.order_status,
-            customer_po_reference: orderForm.customer_po_reference || null,
             sales_channel: orderForm.sales_channel || null,
             special_instructions: orderForm.special_instructions || null,
-            internal_notes: orderForm.internal_notes || null,
+            assigned_to: orderForm.assigned_to || null,
             created_by: profile?.id,
             updated_by: profile?.id,
           })
@@ -210,8 +243,23 @@ export function NewOrderPage() {
         notes: item.notes || null,
       }))
 
-      const { error: itemsError } = await supabase.from("order_items").insert(itemPayloads)
+      const { data: insertedItems, error: itemsError } = await supabase
+        .from("order_items")
+        .insert(itemPayloads)
+        .select()
       if (itemsError) throw itemsError
+
+      const photosToUpload = items
+        .map((item, idx) => ({ file: item.photoFile, orderItemId: insertedItems?.[idx]?.id }))
+        .filter((p): p is { file: File; orderItemId: string } => !!p.file && !!p.orderItemId)
+      if (photosToUpload.length > 0) {
+        const results = await Promise.allSettled(
+          photosToUpload.map((p) => uploadAttachment(p.orderItemId, "material", p.file, profile?.id)),
+        )
+        if (results.some((r) => r.status === "rejected")) {
+          toast.error("Order created, but some photos failed to upload")
+        }
+      }
 
       await logAudit(profile, "orders", orderData.id, "INSERT", null, { order_number: orderNumber } as Record<string, unknown>)
       toast.success("Order created successfully")
@@ -260,23 +308,27 @@ export function NewOrderPage() {
         <Card>
           <CardHeader><CardTitle>Order Details</CardTitle></CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex min-w-0 flex-col gap-2">
                 <Label>Order Number</Label>
                 <Input
                   value={orderForm.order_number}
                   placeholder={orderForm.order_number ? undefined : "Generating..."}
-                  disabled={!orderForm.order_number}
-                  onChange={(e) => setOrderForm({ ...orderForm, order_number: e.target.value })}
+                  disabled
+                  readOnly
                 />
               </div>
-              <div className="flex flex-col gap-2">
-                <Label>Order Date</Label>
-                <Input
-                  type="date"
-                  value={orderForm.order_date}
-                  onChange={(e) => setOrderForm({ ...orderForm, order_date: e.target.value })}
-                />
+              <div className="flex min-w-0 flex-col gap-2">
+                <Label>Sales Channel</Label>
+                <Select
+                  value={orderForm.sales_channel}
+                  onValueChange={(v) => setOrderForm({ ...orderForm, sales_channel: v })}
+                >
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Select..." /></SelectTrigger>
+                  <SelectContent>
+                    {salesChannels.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="flex flex-col gap-2">
@@ -328,26 +380,24 @@ export function NewOrderPage() {
                 </PopoverContent>
               </Popover>
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex min-w-0 flex-col gap-2">
+                <Label>Order Date</Label>
+                <Input
+                  type="date"
+                  className="min-w-0"
+                  value={orderForm.order_date}
+                  onChange={(e) => setOrderForm({ ...orderForm, order_date: e.target.value })}
+                />
+              </div>
+              <div className="flex min-w-0 flex-col gap-2">
                 <Label>Delivery Date</Label>
                 <Input
                   type="date"
+                  className="min-w-0"
                   value={orderForm.required_date}
                   onChange={(e) => setOrderForm({ ...orderForm, required_date: e.target.value })}
                 />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Priority</Label>
-                <Select
-                  value={orderForm.priority}
-                  onValueChange={(v) => setOrderForm({ ...orderForm, priority: v })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {priorities.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                  </SelectContent>
-                </Select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -364,22 +414,30 @@ export function NewOrderPage() {
                 </Select>
               </div>
               <div className="flex flex-col gap-2">
-                <Label>Customer PO Reference</Label>
-                <Input
-                  value={orderForm.customer_po_reference}
-                  onChange={(e) => setOrderForm({ ...orderForm, customer_po_reference: e.target.value })}
-                />
+                <Label>Priority</Label>
+                <Select
+                  value={orderForm.priority}
+                  onValueChange={(v) => setOrderForm({ ...orderForm, priority: v })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {priorities.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="flex flex-col gap-2">
-              <Label>Sales Channel</Label>
+              <Label>Assign To</Label>
               <Select
-                value={orderForm.sales_channel}
-                onValueChange={(v) => setOrderForm({ ...orderForm, sales_channel: v })}
+                value={orderForm.assigned_to || "unassigned"}
+                onValueChange={(v) => setOrderForm({ ...orderForm, assigned_to: v === "unassigned" ? "" : v })}
               >
-                <SelectTrigger><SelectValue placeholder="Select sales channel..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
                 <SelectContent>
-                  {salesChannels.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {assignableUsers.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>{u.display_name} ({u.role})</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -388,14 +446,6 @@ export function NewOrderPage() {
               <Textarea
                 value={orderForm.special_instructions}
                 onChange={(e) => setOrderForm({ ...orderForm, special_instructions: e.target.value })}
-                rows={2}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label>Internal Notes</Label>
-              <Textarea
-                value={orderForm.internal_notes}
-                onChange={(e) => setOrderForm({ ...orderForm, internal_notes: e.target.value })}
                 rows={2}
               />
             </div>
@@ -411,7 +461,7 @@ export function NewOrderPage() {
       {/* Step 2: Items */}
       {step === 2 && (
         <Card>
-          <CardHeader className="flex-row items-center justify-between">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
             <CardTitle>Items & Pricing</CardTitle>
             <Button size="sm" onClick={addBlankItem}>
               <Plus className="size-4" /> Add Item
@@ -437,7 +487,7 @@ export function NewOrderPage() {
                           <Trash2 className="size-3.5" />
                         </Button>
                       </div>
-                      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                      <div className="grid grid-cols-2 gap-3">
                         <div className="flex flex-col gap-1">
                           <Label className="text-xs">Product Type</Label>
                           <Select
@@ -449,22 +499,6 @@ export function NewOrderPage() {
                               {productTypes.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                             </SelectContent>
                           </Select>
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <Label className="text-xs">Design Name/No.</Label>
-                          <Input
-                            className="h-8"
-                            value={item.design_name_number}
-                            onChange={(e) => updateItem(item.tempId, { design_name_number: e.target.value })}
-                          />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <Label className="text-xs">Size/Placement</Label>
-                          <Input
-                            className="h-8"
-                            value={item.size_placement}
-                            onChange={(e) => updateItem(item.tempId, { size_placement: e.target.value })}
-                          />
                         </div>
                         <div className="flex flex-col gap-1">
                           <Label className="text-xs">Quantity</Label>
@@ -497,6 +531,16 @@ export function NewOrderPage() {
                           />
                         </div>
                         <div className="flex flex-col gap-1">
+                          <Label className="text-xs">Setup/Digitizing</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            className="h-8"
+                            value={Number.isNaN(item.setup_digitizing_charge) ? "" : item.setup_digitizing_charge}
+                            onChange={(e) => updateItem(item.tempId, { setup_digitizing_charge: e.target.value === "" ? NaN : parseFloat(e.target.value) })}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
                           <Label className="text-xs">Manual Unit Price</Label>
                           <Input
                             type="number"
@@ -505,16 +549,6 @@ export function NewOrderPage() {
                             placeholder="Auto"
                             value={item.manual_unit_price}
                             onChange={(e) => updateItem(item.tempId, { manual_unit_price: e.target.value })}
-                          />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <Label className="text-xs">Setup/Digitizing</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            className="h-8"
-                            value={Number.isNaN(item.setup_digitizing_charge) ? "" : item.setup_digitizing_charge}
-                            onChange={(e) => updateItem(item.tempId, { setup_digitizing_charge: e.target.value === "" ? NaN : parseFloat(e.target.value) })}
                           />
                         </div>
                         <div className="flex flex-col gap-1">
@@ -530,6 +564,38 @@ export function NewOrderPage() {
                           value={item.product_description}
                           onChange={(e) => updateItem(item.tempId, { product_description: e.target.value })}
                         />
+                      </div>
+                      <div className="mt-2 flex flex-col gap-1">
+                        <Label className="text-xs">Photo</Label>
+                        <div className="flex items-center gap-2">
+                          {item.photoPreviewUrl ? (
+                            <div className="relative size-16 shrink-0 overflow-hidden rounded-md border">
+                              <img src={item.photoPreviewUrl} alt="" className="size-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => setItemPhoto(item.tempId, null)}
+                                className="absolute right-0.5 top-0.5 flex size-4 items-center justify-center rounded-full bg-background/90 text-muted-foreground hover:text-destructive"
+                                title="Remove photo"
+                              >
+                                <X className="size-2.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <label className="flex size-16 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed text-muted-foreground hover:bg-muted/50">
+                              <Camera className="size-4" />
+                              <span className="text-[10px]">Add photo</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => setItemPhoto(item.tempId, e.target.files?.[0] || null)}
+                              />
+                            </label>
+                          )}
+                          {item.photoFile && (
+                            <span className="max-w-[160px] truncate text-xs text-muted-foreground">{item.photoFile.name}</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )
@@ -590,9 +656,10 @@ export function NewOrderPage() {
                   const useManual = item.manual_unit_price !== ""
                   const unitPrice = useManual ? parseFloat(item.manual_unit_price) : calcPrice
                   const lineTotal = unitPrice * (item.quantity || 0)
+                  const label = item.product_description || item.design_name_number
                   return (
                     <div key={item.tempId} className="flex items-center justify-between text-sm">
-                      <span>{idx + 1}. {item.product_type} — {item.product_description || item.design_name_number || "—"}</span>
+                      <span>{idx + 1}. {item.product_type}{label ? ` — ${label}` : ""}</span>
                       <span className="font-medium">{formatCurrency(lineTotal)}</span>
                     </div>
                   )

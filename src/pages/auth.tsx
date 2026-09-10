@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Scissors, Loader2 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -42,9 +42,7 @@ export function AuthScreen() {
     <div className="flex min-h-svh items-center justify-center bg-gradient-to-br from-slate-50 to-slate-200 p-4 dark:from-slate-950 dark:to-slate-900">
       <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center gap-2">
-          <div className="flex size-14 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg">
-            <Scissors className="size-7" />
-          </div>
+          <img src="/favicon.svg" alt="" className="size-14 rounded-xl shadow-lg" />
           <h1 className="text-2xl font-bold tracking-tight">Paavai Embroidery</h1>
           <p className="text-sm text-muted-foreground">Business Management System</p>
         </div>

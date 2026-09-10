@@ -11,6 +11,7 @@ import {
   ScrollText,
   Scissors,
   MessageCircle,
+  CircleUser,
 } from "lucide-react"
 
 import {
@@ -26,8 +27,9 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { useRouter, type Route } from "@/lib/router"
-import { fetchBusinessSettings } from "@/lib/config"
+import { useBusinessProfile } from "@/lib/business-profile"
 import { useAuth } from "@/lib/use-auth"
+import { allowedRouteNames } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 
 interface NavItem {
@@ -63,6 +65,12 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { label: "Audit Log", icon: ScrollText, route: { name: "audit" } },
     ],
   },
+  {
+    label: "Account",
+    items: [
+      { label: "My Profile", icon: CircleUser, route: { name: "profile" } },
+    ],
+  },
 ]
 
 function routeMatches(current: Route, item: Route): boolean {
@@ -78,22 +86,7 @@ function routeMatches(current: Route, item: Route): boolean {
 export function AppSidebar() {
   const { route, navigate } = useRouter()
   const { profile, user, signOut } = useAuth()
-  const [companyName, setCompanyName] = React.useState("Embroidery Shop Manager")
-  const [companyLogo, setCompanyLogo] = React.useState<string | null>(null)
-
-  React.useEffect(() => {
-    let isMounted = true
-
-    void fetchBusinessSettings().then((settings) => {
-      if (!isMounted) return
-      setCompanyName((settings.company_name || "Embroidery Shop Manager").trim() || "Embroidery Shop Manager")
-      setCompanyLogo(settings.company_logo_data_url || null)
-    })
-
-    return () => {
-      isMounted = false
-    }
-  }, [])
+  const { companyName, companyLogo } = useBusinessProfile()
 
   const displayName =
     profile?.display_name ||
@@ -102,6 +95,10 @@ export function AppSidebar() {
     "User"
 
   const userRole = profile?.role || user?.user_metadata?.role || "User"
+  const allowed = allowedRouteNames(profile?.role)
+  const visibleGroups = navGroups
+    .map((group) => ({ ...group, items: group.items.filter((item) => allowed.has(item.route.name)) }))
+    .filter((group) => group.items.length > 0)
 
   return (
     <Sidebar>
@@ -122,7 +119,7 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        {navGroups.map((group) => (
+        {visibleGroups.map((group) => (
           <SidebarGroup key={group.label}>
             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
             <SidebarGroupContent>

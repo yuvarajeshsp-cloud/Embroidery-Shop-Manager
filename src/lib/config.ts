@@ -46,11 +46,16 @@ export async function fetchConfigItems(category: string): Promise<ConfigItem[]> 
   return data || []
 }
 
+let businessSettingsCache: Record<string, string> | null = null
+
 export function clearConfigCache() {
   cache.clear()
+  businessSettingsCache = null
 }
 
 export async function fetchBusinessSettings(): Promise<Record<string, string>> {
+  if (businessSettingsCache) return businessSettingsCache
+
   const { data, error } = await supabase.from("business_settings").select("*")
   if (error) {
     console.error("Failed to fetch business settings:", error)
@@ -60,6 +65,7 @@ export async function fetchBusinessSettings(): Promise<Record<string, string>> {
   for (const row of data || []) {
     result[row.key] = row.value
   }
+  businessSettingsCache = result
   return result
 }
 

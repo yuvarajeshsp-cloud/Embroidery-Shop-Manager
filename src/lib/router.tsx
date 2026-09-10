@@ -14,6 +14,7 @@ export type Route =
   | { name: "whatsapp" }
   | { name: "users" }
   | { name: "audit" }
+  | { name: "profile" }
   | { name: "login" }
 
 interface RouterContextValue {

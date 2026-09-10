@@ -1,4 +1,7 @@
+import { jsPDF } from "jspdf"
+import { Capacitor } from "@capacitor/core"
 import { fetchBusinessSettings } from "./config"
+import { shareFile, formatPdfCurrency } from "./pdf"
 import {
   formatCurrency,
   formatDate,
@@ -98,6 +101,252 @@ function printThermalHtml(bodyHtml: string, title: string) {
   }, 300)
 }
 
+// Draws a thermal-receipt-style PDF using jsPDF's own text/line drawing
+// (not html2canvas): the app's Tailwind theme uses oklch() colors globally,
+// which html2canvas cannot parse — even rendered inside an isolated iframe,
+// it still pulls the CSS through and throws. Direct drawing sidesteps that
+// entirely and mirrors the exact content of the HTML receipt used for the
+// desktop print/preview, just via jsPDF calls instead of CSS.
+const THERMAL_WIDTH_MM = 80
+const THERMAL_MARGIN_MM = 4
+const THERMAL_CONTENT_WIDTH_MM = THERMAL_WIDTH_MM - THERMAL_MARGIN_MM * 2
+const THERMAL_DARK: [number, number, number] = [0, 0, 0]
+const THERMAL_MUTED: [number, number, number] = [70, 70, 70]
+
+function drawThermalDivider(doc: jsPDF, y: number): number {
+  doc.setDrawColor(...THERMAL_MUTED)
+  doc.setLineDashPattern([0.8, 0.8], 0)
+  doc.line(THERMAL_MARGIN_MM, y, THERMAL_WIDTH_MM - THERMAL_MARGIN_MM, y)
+  doc.setLineDashPattern([], 0)
+  return y + 4
+}
+
+function drawThermalRow(doc: jsPDF, label: string, value: string, y: number, bold: boolean): number {
+  doc.setFont("courier", bold ? "bold" : "normal")
+  doc.setTextColor(...(bold ? THERMAL_DARK : THERMAL_MUTED))
+  doc.text(label, THERMAL_MARGIN_MM, y)
+  doc.setTextColor(...THERMAL_DARK)
+  doc.text(value, THERMAL_WIDTH_MM - THERMAL_MARGIN_MM, y, { align: "right" })
+  return y + 4
+}
+
+type BusinessSettings = Record<string, string>
+
+function drawThermalHeader(doc: jsPDF, y: number, settings: BusinessSettings): number {
+  const name = (settings.company_name || "Embroidery Shop Manager").trim()
+  const tagline = (settings.company_tagline || "").trim()
+  const phone = (settings.company_phone || "").trim()
+  const email = (settings.company_email || "").trim()
+  const address = (settings.company_address || "").trim()
+  const cityLine = [settings.company_city, settings.company_state, settings.company_pincode].filter(Boolean).join(", ")
+  const gst = (settings.company_gst_number || "").trim()
+  const logo = (settings.company_logo_data_url || "").trim()
+
+  if (logo && logo.startsWith("data:image/")) {
+    try {
+      const format = logo.includes("image/png") ? "PNG" : "JPEG"
+      const logoW = 22
+      const logoH = 14
+      doc.addImage(logo, format, (THERMAL_WIDTH_MM - logoW) / 2, y, logoW, logoH)
+      y += logoH + 2
+    } catch {
+      // If the logo fails to embed, continue without it
+    }
+  }
+
+  doc.setFont("courier", "bold")
+  doc.setFontSize(11)
+  doc.setTextColor(...THERMAL_DARK)
+  doc.text(name, THERMAL_WIDTH_MM / 2, y, { align: "center" })
+  y += 4.6
+
+  doc.setFont("courier", "normal")
+  doc.setFontSize(7.5)
+  doc.setTextColor(...THERMAL_MUTED)
+  const lines = [tagline, address, cityLine, phone ? `Ph: ${phone}` : "", email, gst ? `GST: ${gst}` : ""].filter(Boolean)
+  for (const line of lines) {
+    doc.text(line, THERMAL_WIDTH_MM / 2, y, { align: "center" })
+    y += 3.4
+  }
+
+  return y + 1
+}
+
+// jsPDF renders a fixed-size page and does not reflow content that runs past
+// the bottom edge onto a new page — it silently draws off-page instead, which
+// clips whatever comes after. Since the header's height varies with which
+// business-settings fields are filled in, we can't reliably precompute the
+// page height up front. Instead we draw once on an oversized scratch page to
+// measure how far the content actually goes, then draw again on a page sized
+// to fit that content exactly.
+function drawThermalInvoiceContent(doc: jsPDF, data: ThermalInvoiceData, settings: BusinessSettings): number {
+  const { order, customer, items, payments } = data
+
+  const subtotal = orderTotal(items) - orderSetupCharges(items)
+  const setup = orderSetupCharges(items)
+  const total = orderTotal(items)
+  const paid = orderAmountPaid(payments)
+  const balance = orderBalanceDue(items, payments)
+  const payStatus = derivePaymentStatus(items, payments)
+
+  let y = 6
+  y = drawThermalHeader(doc, y, settings)
+  y = drawThermalDivider(doc, y)
+
+  doc.setFont("courier", "bold")
+  doc.setFontSize(10)
+  doc.setTextColor(...THERMAL_DARK)
+  doc.text("INVOICE", THERMAL_WIDTH_MM / 2, y, { align: "center" })
+  y += 5
+
+  doc.setFontSize(8.5)
+  y = drawThermalRow(doc, "Order #", order.order_number, y, true)
+  y = drawThermalRow(doc, "Date", formatDate(order.order_date), y, false)
+  y = drawThermalDivider(doc, y)
+
+  doc.setFont("courier", "bold")
+  doc.setFontSize(9)
+  doc.setTextColor(...THERMAL_DARK)
+  doc.text(customer?.customer_business_name || "Walk-in Customer", THERMAL_MARGIN_MM, y)
+  y += 4
+  doc.setFont("courier", "normal")
+  doc.setFontSize(8)
+  doc.setTextColor(...THERMAL_MUTED)
+  if (customer?.contact_person) {
+    doc.text(customer.contact_person, THERMAL_MARGIN_MM, y)
+    y += 3.6
+  }
+  if (customer?.phone) {
+    doc.text(`Ph: ${customer.phone}`, THERMAL_MARGIN_MM, y)
+    y += 3.6
+  }
+  y = drawThermalDivider(doc, y)
+
+  for (let idx = 0; idx < items.length; idx++) {
+    const item = items[idx]
+    doc.setFont("courier", "bold")
+    doc.setFontSize(8.5)
+    doc.setTextColor(...THERMAL_DARK)
+    doc.text(`${idx + 1}. ${item.product_type}`, THERMAL_MARGIN_MM, y)
+    y += 3.8
+
+    const desc = item.product_description || item.design_name_number || ""
+    if (desc) {
+      doc.setFont("courier", "normal")
+      doc.setFontSize(7.5)
+      doc.setTextColor(...THERMAL_MUTED)
+      const descLines = doc.splitTextToSize(desc, THERMAL_CONTENT_WIDTH_MM) as string[]
+      doc.text(descLines[0] || "", THERMAL_MARGIN_MM, y)
+      y += 3.6
+    }
+
+    doc.setFont("courier", "normal")
+    doc.setFontSize(8)
+    doc.setTextColor(...THERMAL_DARK)
+    doc.text(`${item.quantity} x ${formatPdfCurrency(orderItemUnitPrice(item))}`, THERMAL_MARGIN_MM, y)
+    doc.text(formatPdfCurrency(orderItemTotal(item)), THERMAL_WIDTH_MM - THERMAL_MARGIN_MM, y, { align: "right" })
+    y += 4.4
+  }
+
+  y = drawThermalDivider(doc, y)
+  doc.setFontSize(8.5)
+  y = drawThermalRow(doc, "Subtotal", formatPdfCurrency(subtotal), y, false)
+  if (setup > 0) y = drawThermalRow(doc, "Setup/Digitizing", formatPdfCurrency(setup), y, false)
+  doc.setFontSize(10)
+  y = drawThermalRow(doc, "TOTAL", formatPdfCurrency(total), y, true)
+  doc.setFontSize(8.5)
+  y = drawThermalRow(doc, "Paid", formatPdfCurrency(paid), y, false)
+  y = drawThermalRow(doc, "Balance Due", formatPdfCurrency(balance), y, true)
+  y = drawThermalRow(doc, "Payment Status", payStatus, y, true)
+  y = drawThermalDivider(doc, y)
+
+  doc.setFont("courier", "normal")
+  doc.setFontSize(7.5)
+  doc.setTextColor(...THERMAL_MUTED)
+  doc.text("Thank you for your business!", THERMAL_WIDTH_MM / 2, y, { align: "center" })
+  y += 3.4
+  doc.text(formatDate(new Date()), THERMAL_WIDTH_MM / 2, y, { align: "center" })
+  y += 3.4
+
+  return y
+}
+
+// Scratch page tall enough that no realistic receipt content runs past it
+// during the measurement pass.
+const THERMAL_SCRATCH_HEIGHT_MM = 500
+const THERMAL_BOTTOM_MARGIN_MM = 6
+
+async function generateThermalInvoicePdf(data: ThermalInvoiceData): Promise<Blob> {
+  const settings = await fetchBusinessSettings()
+
+  const scratch = new jsPDF({ unit: "mm", format: [THERMAL_WIDTH_MM, THERMAL_SCRATCH_HEIGHT_MM] })
+  const measuredY = drawThermalInvoiceContent(scratch, data, settings)
+
+  const doc = new jsPDF({ unit: "mm", format: [THERMAL_WIDTH_MM, measuredY + THERMAL_BOTTOM_MARGIN_MM] })
+  drawThermalInvoiceContent(doc, data, settings)
+
+  return doc.output("blob")
+}
+
+function drawThermalOrderTagContent(
+  doc: jsPDF,
+  order: Order,
+  customer: Customer | null,
+  settings: BusinessSettings,
+): number {
+  let y = 6
+  y = drawThermalHeader(doc, y, settings)
+  y = drawThermalDivider(doc, y)
+
+  doc.setFont("courier", "bold")
+  doc.setFontSize(10)
+  doc.setTextColor(...THERMAL_DARK)
+  doc.text("ORDER TAG", THERMAL_WIDTH_MM / 2, y, { align: "center" })
+  y = drawThermalDivider(doc, y + 3)
+
+  doc.setFont("courier", "normal")
+  doc.setFontSize(7.5)
+  doc.setTextColor(...THERMAL_MUTED)
+  doc.text("Order Number", THERMAL_MARGIN_MM, y)
+  y += 6
+  doc.setFont("courier", "bold")
+  doc.setFontSize(16)
+  doc.setTextColor(...THERMAL_DARK)
+  doc.text(order.order_number, THERMAL_MARGIN_MM, y)
+  y = drawThermalDivider(doc, y + 3)
+
+  const field = (label: string, value: string) => {
+    doc.setFont("courier", "normal")
+    doc.setFontSize(7.5)
+    doc.setTextColor(...THERMAL_MUTED)
+    doc.text(label, THERMAL_MARGIN_MM, y)
+    y += 4
+    doc.setFont("courier", "bold")
+    doc.setFontSize(9)
+    doc.setTextColor(...THERMAL_DARK)
+    doc.text(value, THERMAL_MARGIN_MM, y)
+    y += 5
+  }
+
+  field("Business Name", customer?.customer_business_name || "—")
+  field("Contact Person", customer?.contact_person || "—")
+  field("Phone Number", customer?.phone || "—")
+
+  return y
+}
+
+async function generateThermalOrderTagPdf(order: Order, customer: Customer | null): Promise<Blob> {
+  const settings = await fetchBusinessSettings()
+
+  const scratch = new jsPDF({ unit: "mm", format: [THERMAL_WIDTH_MM, THERMAL_SCRATCH_HEIGHT_MM] })
+  const measuredY = drawThermalOrderTagContent(scratch, order, customer, settings)
+
+  const doc = new jsPDF({ unit: "mm", format: [THERMAL_WIDTH_MM, measuredY + THERMAL_BOTTOM_MARGIN_MM] })
+  drawThermalOrderTagContent(doc, order, customer, settings)
+
+  return doc.output("blob")
+}
+
 async function businessHeaderHtml(): Promise<string> {
   const settings = await fetchBusinessSettings()
   const name = (settings.company_name || "Embroidery Shop Manager").trim()
@@ -193,14 +442,43 @@ async function buildOrderTagBody(order: Order, customer: Customer | null): Promi
   `
 }
 
+// window.print() has no effect inside the app's native WebView (iOS/Android
+// don't implement it there), so on native platforms we hand the user the
+// same receipt, rendered as an 80mm PDF, through the OS share sheet instead
+// — that's where "Print" (AirPrint, etc.) actually lives on a phone.
 export async function printThermalInvoice(data: ThermalInvoiceData) {
+  if (Capacitor.isNativePlatform()) {
+    const blob = await generateThermalInvoicePdf(data)
+    await shareFile(blob, `${data.order.order_number}.pdf`, `Invoice ${data.order.order_number}`)
+    return
+  }
   const body = await buildInvoiceBody(data)
   printThermalHtml(body, `Invoice ${data.order.order_number}`)
 }
 
 export async function printThermalOrderTag(order: Order, customer: Customer | null) {
+  if (Capacitor.isNativePlatform()) {
+    const blob = await generateThermalOrderTagPdf(order, customer)
+    await shareFile(blob, `${order.order_number}-tag.pdf`, `Order Tag ${order.order_number}`)
+    return
+  }
   const body = await buildOrderTagBody(order, customer)
   printThermalHtml(body, `Order Tag ${order.order_number}`)
+}
+
+// Shares the same receipt PDF through the OS share sheet, where the user
+// picks WhatsApp (or any other locally installed app) as the target —
+// mobile OSes don't allow an app to jump straight into another app's
+// share/compose UI with a file attached, the share sheet is the only
+// cross-platform way to hand a file to WhatsApp with the user's consent.
+export async function shareThermalInvoiceViaWhatsApp(data: ThermalInvoiceData) {
+  const blob = await generateThermalInvoicePdf(data)
+  await shareFile(
+    blob,
+    `${data.order.order_number}.pdf`,
+    `Invoice ${data.order.order_number}`,
+    `Order ${data.order.order_number} for ${data.customer?.customer_business_name || ""}`,
+  )
 }
 
 // Returns the full receipt HTML document (for rendering inline in an

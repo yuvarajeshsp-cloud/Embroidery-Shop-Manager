@@ -12,11 +12,17 @@ import {
   ScrollText,
   MessageCircle,
   LogOut,
+  Sun,
+  Moon,
+  Monitor,
+  CircleUser,
 } from "lucide-react"
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { useRouter, type Route } from "@/lib/router"
 import { useAuth } from "@/lib/use-auth"
+import { allowedRouteNames } from "@/lib/permissions"
+import { useTheme } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
 
 interface NavItem {
@@ -39,6 +45,7 @@ const moreItems: NavItem[] = [
   { label: "WhatsApp", icon: MessageCircle, route: { name: "whatsapp" } },
   { label: "Users & Roles", icon: UserCog, route: { name: "users" } },
   { label: "Audit Log", icon: ScrollText, route: { name: "audit" } },
+  { label: "My Profile", icon: CircleUser, route: { name: "profile" } },
 ]
 
 function routeMatches(current: Route, item: Route): boolean {
@@ -52,16 +59,25 @@ function routeMatches(current: Route, item: Route): boolean {
 
 const moreRouteNames = new Set(moreItems.map((i) => i.route.name))
 
+const THEME_CYCLE = ["light", "dark", "system"] as const
+const THEME_ICON = { light: Sun, dark: Moon, system: Monitor }
+const THEME_LABEL = { light: "Light", dark: "Dark", system: "System" }
+
 export function BottomNav() {
   const { route, navigate } = useRouter()
-  const { signOut } = useAuth()
+  const { profile, signOut } = useAuth()
+  const { theme, setTheme } = useTheme()
   const [showMore, setShowMore] = React.useState(false)
   const isMoreActive = moreRouteNames.has(route.name)
+  const ThemeIcon = THEME_ICON[theme]
+  const allowed = allowedRouteNames(profile?.role)
+  const visibleTabs = tabs.filter((t) => allowed.has(t.route.name))
+  const visibleMoreItems = moreItems.filter((i) => allowed.has(i.route.name))
 
   return (
     <>
       <nav className="fixed inset-x-0 bottom-0 z-50 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-stretch border-t bg-background pb-[env(safe-area-inset-bottom)]">
-        {tabs.map((tab) => {
+        {visibleTabs.map((tab) => {
           const Icon = tab.icon
           const isActive = routeMatches(route, tab.route)
           return (
@@ -97,7 +113,7 @@ export function BottomNav() {
             <SheetDescription>Operations and admin tools</SheetDescription>
           </SheetHeader>
           <div className="flex flex-col gap-1 px-4 pb-4">
-            {moreItems.map((item) => {
+            {visibleMoreItems.map((item) => {
               const Icon = item.icon
               const isActive = routeMatches(route, item.route)
               return (
@@ -117,6 +133,19 @@ export function BottomNav() {
                 </button>
               )
             })}
+            <button
+              onClick={() => {
+                const next = THEME_CYCLE[(THEME_CYCLE.indexOf(theme) + 1) % THEME_CYCLE.length]
+                setTheme(next)
+              }}
+              className="flex items-center justify-between rounded-lg px-3 py-3 text-left text-sm text-foreground"
+            >
+              <span className="flex items-center gap-3">
+                <ThemeIcon className="size-4" />
+                Theme
+              </span>
+              <span className="text-xs text-muted-foreground">{THEME_LABEL[theme]}</span>
+            </button>
             <button
               onClick={() => {
                 setShowMore(false)

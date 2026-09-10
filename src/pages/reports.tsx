@@ -19,6 +19,7 @@ import {
 import { fetchConfigItems } from "@/lib/config"
 import { ExportDialog } from "@/components/export-dialog"
 import { PageHeader } from "@/components/page-header"
+import { PageLoader } from "@/components/app-loader"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -119,7 +120,7 @@ export function ReportsPage() {
   }
 
   if (loading) {
-    return <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">Loading reports...</div>
+    return <PageLoader label="Loading reports..." />
   }
 
   const range = computeDateRange(preset, customFrom, customTo)

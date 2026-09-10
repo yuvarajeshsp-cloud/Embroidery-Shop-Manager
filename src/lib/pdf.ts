@@ -1,4 +1,7 @@
 import { jsPDF } from "jspdf"
+import { Capacitor } from "@capacitor/core"
+import { Filesystem, Directory } from "@capacitor/filesystem"
+import { Share } from "@capacitor/share"
 import { supabase } from "./supabase"
 import type { Order, OrderItem, Payment, Customer } from "./types"
 import {
@@ -14,6 +17,52 @@ import {
 } from "./helpers"
 import { fetchBusinessSettings } from "./config"
 
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      resolve(result.slice(result.indexOf(",") + 1))
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
+// Android/iOS WebViews don't implement navigator.share, so on native
+// platforms we write the file to the app's cache dir and hand it to the
+// OS share sheet via the Capacitor Share plugin instead — that's where
+// "Print" (AirPrint, a connected printer, etc.) actually lives on a phone.
+export async function shareFile(blob: Blob, fileName: string, title: string, text?: string) {
+  if (Capacitor.isNativePlatform()) {
+    const data = await blobToBase64(blob)
+    const { uri } = await Filesystem.writeFile({
+      path: fileName,
+      data,
+      directory: Directory.Cache,
+    })
+    try {
+      await Share.share({ title, text, files: [uri], dialogTitle: title })
+    } finally {
+      Filesystem.deleteFile({ path: fileName, directory: Directory.Cache }).catch(() => {})
+    }
+    return
+  }
+
+  const file = new File([blob], fileName, { type: blob.type })
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    await navigator.share({ title, text, files: [file] })
+    return
+  }
+
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = fileName
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 export interface OrderPdfData {
   order: Order
   customer: Customer | null
@@ -23,7 +72,7 @@ export interface OrderPdfData {
 
 // jsPDF's built-in helvetica font cannot render the ₹ Unicode symbol,
 // so we format currency with a "Rs." prefix for the PDF only.
-function formatPdfCurrency(amount: number): string {
+export function formatPdfCurrency(amount: number): string {
   const formatted = new Intl.NumberFormat("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -348,23 +397,6 @@ export async function downloadOrderPdf(data: OrderPdfData) {
   link.download = getPdfFileName(data.order)
   link.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
-
-export async function shareOrderPdf(data: OrderPdfData) {
-  const blob = await generateOrderPdf(data)
-  const fileName = getPdfFileName(data.order)
-
-  if (navigator.canShare && navigator.canShare({ files: [new File([blob], fileName, { type: "application/pdf" })] })) {
-    const file = new File([blob], fileName, { type: "application/pdf" })
-    await navigator.share({
-      title: `Order ${data.order.order_number}`,
-      text: `Order confirmation for ${data.customer?.customer_business_name || ""}`,
-      files: [file],
-    })
-    return
-  }
-
-  await downloadOrderPdf(data)
 }
 
 const INVOICE_BUCKET = "order-attachments"

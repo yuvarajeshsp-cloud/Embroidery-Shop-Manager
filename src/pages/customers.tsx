@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Download, Plus, Search, Pencil, Trash2, Phone, Mail, MapPin, Archive, ArchiveRestore } from "lucide-react"
+import { Download, Plus, Search, Pencil, Trash2, Phone, Mail, MapPin } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
@@ -9,6 +9,7 @@ import type { ExportField } from "@/lib/export"
 import { ExportDialog } from "@/components/export-dialog"
 import { MultiSelectFilter } from "@/components/multi-select-filter"
 import { PageHeader } from "@/components/page-header"
+import { PageLoader } from "@/components/app-loader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -53,7 +54,6 @@ export function CustomersPage() {
   const [search, setSearch] = React.useState("")
   const [typeFilter, setTypeFilter] = React.useState<Set<string>>(new Set())
   const [customerTypes, setCustomerTypes] = React.useState<string[]>([])
-  const [showArchived, setShowArchived] = React.useState(false)
   const [editing, setEditing] = React.useState<Customer | null>(null)
   const [showForm, setShowForm] = React.useState(false)
   const [showExport, setShowExport] = React.useState(false)
@@ -67,10 +67,7 @@ export function CustomersPage() {
 
   async function loadCustomers() {
     setLoading(true)
-    let query = supabase.from("customers").select("*").order("customer_business_name")
-    if (!showArchived) {
-      query = query.eq("archived", false)
-    }
+    const query = supabase.from("customers").select("*").eq("archived", false).order("customer_business_name")
     const { data, error } = await query
     if (error) {
       toast.error("Failed to load customers")
@@ -105,7 +102,6 @@ export function CustomersPage() {
     { key: "delivery_address", label: "Delivery Address", value: (c) => c.delivery_address || "" },
     { key: "date_added", label: "Date Added", value: (c) => formatDate(c.date_added) },
     { key: "notes", label: "Notes", value: (c) => c.notes || "" },
-    { key: "archived", label: "Archived", value: (c) => (c.archived ? "Yes" : "No") },
   ]
 
   function handleNew() {
@@ -116,19 +112,6 @@ export function CustomersPage() {
   function handleEdit(c: Customer) {
     setEditing(c)
     setShowForm(true)
-  }
-
-  async function handleArchive(c: Customer, archive: boolean) {
-    const { error } = await supabase
-      .from("customers")
-      .update({ archived: archive, updated_at: new Date().toISOString() })
-      .eq("id", c.id)
-    if (error) {
-      toast.error("Failed to update customer")
-    } else {
-      toast.success(archive ? "Customer archived" : "Customer restored")
-      loadCustomers()
-    }
   }
 
   async function handleDelete(c: Customer) {
@@ -147,7 +130,7 @@ export function CustomersPage() {
       <PageHeader title="Customers" description="Manage your customer database">
         <Button variant="outline" onClick={() => setShowExport(true)} size="sm">
           <Download className="size-4" />
-          Export
+          <span className="hidden sm:inline">Export</span>
         </Button>
         <Button onClick={handleNew} size="sm">
           <Plus className="size-4" />
@@ -171,23 +154,12 @@ export function CustomersPage() {
           selected={typeFilter}
           onChange={setTypeFilter}
         />
-        <Button
-          variant={showArchived ? "default" : "outline"}
-          onClick={() => {
-            setShowArchived(!showArchived)
-            setTimeout(loadCustomers, 0)
-          }}
-          size="sm"
-        >
-          <Archive className="size-4" />
-          {showArchived ? "Showing Archived" : "Show Archived"}
-        </Button>
       </div>
 
       <Card>
         <CardContent className="p-0">
           {loading ? (
-            <div className="p-8 text-center text-muted-foreground">Loading...</div>
+            <PageLoader size="sm" />
           ) : filtered.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">
               No customers found. Click "New Customer" to add one.
@@ -201,10 +173,7 @@ export function CustomersPage() {
                   className="flex flex-col gap-2 p-4 text-left active:bg-accent"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium">
-                      {c.customer_business_name}
-                      {c.archived && <Badge variant="secondary" className="ml-2 text-xs">Archived</Badge>}
-                    </span>
+                    <span className="font-medium">{c.customer_business_name}</span>
                     <Badge variant="outline">{c.customer_type}</Badge>
                   </div>
                   <div className="text-sm text-muted-foreground">
@@ -215,9 +184,6 @@ export function CustomersPage() {
                     <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                       <Button variant="ghost" size="icon-sm" onClick={() => handleEdit(c)}>
                         <Pencil className="size-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon-sm" onClick={() => handleArchive(c, !c.archived)}>
-                        {c.archived ? <ArchiveRestore className="size-3.5" /> : <Archive className="size-3.5" />}
                       </Button>
                       <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(c)}>
                         <Trash2 className="size-3.5" />
@@ -243,10 +209,7 @@ export function CustomersPage() {
                 {filtered.map((c) => (
                   <TableRow key={c.id} className="cursor-pointer" onClick={() => navigate({ name: "customer-detail", id: c.id })}>
                     <TableCell className="font-mono text-xs">{c.customer_code}</TableCell>
-                    <TableCell className="font-medium">
-                      {c.customer_business_name}
-                      {c.archived && <Badge variant="secondary" className="ml-2 text-xs">Archived</Badge>}
-                    </TableCell>
+                    <TableCell className="font-medium">{c.customer_business_name}</TableCell>
                     <TableCell>{c.contact_person || "—"}</TableCell>
                     <TableCell>{c.phone || "—"}</TableCell>
                     <TableCell>
@@ -256,9 +219,6 @@ export function CustomersPage() {
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="icon-sm" onClick={() => handleEdit(c)}>
                           <Pencil className="size-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => handleArchive(c, !c.archived)}>
-                          {c.archived ? <ArchiveRestore className="size-3.5" /> : <Archive className="size-3.5" />}
                         </Button>
                         <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(c)}>
                           <Trash2 className="size-3.5" />
@@ -540,7 +500,7 @@ export function CustomerDetailPage({ id }: { id: string }) {
   }
 
   if (loading) {
-    return <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">Loading...</div>
+    return <PageLoader />
   }
 
   if (!customer) {

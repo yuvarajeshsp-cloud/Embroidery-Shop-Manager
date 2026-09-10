@@ -2,8 +2,10 @@ import * as React from "react"
 import { Plus, Trash2, ArrowUp, ArrowDown, Building2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { BUSINESS_PROFILE_FIELDS, PRODUCTION_BOARD_STAGE_CATEGORY, clearConfigCache, fetchBusinessSettings, saveBusinessSettings, setDocumentTitleFromSettings } from "@/lib/config"
+import { refreshBusinessProfile } from "@/lib/business-profile"
 import type { ConfigItem } from "@/lib/types"
 import { PageHeader } from "@/components/page-header"
+import { PageLoader } from "@/components/app-loader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -106,6 +108,8 @@ export function ConfigPage() {
     try {
       await saveBusinessSettings(profile)
       setDocumentTitleFromSettings(profile)
+      clearConfigCache()
+      await refreshBusinessProfile()
       toast.success("Business profile saved")
     } catch (error) {
       console.error(error)
@@ -296,7 +300,7 @@ export function ConfigPage() {
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
-            <div className="p-8 text-center text-muted-foreground">Loading...</div>
+            <PageLoader size="sm" />
           ) : items.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">No items configured</div>
           ) : (

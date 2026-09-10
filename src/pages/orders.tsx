@@ -9,6 +9,7 @@ import {
   Share2,
   Printer,
   Eye,
+  MessageCircle,
   Shirt,
   Palette,
   Ruler,
@@ -16,6 +17,7 @@ import {
   Sparkles,
   IndianRupee,
   StickyNote,
+  ImageIcon,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
@@ -35,10 +37,12 @@ import {
   derivePaymentStatus,
   isOverdue,
 } from "@/lib/helpers"
-import type { Order, OrderItem, Payment, Customer } from "@/lib/types"
+import type { Order, OrderItem, Payment, Customer, UserProfile } from "@/lib/types"
+import { ASSIGNABLE_ROLES } from "@/lib/permissions"
 import type { ExportField } from "@/lib/export"
 import { computeDateRange, isWithinRange, type DateRangePreset } from "@/lib/date-range"
 import { PageHeader } from "@/components/page-header"
+import { PageLoader } from "@/components/app-loader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -88,12 +92,18 @@ import { uploadOrderInvoicePdf } from "@/lib/pdf"
 import {
   printThermalInvoice,
   printThermalOrderTag,
+  shareThermalInvoiceViaWhatsApp,
   getThermalInvoiceHtml,
   getThermalOrderTagHtml,
 } from "@/lib/thermal-print"
 import type { OrderItemAttachment } from "@/lib/types"
 
-type EnrichedOrder = Order & { customer?: Customer; order_items?: OrderItem[]; payments?: Payment[] }
+type EnrichedOrder = Order & {
+  customer?: Customer
+  order_items?: OrderItem[]
+  payments?: Payment[]
+  thumbnailAttachment?: OrderItemAttachment
+}
 
 export function OrdersPage() {
   const { navigate } = useRouter()
@@ -105,7 +115,6 @@ export function OrdersPage() {
   const [priorityFilter, setPriorityFilter] = React.useState<Set<string>>(new Set())
   const [customerFilter, setCustomerFilter] = React.useState<Set<string>>(new Set())
   const [channelFilter, setChannelFilter] = React.useState<Set<string>>(new Set())
-  const [showArchived, setShowArchived] = React.useState(false)
   const [orderStatuses, setOrderStatuses] = React.useState<string[]>([])
   const [priorities, setPriorities] = React.useState<string[]>([])
   const [salesChannels, setSalesChannels] = React.useState<string[]>([])
@@ -113,18 +122,21 @@ export function OrdersPage() {
   const [customFrom, setCustomFrom] = React.useState("")
   const [customTo, setCustomTo] = React.useState("")
   const [showExport, setShowExport] = React.useState(false)
+  const [assigneeMap, setAssigneeMap] = React.useState<Map<string, string>>(new Map())
 
   React.useEffect(() => {
     fetchConfigItems("order_status").then((items) => setOrderStatuses(items.map((i) => i.name)))
     fetchConfigItems("priority").then((items) => setPriorities(items.map((i) => i.name)))
     fetchConfigItems("sales_channel").then((items) => setSalesChannels(items.map((i) => i.name)))
+    supabase.from("user_profiles").select("id,display_name").then(({ data }) => {
+      setAssigneeMap(new Map((data || []).map((u: { id: string; display_name: string }) => [u.id, u.display_name])))
+    })
     loadOrders()
   }, [])
 
   async function loadOrders() {
     setLoading(true)
-    let query = supabase.from("orders").select("*").order("order_date", { ascending: false })
-    if (!showArchived) query = query.eq("archived", false)
+    const query = supabase.from("orders").select("*").eq("archived", false).order("order_date", { ascending: false })
     const { data: orderData } = await query
     if (!orderData) { setLoading(false); return }
 
@@ -137,10 +149,12 @@ export function OrdersPage() {
 
     const customerMap = new Map((customersRes.data || []).map((c: Customer) => [c.id, c]))
     const itemsByOrder = new Map<string, OrderItem[]>()
+    const orderIdByItemId = new Map<string, string>()
     for (const item of itemsRes.data || []) {
       const arr = itemsByOrder.get(item.order_id) || []
       arr.push(item)
       itemsByOrder.set(item.order_id, arr)
+      orderIdByItemId.set(item.id, item.order_id)
     }
     const paymentsByOrder = new Map<string, Payment[]>()
     for (const p of paymentsRes.data || []) {
@@ -149,12 +163,22 @@ export function OrdersPage() {
       paymentsByOrder.set(p.order_id, arr)
     }
 
+    const allAttachments = await fetchAttachmentsForItems([...orderIdByItemId.keys()])
+    const thumbnailByOrder = new Map<string, OrderItemAttachment>()
+    for (const a of [...allAttachments].sort(
+      (x, y) => new Date(x.created_at).getTime() - new Date(y.created_at).getTime(),
+    )) {
+      const orderId = orderIdByItemId.get(a.order_item_id)
+      if (orderId && !thumbnailByOrder.has(orderId)) thumbnailByOrder.set(orderId, a)
+    }
+
     setOrders(
       orderData.map((o: Order) => ({
         ...o,
         customer: customerMap.get(o.customer_id),
         order_items: itemsByOrder.get(o.id) || [],
         payments: paymentsByOrder.get(o.id) || [],
+        thumbnailAttachment: thumbnailByOrder.get(o.id),
       })),
     )
     setLoading(false)
@@ -194,6 +218,7 @@ export function OrdersPage() {
     { key: "priority", label: "Priority", value: (o) => o.priority },
     { key: "required_date", label: "Delivery Date", value: (o) => (o.required_date ? formatDate(o.required_date) : "") },
     { key: "sales_channel", label: "Sales Channel", value: (o) => o.sales_channel || "" },
+    { key: "assigned_to", label: "Assigned To", value: (o) => (o.assigned_to && assigneeMap.get(o.assigned_to)) || "Unassigned" },
     { key: "customer_po_reference", label: "PO Reference", value: (o) => o.customer_po_reference || "" },
     { key: "order_total", label: "Order Total", value: (o) => orderTotal(o.order_items || []) },
     { key: "amount_paid", label: "Amount Paid", value: (o) => orderAmountPaid(o.payments || []) },
@@ -207,7 +232,7 @@ export function OrdersPage() {
       <PageHeader title="Orders" description="Manage all embroidery orders">
         <Button variant="outline" onClick={() => setShowExport(true)} size="sm">
           <Download className="size-4" />
-          Export
+          <span className="hidden sm:inline">Export</span>
         </Button>
         <Button onClick={() => navigate({ name: "order-new" })} size="sm">
           <Plus className="size-4" />
@@ -215,8 +240,8 @@ export function OrdersPage() {
         </Button>
       </PageHeader>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+        <div className="relative col-span-2 sm:flex-1 sm:min-w-[200px]">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search by order number or customer..."
@@ -230,24 +255,28 @@ export function OrdersPage() {
           options={orderStatuses.map((s) => ({ value: s, label: s }))}
           selected={statusFilter}
           onChange={setStatusFilter}
+          className="w-full sm:w-auto"
         />
         <MultiSelectFilter
           label="Priority"
           options={priorities.map((p) => ({ value: p, label: p }))}
           selected={priorityFilter}
           onChange={setPriorityFilter}
+          className="w-full sm:w-auto"
         />
         <MultiSelectFilter
           label="Customer"
           options={customerOptions}
           selected={customerFilter}
           onChange={setCustomerFilter}
+          className="w-full sm:w-auto"
         />
         <MultiSelectFilter
           label="Sales Channel"
           options={salesChannels.map((s) => ({ value: s, label: s }))}
           selected={channelFilter}
           onChange={setChannelFilter}
+          className="w-full sm:w-auto"
         />
         <DateRangeFilter
           preset={datePreset}
@@ -257,19 +286,12 @@ export function OrdersPage() {
           onCustomFromChange={setCustomFrom}
           onCustomToChange={setCustomTo}
         />
-        <Button
-          variant={showArchived ? "default" : "outline"}
-          onClick={() => { setShowArchived(!showArchived); setTimeout(loadOrders, 0) }}
-          size="sm"
-        >
-          {showArchived ? "Showing Archived" : "Show Archived"}
-        </Button>
       </div>
 
       <Card>
         <CardContent className="p-0">
           {loading ? (
-            <div className="p-8 text-center text-muted-foreground">Loading...</div>
+            <PageLoader size="sm" />
           ) : filtered.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">
               No orders found. Click "New Order" to create one.
@@ -284,8 +306,20 @@ export function OrdersPage() {
                   <button
                     key={o.id}
                     onClick={() => navigate({ name: "order-detail", id: o.id })}
-                    className="flex flex-col gap-2 p-4 text-left active:bg-accent"
+                    className="flex items-start gap-3 p-4 text-left active:bg-accent"
                   >
+                    <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted/30">
+                      {o.thumbnailAttachment ? (
+                        <img
+                          src={getAttachmentUrl(o.thumbnailAttachment.file_path)}
+                          alt=""
+                          className="size-full object-cover"
+                        />
+                      ) : (
+                        <ImageIcon className="size-4 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="flex flex-1 flex-col gap-2">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-mono text-sm font-medium">{o.order_number}</span>
                       <span className="font-semibold">{formatCurrency(total)}</span>
@@ -307,6 +341,10 @@ export function OrdersPage() {
                       <PriorityBadge priority={o.priority} />
                       <PaymentStatusBadge status={payStatus} />
                     </div>
+                    <div className="text-xs text-muted-foreground">
+                      Assigned: {(o.assigned_to && assigneeMap.get(o.assigned_to)) || "Unassigned"}
+                    </div>
+                    </div>
                   </button>
                 )
               })}
@@ -315,12 +353,14 @@ export function OrdersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-12"></TableHead>
                   <TableHead>Order #</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Due Date</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Priority</TableHead>
+                  <TableHead>Assigned To</TableHead>
                   <TableHead>Payment</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                 </TableRow>
@@ -336,6 +376,19 @@ export function OrdersPage() {
                       className="cursor-pointer"
                       onClick={() => navigate({ name: "order-detail", id: o.id })}
                     >
+                      <TableCell>
+                        <div className="flex size-9 items-center justify-center overflow-hidden rounded-md border bg-muted/30">
+                          {o.thumbnailAttachment ? (
+                            <img
+                              src={getAttachmentUrl(o.thumbnailAttachment.file_path)}
+                              alt=""
+                              className="size-full object-cover"
+                            />
+                          ) : (
+                            <ImageIcon className="size-4 text-muted-foreground" />
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="font-mono text-xs font-medium">{o.order_number}</TableCell>
                       <TableCell>{o.customer?.customer_business_name || "—"}</TableCell>
                       <TableCell className="text-xs">{formatDate(o.order_date)}</TableCell>
@@ -349,6 +402,9 @@ export function OrdersPage() {
                       </TableCell>
                       <TableCell><OrderStatusBadge status={o.order_status} /></TableCell>
                       <TableCell><PriorityBadge priority={o.priority} /></TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {(o.assigned_to && assigneeMap.get(o.assigned_to)) || "Unassigned"}
+                      </TableCell>
                       <TableCell><PaymentStatusBadge status={payStatus} /></TableCell>
                       <TableCell className="text-right font-medium">{formatCurrency(total)}</TableCell>
                     </TableRow>
@@ -396,9 +452,14 @@ export function OrderDetailPage({ id }: { id: string }) {
   const [downloadingPdf, setDownloadingPdf] = React.useState(false)
   const [orderStatuses, setOrderStatuses] = React.useState<string[]>([])
   const [thermalPreview, setThermalPreview] = React.useState<{ title: string; html: string } | null>(null)
+  const [assignableUsers, setAssignableUsers] = React.useState<UserProfile[]>([])
+
+  const canReassign = profile?.role === "Administrator" || profile?.role === "Manager"
 
   React.useEffect(() => {
     fetchConfigItems("order_status").then((items) => setOrderStatuses(items.map((i) => i.name)))
+    supabase.from("user_profiles").select("*").in("role", ASSIGNABLE_ROLES).eq("is_active", true).order("display_name")
+      .then(({ data }) => setAssignableUsers(data || []))
     loadOrder()
   }, [id])
 
@@ -447,6 +508,21 @@ export function OrderDetailPage({ id }: { id: string }) {
     setShowStatusChange(false)
   }
 
+  async function handleAssign(userId: string | null) {
+    if (!order) return
+    const { error } = await supabase
+      .from("orders")
+      .update({ assigned_to: userId, updated_at: new Date().toISOString(), updated_by: profile?.id })
+      .eq("id", order.id)
+    if (error) {
+      toast.error("Failed to update assignment")
+    } else {
+      await logAudit(profile, "orders", order.id, "UPDATE", { assigned_to: order.assigned_to } as Record<string, unknown>, { assigned_to: userId } as Record<string, unknown>, "Reassigned")
+      toast.success("Order assignment updated")
+      setOrder({ ...order, assigned_to: userId })
+    }
+  }
+
   async function handleDeleteItem(itemId: string) {
     if (!confirm("Delete this item?")) return
     const { error } = await supabase.from("order_items").delete().eq("id", itemId)
@@ -459,7 +535,7 @@ export function OrderDetailPage({ id }: { id: string }) {
   }
 
   if (loading) {
-    return <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">Loading...</div>
+    return <PageLoader />
   }
   if (!order) {
     return <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">Order not found</div>
@@ -513,6 +589,27 @@ export function OrderDetailPage({ id }: { id: string }) {
               <span className="text-xs text-muted-foreground">Status</span>
               <OrderStatusBadge status={order.order_status} />
             </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">Assigned To</span>
+              {canReassign ? (
+                <Select
+                  value={order.assigned_to || "unassigned"}
+                  onValueChange={(v) => handleAssign(v === "unassigned" ? null : v)}
+                >
+                  <SelectTrigger className="h-7 w-[160px] text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    {assignableUsers.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>{u.display_name} ({u.role})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <span className="text-sm">
+                  {assignableUsers.find((u) => u.id === order.assigned_to)?.display_name || "Unassigned"}
+                </span>
+              )}
+            </div>
             {order.customer_po_reference && (
               <div className="flex justify-between">
                 <span className="text-xs text-muted-foreground">PO Reference</span>
@@ -564,12 +661,9 @@ export function OrderDetailPage({ id }: { id: string }) {
 
         <Card>
           <CardHeader><CardTitle>Actions</CardTitle></CardHeader>
-          <CardContent className="flex flex-col gap-2">
+          <CardContent className="grid grid-cols-2 gap-2">
             <Button variant="outline" size="sm" onClick={() => setShowStatusChange(true)}>
               Change Status
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate({ name: "production" })}>
-              View Production
             </Button>
             <Button
               variant="outline"
@@ -604,7 +698,14 @@ export function OrderDetailPage({ id }: { id: string }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => printThermalInvoice({ order, customer, items, payments })}
+              onClick={async () => {
+                try {
+                  await printThermalInvoice({ order, customer, items, payments })
+                } catch (err) {
+                  console.error(err)
+                  toast.error(err instanceof Error ? err.message : "Failed to print invoice")
+                }
+              }}
             >
               <Printer className="size-4" />
               Print Invoice
@@ -623,7 +724,14 @@ export function OrderDetailPage({ id }: { id: string }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => printThermalOrderTag(order, customer)}
+              onClick={async () => {
+                try {
+                  await printThermalOrderTag(order, customer)
+                } catch (err) {
+                  console.error(err)
+                  toast.error(err instanceof Error ? err.message : "Failed to print order tag")
+                }
+              }}
             >
               <Printer className="size-4" />
               Print Order Tag
@@ -635,6 +743,21 @@ export function OrderDetailPage({ id }: { id: string }) {
             >
               <Share2 className="size-4" />
               Share to Customer
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  await shareThermalInvoiceViaWhatsApp({ order, customer, items, payments })
+                } catch (err) {
+                  console.error(err)
+                  toast.error(err instanceof Error ? err.message : "Failed to share")
+                }
+              }}
+            >
+              <MessageCircle className="size-4" />
+              WhatsApp
             </Button>
           </CardContent>
         </Card>

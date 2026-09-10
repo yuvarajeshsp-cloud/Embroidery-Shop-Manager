@@ -3,7 +3,7 @@ import { Scissors } from "lucide-react"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 import { ModeToggle } from "@/components/mode-toggle"
-import { fetchBusinessSettings } from "@/lib/config"
+import { useBusinessProfile } from "@/lib/business-profile"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
 
@@ -16,28 +16,12 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, children, className }: PageHeaderProps) {
   const isMobile = useIsMobile()
-  const [companyName, setCompanyName] = React.useState("Embroidery Shop Manager")
-  const [companyLogo, setCompanyLogo] = React.useState<string | null>(null)
-
-  React.useEffect(() => {
-    let mounted = true
-
-    void fetchBusinessSettings().then((settings) => {
-      if (!mounted) return
-      const nextName = (settings.company_name || "Embroidery Shop Manager").trim() || "Embroidery Shop Manager"
-      setCompanyName(nextName)
-      setCompanyLogo(settings.company_logo_data_url || null)
-    })
-
-    return () => {
-      mounted = false
-    }
-  }, [])
+  const { companyName, companyLogo } = useBusinessProfile()
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
+      <div className="flex flex-nowrap items-center justify-between gap-2">
+        <div className="flex min-w-0 shrink items-center gap-2">
           {!isMobile && (
             <>
               <SidebarTrigger />
@@ -45,27 +29,27 @@ export function PageHeader({ title, description, children, className }: PageHead
             </>
           )}
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-background">
+            <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-background">
               {companyLogo ? (
                 <img src={companyLogo} alt={companyName} className="h-full w-full object-cover" />
               ) : (
                 <Scissors className="size-4" />
               )}
             </div>
-            <div className="flex min-w-0 flex-col">
-              <span className="truncate text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="text-[11px] font-semibold uppercase leading-tight tracking-[0.12em] text-muted-foreground">
                 {companyName}
               </span>
-              <h1 className="truncate text-xl font-bold tracking-tight">{title}</h1>
+              <h1 className="truncate text-xl font-bold leading-tight tracking-tight">{title}</h1>
               {description && (
-                <p className="truncate text-sm text-muted-foreground">{description}</p>
+                <p className="text-sm leading-tight text-muted-foreground">{description}</p>
               )}
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 flex-nowrap items-center gap-2">
           {children}
-          <ModeToggle />
+          {!isMobile && <ModeToggle />}
         </div>
       </div>
     </div>
