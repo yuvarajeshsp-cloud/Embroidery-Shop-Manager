@@ -20,8 +20,10 @@ import { ReportsPage } from "@/pages/reports"
 import { ConfigPage } from "@/pages/config"
 import { WhatsAppPage } from "@/pages/whatsapp"
 import { UsersPage, AuditPage } from "@/pages/admin"
+import { PlatformAdminPage } from "@/pages/platform-admin"
 import { AppLoader } from "@/components/app-loader"
 import { useBusinessProfile } from "@/lib/business-profile"
+import { usePlatformAdmin } from "@/lib/platform-admin"
 import { setFavicon } from "@/lib/favicon"
 import { canAccessRoute } from "@/lib/permissions"
 import * as React from "react"
@@ -38,6 +40,11 @@ function AccessDenied() {
 function RouteRenderer() {
   const { route } = useRouter()
   const { profile } = useAuth()
+  const isPlatformAdmin = usePlatformAdmin()
+
+  if (route.name === "platform-admin") {
+    return isPlatformAdmin ? <PlatformAdminPage /> : <AccessDenied />
+  }
 
   if (!canAccessRoute(profile?.role, route.name)) {
     return <AccessDenied />

@@ -12,6 +12,7 @@ import {
   Scissors,
   MessageCircle,
   CircleUser,
+  ShieldCheck,
 } from "lucide-react"
 
 import {
@@ -29,6 +30,7 @@ import {
 import { useRouter, type Route } from "@/lib/router"
 import { useBusinessProfile } from "@/lib/business-profile"
 import { useAuth } from "@/lib/use-auth"
+import { usePlatformAdmin } from "@/lib/platform-admin"
 import { allowedRouteNames } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 
@@ -87,6 +89,7 @@ export function AppSidebar() {
   const { route, navigate } = useRouter()
   const { profile, user, signOut } = useAuth()
   const { companyName, companyLogo } = useBusinessProfile()
+  const isPlatformAdmin = usePlatformAdmin()
 
   const displayName =
     profile?.display_name ||
@@ -96,8 +99,14 @@ export function AppSidebar() {
 
   const userRole = profile?.role || user?.user_metadata?.role || "User"
   const allowed = allowedRouteNames(profile?.role)
-  const visibleGroups = navGroups
-    .map((group) => ({ ...group, items: group.items.filter((item) => allowed.has(item.route.name)) }))
+  const groupsWithPlatform = isPlatformAdmin
+    ? [...navGroups, { label: "Platform", items: [{ label: "Platform Admin", icon: ShieldCheck, route: { name: "platform-admin" } as Route }] }]
+    : navGroups
+  const visibleGroups = groupsWithPlatform
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => item.route.name === "platform-admin" || allowed.has(item.route.name)),
+    }))
     .filter((group) => group.items.length > 0)
 
   return (

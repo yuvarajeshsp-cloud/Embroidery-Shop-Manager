@@ -37,6 +37,8 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { useOrganizationDirectory } from "@/lib/platform-admin"
+import { MultiSelectFilter } from "@/components/multi-select-filter"
 import { toast } from "sonner"
 
 const ROLES: UserRole[] = ["Administrator", "Manager", "Operator", "Accounts"]
@@ -58,6 +60,8 @@ export function UsersPage() {
   const [inviteName, setInviteName] = React.useState("")
   const [inviteRole, setInviteRole] = React.useState<UserRole>("Operator")
   const [inviting, setInviting] = React.useState(false)
+  const { orgs, orgMap } = useOrganizationDirectory()
+  const [orgFilter, setOrgFilter] = React.useState<Set<string>>(new Set())
 
   React.useEffect(() => {
     loadUsers()
@@ -134,6 +138,8 @@ export function UsersPage() {
     }
   }
 
+  const filteredUsers = orgFilter.size === 0 ? users : users.filter((u) => orgFilter.has(u.organization_id))
+
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
       <PageHeader title="Users & Roles" description="Manage team members and their permissions">
@@ -142,15 +148,25 @@ export function UsersPage() {
         </Button>
       </PageHeader>
 
+      {orgs.length > 0 && (
+        <MultiSelectFilter
+          label="Organization"
+          options={orgs.map((o) => ({ value: o.id, label: o.name }))}
+          selected={orgFilter}
+          onChange={setOrgFilter}
+          className="w-full sm:w-auto"
+        />
+      )}
+
       <Card>
         <CardContent className="p-0">
           {loading ? (
             <PageLoader size="sm" />
-          ) : users.length === 0 ? (
+          ) : filteredUsers.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">No users found</div>
           ) : isMobile ? (
             <div className="flex flex-col divide-y">
-              {users.map((u) => (
+              {filteredUsers.map((u) => (
                 <div key={u.id} className="flex flex-col gap-2 p-4">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium">
@@ -170,8 +186,11 @@ export function UsersPage() {
                   </div>
                   <div className="text-sm text-muted-foreground">{u.email}</div>
                   <div className="text-sm text-muted-foreground">{u.phone || "—"}</div>
+                  {orgs.length > 0 && (
+                    <div className="text-xs text-muted-foreground">Org: {orgMap.get(u.organization_id) || "—"}</div>
+                  )}
                   <div className="flex items-center justify-between gap-2">
-                    {u.id === currentUser?.id ? (
+                    {u.id === currentUser?.id || u.organization_id !== currentUser?.organization_id ? (
                       <Badge variant="outline" className={roleColors[u.role] || ""}>{u.role}</Badge>
                     ) : (
                       <Select value={u.role} onValueChange={(v) => handleRoleChange(u, v as UserRole)}>
@@ -194,6 +213,7 @@ export function UsersPage() {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
+                  {orgs.length > 0 && <TableHead>Organization</TableHead>}
                   <TableHead>Phone</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
@@ -201,16 +221,21 @@ export function UsersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map((u) => (
+                {filteredUsers.map((u) => {
+                  const isOwnOrg = u.organization_id === currentUser?.organization_id
+                  return (
                   <TableRow key={u.id}>
                     <TableCell className="font-medium">
                       {u.display_name}
                       {u.id === currentUser?.id && <span className="ml-2 text-xs text-muted-foreground">(You)</span>}
                     </TableCell>
                     <TableCell className="text-sm">{u.email}</TableCell>
+                    {orgs.length > 0 && (
+                      <TableCell className="text-xs text-muted-foreground">{orgMap.get(u.organization_id) || "—"}</TableCell>
+                    )}
                     <TableCell className="text-sm">{u.phone || "—"}</TableCell>
                     <TableCell>
-                      {u.id === currentUser?.id ? (
+                      {u.id === currentUser?.id || !isOwnOrg ? (
                         <Badge variant="outline" className={roleColors[u.role] || ""}>{u.role}</Badge>
                       ) : (
                         <Select value={u.role} onValueChange={(v) => handleRoleChange(u, v as UserRole)}>
@@ -228,7 +253,7 @@ export function UsersPage() {
                         <Switch
                           checked={u.is_active}
                           onCheckedChange={() => handleToggleActive(u)}
-                          disabled={u.id === currentUser?.id}
+                          disabled={u.id === currentUser?.id || !isOwnOrg}
                         />
                         <span className="text-xs text-muted-foreground">
                           {u.is_active ? "Active" : "Inactive"}
@@ -237,7 +262,8 @@ export function UsersPage() {
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{formatDateTime(u.created_at)}</TableCell>
                   </TableRow>
-                ))}
+                  )
+                })}
               </TableBody>
             </Table>
           )}
@@ -311,6 +337,8 @@ export function AuditPage() {
   const [logs, setLogs] = React.useState<AuditLog[]>([])
   const [loading, setLoading] = React.useState(true)
   const [tableFilter, setTableFilter] = React.useState("all")
+  const { orgs, orgMap } = useOrganizationDirectory()
+  const [orgFilter, setOrgFilter] = React.useState<Set<string>>(new Set())
 
   React.useEffect(() => {
     loadLogs()
@@ -332,13 +360,17 @@ export function AuditPage() {
   }
 
   const tables = [...new Set(logs.map((l) => l.table_name))]
-  const filtered = tableFilter === "all" ? logs : logs.filter((l) => l.table_name === tableFilter)
+  const filtered = logs.filter((l) => {
+    const matchesTable = tableFilter === "all" || l.table_name === tableFilter
+    const matchesOrg = orgFilter.size === 0 || orgFilter.has(l.organization_id)
+    return matchesTable && matchesOrg
+  })
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
       <PageHeader title="Audit Log" description="Immutable record of all changes" />
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Select value={tableFilter} onValueChange={setTableFilter}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="All Tables" />
@@ -348,6 +380,14 @@ export function AuditPage() {
             {tables.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
           </SelectContent>
         </Select>
+        {orgs.length > 0 && (
+          <MultiSelectFilter
+            label="Organization"
+            options={orgs.map((o) => ({ value: o.id, label: o.name }))}
+            selected={orgFilter}
+            onChange={setOrgFilter}
+          />
+        )}
       </div>
 
       <Card>
@@ -373,6 +413,9 @@ export function AuditPage() {
                       <span className="text-xs text-muted-foreground">{formatDateTime(log.changed_at)}</span>
                     </div>
                     <div className="text-sm text-muted-foreground">{log.user_name || "—"}</div>
+                    {orgs.length > 0 && (
+                      <div className="text-xs text-muted-foreground">Org: {orgMap.get(log.organization_id) || "—"}</div>
+                    )}
                     <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                       <span className="font-mono">{log.record_id.substring(0, 8)}...</span>
                       {log.reason && <span>{log.reason}</span>}
@@ -387,6 +430,7 @@ export function AuditPage() {
                 <TableRow>
                   <TableHead>Time</TableHead>
                   <TableHead>User</TableHead>
+                  {orgs.length > 0 && <TableHead>Organization</TableHead>}
                   <TableHead>Table</TableHead>
                   <TableHead>Action</TableHead>
                   <TableHead>Record ID</TableHead>
@@ -398,6 +442,9 @@ export function AuditPage() {
                   <TableRow key={log.id}>
                     <TableCell className="text-xs text-muted-foreground">{formatDateTime(log.changed_at)}</TableCell>
                     <TableCell className="text-sm">{log.user_name || "—"}</TableCell>
+                    {orgs.length > 0 && (
+                      <TableCell className="text-xs text-muted-foreground">{orgMap.get(log.organization_id) || "—"}</TableCell>
+                    )}
                     <TableCell><Badge variant="outline" className="text-xs">{log.table_name}</Badge></TableCell>
                     <TableCell>
                       <Badge

@@ -15,6 +15,7 @@ export type Route =
   | { name: "users" }
   | { name: "audit" }
   | { name: "profile" }
+  | { name: "platform-admin" }
   | { name: "login" }
 
 interface RouterContextValue {
