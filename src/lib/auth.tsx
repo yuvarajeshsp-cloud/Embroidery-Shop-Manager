@@ -3,6 +3,15 @@ import type { Session, User } from "@supabase/supabase-js"
 import { supabase } from "./supabase"
 import type { UserProfile, UserRole } from "./types"
 
+function slugify(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+  return slug || "shop"
+}
+
 export interface AuthContextValue {
   session: Session | null
   user: User | null
@@ -13,6 +22,7 @@ export interface AuthContextValue {
     email: string,
     password: string,
     displayName: string,
+    shopName: string,
   ) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
@@ -75,43 +85,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 
   const signUp = React.useCallback(
-    async (email: string, password: string, displayName: string) => {
+    async (email: string, password: string, displayName: string, shopName: string) => {
       const { data, error } = await supabase.auth.signUp({ email, password })
       if (error) return { error: error.message }
 
       if (data.user) {
-        // v2 foundation: every profile belongs to an organization. Until
-        // self-serve "create a new shop" sign-up exists, everyone who signs
-        // up joins the one organization already in the database.
-        const { data: org, error: orgError } = await supabase
-          .from("organizations")
-          .select("id")
-          .order("created_at", { ascending: true })
-          .limit(1)
-          .maybeSingle()
-        if (orgError || !org) {
-          return { error: orgError?.message || "No organization to join yet" }
+        // Signing up creates a brand-new organization — this person becomes
+        // its first Administrator. Joining an *existing* org only happens
+        // via an invite from that org's own admin, never by picking one here.
+        const baseSlug = slugify(shopName)
+        let org: { id: string } | null = null
+        for (let attempt = 0; attempt < 3 && !org; attempt++) {
+          const slug = attempt === 0 ? baseSlug : `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`
+          const { data: orgData, error: orgError } = await supabase
+            .from("organizations")
+            .insert({ name: shopName, slug })
+            .select("id")
+            .single()
+          if (orgData) {
+            org = orgData
+          } else if (orgError?.code !== "23505") {
+            return { error: orgError?.message || "Failed to create your shop" }
+          }
         }
+        if (!org) return { error: "Failed to create your shop — please try again" }
 
-        // New self-signups always land as the lowest-privilege role. An
-        // Administrator promotes them from the Users & Roles page — the
-        // database also rejects a self-inserted 'Administrator' row outright.
         const { error: profileError } = await supabase
           .from("user_profiles")
           .insert({
             id: data.user.id,
             display_name: displayName,
             email,
-            role: "Operator" satisfies UserRole,
+            role: "Administrator" satisfies UserRole,
             organization_id: org.id,
           })
         if (profileError) {
           return { error: profileError.message }
         }
+
+        // supabase.auth.signUp() activates the session (and this provider's
+        // own auth-state listener fires) before the org/profile above ever
+        // gets created — that first loadProfile() call finds nothing yet.
+        // Load it again now that it actually exists.
+        await loadProfile(data.user.id)
       }
       return { error: null }
     },
-    [],
+    [loadProfile],
   )
 
   const signOut = React.useCallback(async () => {

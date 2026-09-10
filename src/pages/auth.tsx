@@ -16,6 +16,7 @@ export function AuthScreen() {
   const [signInEmail, setSignInEmail] = React.useState("")
   const [signInPassword, setSignInPassword] = React.useState("")
 
+  const [signUpShopName, setSignUpShopName] = React.useState("")
   const [signUpName, setSignUpName] = React.useState("")
   const [signUpEmail, setSignUpEmail] = React.useState("")
   const [signUpPassword, setSignUpPassword] = React.useState("")
@@ -33,7 +34,7 @@ export function AuthScreen() {
     e.preventDefault()
     setError(null)
     setLoading(true)
-    const { error } = await signUp(signUpEmail, signUpPassword, signUpName)
+    const { error } = await signUp(signUpEmail, signUpPassword, signUpName, signUpShopName)
     setLoading(false)
     if (error) setError(error)
   }
@@ -94,7 +95,20 @@ export function AuthScreen() {
               <TabsContent value="signup">
                 <form onSubmit={handleSignUp} className="flex flex-col gap-4 pt-4">
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="signup-name">Display Name</Label>
+                    <Label htmlFor="signup-shop">Shop Name</Label>
+                    <Input
+                      id="signup-shop"
+                      placeholder="Your Shop or Business Name"
+                      value={signUpShopName}
+                      onChange={(e) => setSignUpShopName(e.target.value)}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Creates your own private workspace — you'll be its Administrator.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="signup-name">Your Name</Label>
                     <Input
                       id="signup-name"
                       placeholder="Your Name"
