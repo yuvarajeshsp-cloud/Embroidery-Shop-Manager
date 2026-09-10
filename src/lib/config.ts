@@ -80,7 +80,7 @@ export async function saveBusinessSettings(values: Record<string, string>) {
 
   if (entries.length === 0) return
 
-  const { error } = await supabase.from("business_settings").upsert(entries, { onConflict: "key" })
+  const { error } = await supabase.from("business_settings").upsert(entries, { onConflict: "organization_id,key" })
 
   if (error) {
     throw error
