@@ -1,7 +1,24 @@
 export type UserRole = "Administrator" | "Manager" | "Operator" | "Accounts"
 
+export type SubscriptionStatus = "trialing" | "active" | "past_due" | "canceled" | "expired"
+export type OrganizationPlan = "trial" | "monthly" | "yearly"
+
+export interface Organization {
+  id: string
+  name: string
+  slug: string
+  plan: OrganizationPlan
+  subscription_status: SubscriptionStatus
+  trial_ends_at: string | null
+  stripe_customer_id: string | null
+  stripe_subscription_id: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface UserProfile {
   id: string
+  organization_id: string
   display_name: string
   email: string
   phone: string | null
@@ -14,6 +31,7 @@ export interface UserProfile {
 
 export interface Customer {
   id: string
+  organization_id: string
   customer_code: string
   customer_business_name: string
   contact_person: string | null
@@ -37,6 +55,7 @@ export interface Customer {
 
 export interface Order {
   id: string
+  organization_id: string
   order_number: string
   order_date: string
   customer_id: string
@@ -58,6 +77,7 @@ export interface Order {
 
 export interface OrderItem {
   id: string
+  organization_id: string
   order_id: string
   item_number: number
   product_type: string
@@ -78,6 +98,7 @@ export type AttachmentCategory = "material" | "design_confirmation"
 
 export interface OrderItemAttachment {
   id: string
+  organization_id: string
   order_item_id: string
   category: AttachmentCategory
   file_name: string
@@ -90,6 +111,7 @@ export interface OrderItemAttachment {
 
 export interface Payment {
   id: string
+  organization_id: string
   payment_number: string
   payment_date: string
   order_id: string
@@ -107,6 +129,7 @@ export interface Payment {
 
 export interface AuditLog {
   id: string
+  organization_id: string
   user_id: string | null
   user_name: string | null
   table_name: string
@@ -120,6 +143,7 @@ export interface AuditLog {
 
 export interface ConfigItem {
   id: string
+  organization_id: string
   category: string
   name: string
   sort_order: number
@@ -130,6 +154,7 @@ export interface ConfigItem {
 
 export interface ConfigStitchRate {
   id: string
+  organization_id: string
   embroidery_type: string
   rate_per_1000_stitches: number
   min_stitches: number | null
@@ -142,6 +167,7 @@ export interface ConfigStitchRate {
 
 export interface BusinessSetting {
   id: string
+  organization_id: string
   key: string
   value: string
   updated_at: string
@@ -151,6 +177,7 @@ export type WhatsAppTemplateCategory = "utility" | "marketing" | "authentication
 
 export interface WhatsAppTemplate {
   id: string
+  organization_id: string
   name: string
   category: WhatsAppTemplateCategory
   language: string
@@ -165,6 +192,7 @@ export type WhatsAppMessageKind = "status_update" | "invoice" | "design_confirma
 
 export interface WhatsAppMessageLog {
   id: string
+  organization_id: string
   customer_id: string | null
   order_id: string | null
   message_kind: WhatsAppMessageKind

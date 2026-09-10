@@ -80,6 +80,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) return { error: error.message }
 
       if (data.user) {
+        // v2 foundation: every profile belongs to an organization. Until
+        // self-serve "create a new shop" sign-up exists, everyone who signs
+        // up joins the one organization already in the database.
+        const { data: org, error: orgError } = await supabase
+          .from("organizations")
+          .select("id")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle()
+        if (orgError || !org) {
+          return { error: orgError?.message || "No organization to join yet" }
+        }
+
         // New self-signups always land as the lowest-privilege role. An
         // Administrator promotes them from the Users & Roles page — the
         // database also rejects a self-inserted 'Administrator' row outright.
@@ -90,6 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             display_name: displayName,
             email,
             role: "Operator" satisfies UserRole,
+            organization_id: org.id,
           })
         if (profileError) {
           return { error: profileError.message }

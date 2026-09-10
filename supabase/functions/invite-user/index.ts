@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
   // Confirm the caller is an Administrator by reading their profile with the
   // service key (bypasses RLS so we get the authoritative row).
   const profileRes = await fetch(
-    `${supabaseUrl}/rest/v1/user_profiles?id=eq.${callerUser.id}&select=role,is_active`,
+    `${supabaseUrl}/rest/v1/user_profiles?id=eq.${callerUser.id}&select=role,is_active,organization_id`,
     {
       headers: { Authorization: `Bearer ${serviceRoleKey}`, apikey: serviceRoleKey },
     },
@@ -122,6 +122,7 @@ Deno.serve(async (req) => {
       email,
       role,
       is_active: true,
+      organization_id: callerProfile.organization_id,
     }),
   })
 

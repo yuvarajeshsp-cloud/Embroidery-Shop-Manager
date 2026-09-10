@@ -46,6 +46,7 @@ src-tauri/target
 # Capacitor / iOS native build artifacts (machine-specific, generated builds)
 ios/App/Pods
 ios/App/build
+ios/App/build-device
 ios/App/DerivedData
 ios/App/App.xcworkspace/xcuserdata
 ios/App/App.xcodeproj/xcuserdata
