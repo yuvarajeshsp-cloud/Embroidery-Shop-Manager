@@ -16,9 +16,16 @@ const DEFAULT_NAME = "Business Management System"
 export interface BusinessProfile {
   companyName: string
   companyLogo: string | null
+  sidebarColor: string | null
+  buttonColor: string | null
 }
 
-const DEFAULT_PROFILE: BusinessProfile = { companyName: DEFAULT_NAME, companyLogo: null }
+const DEFAULT_PROFILE: BusinessProfile = {
+  companyName: DEFAULT_NAME,
+  companyLogo: null,
+  sidebarColor: null,
+  buttonColor: null,
+}
 
 function readCache(): BusinessProfile {
   try {
@@ -28,6 +35,8 @@ function readCache(): BusinessProfile {
     return {
       companyName: parsed.companyName?.trim() || DEFAULT_NAME,
       companyLogo: parsed.companyLogo || null,
+      sidebarColor: parsed.sidebarColor || null,
+      buttonColor: parsed.buttonColor || null,
     }
   } catch {
     return DEFAULT_PROFILE
@@ -42,11 +51,49 @@ function writeCache(profile: BusinessProfile) {
   }
 }
 
+/** Relative luminance of a #rrggbb color, used to pick a readable black/white foreground. */
+function readableForeground(hex: string): string {
+  const clean = hex.replace("#", "")
+  if (clean.length !== 6) return "#ffffff"
+  const r = parseInt(clean.slice(0, 2), 16)
+  const g = parseInt(clean.slice(2, 4), 16)
+  const b = parseInt(clean.slice(4, 6), 16)
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return luminance > 0.6 ? "#1a1a2e" : "#ffffff"
+}
+
+/**
+ * Applies the org's custom sidebar/button colors as CSS custom property
+ * overrides on the document root, so they take effect the same way in both
+ * light and dark mode (an inline style on the root element beats any
+ * selector-based rule, including `.dark`). Clears back to the theme's own
+ * defaults when a color hasn't been customized.
+ */
+function applyBrandColors(profile: BusinessProfile) {
+  const root = document.documentElement.style
+  if (profile.sidebarColor) {
+    root.setProperty("--sidebar", profile.sidebarColor)
+    root.setProperty("--sidebar-foreground", readableForeground(profile.sidebarColor))
+  } else {
+    root.removeProperty("--sidebar")
+    root.removeProperty("--sidebar-foreground")
+  }
+  if (profile.buttonColor) {
+    root.setProperty("--primary", profile.buttonColor)
+    root.setProperty("--primary-foreground", readableForeground(profile.buttonColor))
+  } else {
+    root.removeProperty("--primary")
+    root.removeProperty("--primary-foreground")
+  }
+}
+
 let current: BusinessProfile = readCache()
+applyBrandColors(current)
 const listeners = new Set<(profile: BusinessProfile) => void>()
 let inFlight: Promise<void> | null = null
 
 function notify() {
+  applyBrandColors(current)
   for (const listener of listeners) listener(current)
 }
 
@@ -57,6 +104,8 @@ export function refreshBusinessProfile(): Promise<void> {
       current = {
         companyName: (settings.company_name || DEFAULT_NAME).trim() || DEFAULT_NAME,
         companyLogo: settings.company_logo_data_url || null,
+        sidebarColor: settings.sidebar_color || null,
+        buttonColor: settings.button_color || null,
       }
       writeCache(current)
       notify()

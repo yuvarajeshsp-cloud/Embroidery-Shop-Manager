@@ -17,6 +17,8 @@ export const BUSINESS_PROFILE_FIELDS = [
   "company_state",
   "company_pincode",
   "company_logo_data_url",
+  "sidebar_color",
+  "button_color",
 ] as const
 
 export type BusinessProfileField = (typeof BUSINESS_PROFILE_FIELDS)[number]

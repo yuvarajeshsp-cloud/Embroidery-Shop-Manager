@@ -67,6 +67,11 @@ const profileFields = [
   { key: "company_pincode", label: "Pincode" },
 ] as const
 
+const colorPickers = [
+  { key: "sidebar_color", label: "Sidebar Color", default: "#d3d3ff" },
+  { key: "button_color", label: "Button Color", default: "#9f9fff" },
+] as const
+
 export function ConfigPage() {
   const [activeCategory, setActiveCategory] = React.useState("order_status")
   const [items, setItems] = React.useState<ConfigItem[]>([])
@@ -228,28 +233,53 @@ export function ConfigPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <div className="md:col-span-2 xl:col-span-3 flex items-center gap-4 rounded-lg border bg-muted/30 p-4">
-              <div className="flex size-20 items-center justify-center overflow-hidden rounded-lg border bg-background">
-                {profile.company_logo_data_url ? (
-                  <img src={profile.company_logo_data_url} alt="Company logo" className="h-full w-full object-cover" />
-                ) : (
-                  <Building2 className="size-8 text-muted-foreground" />
-                )}
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="company-logo-upload">Company Logo</Label>
-                <div className="flex items-center gap-2">
-                  <Input id="company-logo-upload" type="file" accept="image/*" onChange={handleLogoUpload} className="max-w-xs" />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setProfile((current) => ({ ...current, company_logo_data_url: "" }))}
-                  >
-                    Remove
-                  </Button>
+            <div className="md:col-span-2 xl:col-span-3 flex flex-wrap items-center gap-6 rounded-lg border bg-muted/30 p-4">
+              <div className="flex items-center gap-4">
+                <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-background">
+                  {profile.company_logo_data_url ? (
+                    <img src={profile.company_logo_data_url} alt="Company logo" className="h-full w-full object-cover" />
+                  ) : (
+                    <Building2 className="size-8 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="company-logo-upload">Company Logo</Label>
+                  <div className="flex items-center gap-2">
+                    <Input id="company-logo-upload" type="file" accept="image/*" onChange={handleLogoUpload} className="max-w-xs" />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setProfile((current) => ({ ...current, company_logo_data_url: "" }))}
+                    >
+                      Remove
+                    </Button>
+                  </div>
                 </div>
               </div>
+
+              {colorPickers.map((picker) => (
+                <div key={picker.key} className="flex flex-col gap-2">
+                  <Label htmlFor={picker.key}>{picker.label}</Label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id={picker.key}
+                      type="color"
+                      value={profile[picker.key] || picker.default}
+                      onChange={(e) => handleProfileChange(picker.key, e.target.value)}
+                      className="size-9 cursor-pointer rounded border bg-transparent p-1"
+                    />
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {profile[picker.key] || `Default (${picker.default})`}
+                    </span>
+                    {profile[picker.key] && (
+                      <Button type="button" variant="ghost" size="sm" onClick={() => handleProfileChange(picker.key, "")}>
+                        Reset
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
 
             {profileFields.map((field) => (
