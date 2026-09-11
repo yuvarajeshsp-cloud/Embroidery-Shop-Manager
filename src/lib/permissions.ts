@@ -40,4 +40,4 @@ export function allowedRouteNames(role: UserRole | undefined): Set<Route["name"]
 }
 
 /** Roles orders may be assigned to. */
-export const ASSIGNABLE_ROLES: UserRole[] = ["Manager", "Operator"]
+export const ASSIGNABLE_ROLES: UserRole[] = ["Administrator", "Manager", "Operator"]
