@@ -339,7 +339,7 @@ export function DashboardPage() {
           const Icon = kpi.icon
           return (
             <Card key={kpi.label} className="min-w-0">
-              <CardContent className="flex min-w-0 flex-col items-center gap-3 px-3 py-6 text-center">
+              <CardContent className="flex min-w-0 flex-col items-center gap-3 px-3 py-4 text-center">
                 <div className="flex items-center gap-1.5">
                   <Icon className={`size-4 shrink-0 ${kpi.color}`} />
                   <span className="text-xs font-medium text-muted-foreground">{kpi.label}</span>
