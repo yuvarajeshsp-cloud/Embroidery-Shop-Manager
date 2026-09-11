@@ -385,7 +385,7 @@ export function NewOrderPage() {
                 <Label>Order Date</Label>
                 <Input
                   type="date"
-                  className="min-w-0"
+                  className="min-w-0 px-2 text-sm"
                   value={orderForm.order_date}
                   onChange={(e) => setOrderForm({ ...orderForm, order_date: e.target.value })}
                 />
@@ -394,7 +394,7 @@ export function NewOrderPage() {
                 <Label>Delivery Date</Label>
                 <Input
                   type="date"
-                  className="min-w-0"
+                  className="min-w-0 px-2 text-sm"
                   value={orderForm.required_date}
                   onChange={(e) => setOrderForm({ ...orderForm, required_date: e.target.value })}
                 />
