@@ -18,9 +18,12 @@ import { computeDateRange, isWithinRange, type DateRangePreset } from "@/lib/dat
 import {
   differenceInCalendarDays,
   startOfDay,
+  endOfWeek,
   startOfWeek,
   startOfMonth,
+  endOfMonth,
   startOfYear,
+  subMonths,
   eachDayOfInterval,
   eachWeekOfInterval,
   eachMonthOfInterval,
@@ -29,6 +32,30 @@ import {
 } from "date-fns"
 
 type TrendGranularity = "day" | "week" | "month" | "year"
+
+// Each preset has an expected shape for its trend chart — a full 7-day week
+// even before the week is over, weekly bars across a month, three full
+// calendar months for "Last 3 Months", etc. — rather than a generic
+// span-based guess. Presets not listed here (custom range, all time) fall
+// back to picking granularity from how wide the resolved range actually is.
+const TREND_PRESET_CONFIG: Partial<Record<DateRangePreset, {
+  granularity: TrendGranularity
+  range?: (now: Date) => { from: Date; to: Date }
+}>> = {
+  today: { granularity: "day" },
+  this_week: {
+    granularity: "day",
+    range: (now) => ({ from: startOfWeek(now, { weekStartsOn: 1 }), to: endOfWeek(now, { weekStartsOn: 1 }) }),
+  },
+  last_7_days: { granularity: "day" },
+  this_month: { granularity: "week" },
+  last_month: { granularity: "week" },
+  last_3_months: {
+    granularity: "month",
+    range: (now) => ({ from: startOfMonth(subMonths(now, 3)), to: endOfMonth(subMonths(now, 1)) }),
+  },
+  this_year: { granularity: "month" },
+}
 
 function pickTrendGranularity(from: Date, to: Date): TrendGranularity {
   const spanDays = differenceInCalendarDays(to, from) + 1
@@ -166,27 +193,38 @@ export function DashboardPage() {
         .slice(0, 5)
         .map((o) => ({ ...o, customer: customerMap.get(o.customer_id) }))
 
-      // Trend chart: bucket the filtered orders across the selected range, at a
-      // granularity (day/week/month/year) chosen from how wide that range is —
-      // so "This Week" shows 7 daily bars while "Yearly" shows monthly bars.
-      // "All Time" spans from an arbitrary fixed start, so bucket it against
-      // the actual earliest order instead of an empty multi-decade range.
+      // Trend chart: bucket the filtered orders across a range and granularity
+      // that matches what the selected preset should look like — a full 7-day
+      // week, weekly bars across a month, 3 full months for "Last 3 Months",
+      // etc. (see TREND_PRESET_CONFIG). Presets without a fixed shape (custom
+      // range) fall back to a span-based guess. "All Time" has no natural
+      // upper-bound start, so it's bucketed against the actual earliest order
+      // instead of an empty multi-decade range, and shows nothing until there
+      // is at least one order.
+      const now = new Date()
+      const presetConfig = TREND_PRESET_CONFIG[datePreset]
       let trendFrom = dateRange.from
-      const trendTo = dateRange.to
-      if (datePreset === "all_time" && orders.length > 0) {
-        trendFrom = orders.reduce(
-          (min, o) => (new Date(o.order_date) < min ? new Date(o.order_date) : min),
-          new Date(orders[0].order_date),
-        )
+      let trendTo = dateRange.to
+      let showSkeleton = true
+      if (presetConfig?.range) {
+        ;({ from: trendFrom, to: trendTo } = presetConfig.range(now))
+      } else if (datePreset === "all_time") {
+        showSkeleton = orders.length > 0
+        if (showSkeleton) {
+          trendFrom = orders.reduce(
+            (min, o) => (new Date(o.order_date) < min ? new Date(o.order_date) : min),
+            new Date(orders[0].order_date),
+          )
+        }
       }
-      const granularity = pickTrendGranularity(trendFrom, trendTo)
+      const granularity = presetConfig?.granularity ?? pickTrendGranularity(trendFrom, trendTo)
       const bucketRanges: Record<TrendGranularity, (interval: { start: Date; end: Date }) => Date[]> = {
         day: eachDayOfInterval,
         week: (interval) => eachWeekOfInterval(interval, { weekStartsOn: 1 }),
         month: eachMonthOfInterval,
         year: eachYearOfInterval,
       }
-      const bucketStarts = orders.length > 0 && trendFrom <= trendTo
+      const bucketStarts = showSkeleton && trendFrom <= trendTo
         ? bucketRanges[granularity]({ start: trendFrom, end: trendTo })
         : []
 
