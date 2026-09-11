@@ -15,6 +15,23 @@ import { Plus } from "lucide-react"
 import { toast } from "sonner"
 import { DateRangeFilter } from "@/components/date-range-filter"
 import { computeDateRange, isWithinRange, type DateRangePreset } from "@/lib/date-range"
+import { cn } from "@/lib/utils"
+
+// A KPI value's length varies wildly (a plain count like "5" vs a formatted
+// currency string like "₹79,100.00"), so its font size scales down in tiers
+// as it gets longer — the number should fill most of the card without ever
+// overflowing it.
+function kpiValueTextSize(value: string): string {
+  const len = value.length
+  if (len <= 2) return "text-4xl"
+  if (len <= 4) return "text-3xl"
+  if (len <= 6) return "text-2xl"
+  if (len <= 8) return "text-xl"
+  if (len <= 10) return "text-lg"
+  if (len <= 12) return "text-base"
+  if (len <= 14) return "text-sm"
+  return "text-xs"
+}
 import {
   differenceInCalendarDays,
   startOfDay,
@@ -322,12 +339,14 @@ export function DashboardPage() {
           const Icon = kpi.icon
           return (
             <Card key={kpi.label} className="min-w-0">
-              <CardContent className="flex flex-col gap-2 p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">{kpi.label}</span>
-                  <Icon className={`size-4 ${kpi.color}`} />
+              <CardContent className="flex min-w-0 flex-col items-center gap-3 px-3 py-6 text-center">
+                <div className="flex items-center gap-1.5">
+                  <Icon className={`size-4 shrink-0 ${kpi.color}`} />
+                  <span className="text-xs font-medium text-muted-foreground">{kpi.label}</span>
                 </div>
-                <span className="text-xl font-bold tracking-tight">{kpi.value}</span>
+                <span className={cn("w-full truncate font-bold tracking-tight", kpiValueTextSize(kpi.value))}>
+                  {kpi.value}
+                </span>
               </CardContent>
             </Card>
           )
