@@ -13,6 +13,8 @@ import { BarChart, Bar, XAxis, CartesianGrid, PieChart, Pie, Cell } from "rechar
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 import { toast } from "sonner"
+import { DateRangeFilter } from "@/components/date-range-filter"
+import { computeDateRange, isWithinRange, type DateRangePreset } from "@/lib/date-range"
 
 interface DashboardData {
   totalOrders: number
@@ -30,8 +32,14 @@ interface DashboardData {
 
 export function DashboardPage() {
   const { navigate } = useRouter()
-  const [data, setData] = React.useState<DashboardData | null>(null)
   const [loading, setLoading] = React.useState(true)
+  const [rawOrders, setRawOrders] = React.useState<Order[]>([])
+  const [rawCustomers, setRawCustomers] = React.useState<Customer[]>([])
+  const [rawItems, setRawItems] = React.useState<OrderItem[]>([])
+  const [rawPayments, setRawPayments] = React.useState<Payment[]>([])
+  const [datePreset, setDatePreset] = React.useState<DateRangePreset>("all_time")
+  const [customFrom, setCustomFrom] = React.useState("")
+  const [customTo, setCustomTo] = React.useState("")
 
   React.useEffect(() => {
     loadDashboard()
@@ -50,20 +58,31 @@ export function DashboardPage() {
       const firstError = ordersRes.error || customersRes.error || itemsRes.error || paymentsRes.error
       if (firstError) throw firstError
 
-      const orders = (ordersRes.data || []) as Order[]
-      const customers = (customersRes.data || []) as Customer[]
-      const items = (itemsRes.data || []) as OrderItem[]
-      const payments = (paymentsRes.data || []) as Payment[]
+      setRawOrders((ordersRes.data || []) as Order[])
+      setRawCustomers((customersRes.data || []) as Customer[])
+      setRawItems((itemsRes.data || []) as OrderItem[])
+      setRawPayments((paymentsRes.data || []) as Payment[])
+    } catch (err) {
+      console.error("Dashboard load error:", err)
+      toast.error(err instanceof Error ? err.message : "Failed to load dashboard data")
+    } finally {
+      setLoading(false)
+    }
+  }
 
-      const customerMap = new Map(customers.map((c) => [c.id, c]))
+  const data = React.useMemo<DashboardData>(() => {
+      const dateRange = computeDateRange(datePreset, customFrom, customTo)
+      const orders = rawOrders.filter((o) => isWithinRange(o.order_date, dateRange))
+
+      const customerMap = new Map(rawCustomers.map((c) => [c.id, c]))
       const itemsByOrder = new Map<string, OrderItem[]>()
-      for (const item of items) {
+      for (const item of rawItems) {
         const arr = itemsByOrder.get(item.order_id) || []
         arr.push(item)
         itemsByOrder.set(item.order_id, arr)
       }
       const paymentsByOrder = new Map<string, Payment[]>()
-      for (const p of payments) {
+      for (const p of rawPayments) {
         const arr = paymentsByOrder.get(p.order_id) || []
         arr.push(p)
         paymentsByOrder.set(p.order_id, arr)
@@ -124,7 +143,7 @@ export function DashboardPage() {
       }
       const statusBreakdown = Object.entries(statusCounts).map(([status, count]) => ({ status, count }))
 
-      setData({
+      return {
         totalOrders: orders.length,
         activeOrders: activeOrders.length,
         totalRevenue,
@@ -136,16 +155,10 @@ export function DashboardPage() {
         urgentOrders,
         monthlyData,
         statusBreakdown,
-      })
-    } catch (err) {
-      console.error("Dashboard load error:", err)
-      toast.error(err instanceof Error ? err.message : "Failed to load dashboard data")
-    } finally {
-      setLoading(false)
-    }
-  }
+      }
+  }, [rawOrders, rawCustomers, rawItems, rawPayments, datePreset, customFrom, customTo])
 
-  if (loading || !data) {
+  if (loading) {
     return <PageLoader label="Loading dashboard..." />
   }
 
@@ -173,6 +186,17 @@ export function DashboardPage() {
           New Order
         </Button>
       </PageHeader>
+
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+        <DateRangeFilter
+          preset={datePreset}
+          onPresetChange={setDatePreset}
+          customFrom={customFrom}
+          customTo={customTo}
+          onCustomFromChange={setCustomFrom}
+          onCustomToChange={setCustomTo}
+        />
+      </div>
 
       {/* KPI Cards */}
       <div className="grid min-w-0 grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
