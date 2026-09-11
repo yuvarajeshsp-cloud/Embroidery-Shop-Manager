@@ -47,7 +47,7 @@ const TREND_PRESET_CONFIG: Partial<Record<DateRangePreset, {
     granularity: "day",
     range: (now) => ({ from: startOfWeek(now, { weekStartsOn: 1 }), to: endOfWeek(now, { weekStartsOn: 1 }) }),
   },
-  last_7_days: { granularity: "day" },
+  last_week: { granularity: "day" },
   this_month: { granularity: "week" },
   last_month: { granularity: "week" },
   last_3_months: {

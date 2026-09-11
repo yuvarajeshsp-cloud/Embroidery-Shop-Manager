@@ -2,10 +2,11 @@ import {
   startOfDay,
   endOfDay,
   startOfWeek,
+  endOfWeek,
   startOfMonth,
   endOfMonth,
   subMonths,
-  subDays,
+  subWeeks,
   startOfYear,
 } from "date-fns"
 
@@ -13,7 +14,7 @@ export type DateRangePreset =
   | "all_time"
   | "today"
   | "this_week"
-  | "last_7_days"
+  | "last_week"
   | "this_month"
   | "last_month"
   | "last_3_months"
@@ -24,7 +25,7 @@ export const DATE_RANGE_PRESETS: { key: DateRangePreset; label: string }[] = [
   { key: "all_time", label: "All Time" },
   { key: "today", label: "Daily (Today)" },
   { key: "this_week", label: "Weekly (This Week)" },
-  { key: "last_7_days", label: "Last 7 Days" },
+  { key: "last_week", label: "Last Week" },
   { key: "this_month", label: "Current Month" },
   { key: "last_month", label: "Last Month" },
   { key: "last_3_months", label: "Last 3 Months" },
@@ -50,8 +51,10 @@ export function computeDateRange(
       return { from: startOfDay(now), to: endOfDay(now) }
     case "this_week":
       return { from: startOfWeek(now, { weekStartsOn: 1 }), to: endOfDay(now) }
-    case "last_7_days":
-      return { from: startOfDay(subDays(now, 6)), to: endOfDay(now) }
+    case "last_week": {
+      const lastWeek = subWeeks(now, 1)
+      return { from: startOfWeek(lastWeek, { weekStartsOn: 1 }), to: endOfWeek(lastWeek, { weekStartsOn: 1 }) }
+    }
     case "this_month":
       return { from: startOfMonth(now), to: endOfDay(now) }
     case "last_month": {
