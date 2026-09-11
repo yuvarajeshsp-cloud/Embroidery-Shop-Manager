@@ -39,7 +39,6 @@ import {
 } from "@/lib/helpers"
 import type { Order, OrderItem, Payment, Customer, UserProfile } from "@/lib/types"
 import { ASSIGNABLE_ROLES } from "@/lib/permissions"
-import { useOrganizationDirectory } from "@/lib/platform-admin"
 import type { ExportField } from "@/lib/export"
 import { computeDateRange, isWithinRange, type DateRangePreset } from "@/lib/date-range"
 import { PageHeader } from "@/components/page-header"
@@ -124,8 +123,6 @@ export function OrdersPage() {
   const [customTo, setCustomTo] = React.useState("")
   const [showExport, setShowExport] = React.useState(false)
   const [assigneeMap, setAssigneeMap] = React.useState<Map<string, string>>(new Map())
-  const { orgs, orgMap } = useOrganizationDirectory()
-  const [orgFilter, setOrgFilter] = React.useState<Set<string>>(new Set())
 
   React.useEffect(() => {
     fetchConfigItems("order_status").then((items) => setOrderStatuses(items.map((i) => i.name)))
@@ -208,15 +205,11 @@ export function OrdersPage() {
     const matchesPriority = priorityFilter.size === 0 || priorityFilter.has(o.priority)
     const matchesCustomer = customerFilter.size === 0 || customerFilter.has(o.customer_id)
     const matchesChannel = channelFilter.size === 0 || channelFilter.has(o.sales_channel || "")
-    const matchesOrg = orgFilter.size === 0 || orgFilter.has(o.organization_id)
     const matchesDate = isWithinRange(o.order_date, dateRange)
-    return matchesSearch && matchesStatus && matchesPriority && matchesCustomer && matchesChannel && matchesOrg && matchesDate
+    return matchesSearch && matchesStatus && matchesPriority && matchesCustomer && matchesChannel && matchesDate
   })
 
   const orderExportFields: ExportField<EnrichedOrder>[] = [
-    ...(orgs.length > 0
-      ? [{ key: "organization", label: "Organization", value: (o: EnrichedOrder) => orgMap.get(o.organization_id) || "" }]
-      : []),
     { key: "order_number", label: "Order Number", value: (o) => o.order_number },
     { key: "order_date", label: "Order Date", value: (o) => formatDate(o.order_date) },
     { key: "customer", label: "Customer", value: (o) => o.customer?.customer_business_name || "" },
@@ -285,15 +278,6 @@ export function OrdersPage() {
           onChange={setChannelFilter}
           className="w-full sm:w-auto"
         />
-        {orgs.length > 0 && (
-          <MultiSelectFilter
-            label="Organization"
-            options={orgs.map((o) => ({ value: o.id, label: o.name }))}
-            selected={orgFilter}
-            onChange={setOrgFilter}
-            className="w-full sm:w-auto"
-          />
-        )}
         <DateRangeFilter
           preset={datePreset}
           onPresetChange={setDatePreset}
@@ -360,11 +344,6 @@ export function OrdersPage() {
                     <div className="text-xs text-muted-foreground">
                       Assigned: {(o.assigned_to && assigneeMap.get(o.assigned_to)) || "Unassigned"}
                     </div>
-                    {orgs.length > 0 && (
-                      <div className="text-xs text-muted-foreground">
-                        Org: {orgMap.get(o.organization_id) || "—"}
-                      </div>
-                    )}
                     </div>
                   </button>
                 )
@@ -377,7 +356,6 @@ export function OrdersPage() {
                   <TableHead className="w-12"></TableHead>
                   <TableHead>Order #</TableHead>
                   <TableHead>Customer</TableHead>
-                  {orgs.length > 0 && <TableHead>Organization</TableHead>}
                   <TableHead>Date</TableHead>
                   <TableHead>Due Date</TableHead>
                   <TableHead>Status</TableHead>
@@ -413,9 +391,6 @@ export function OrdersPage() {
                       </TableCell>
                       <TableCell className="font-mono text-xs font-medium">{o.order_number}</TableCell>
                       <TableCell>{o.customer?.customer_business_name || "—"}</TableCell>
-                      {orgs.length > 0 && (
-                        <TableCell className="text-xs text-muted-foreground">{orgMap.get(o.organization_id) || "—"}</TableCell>
-                      )}
                       <TableCell className="text-xs">{formatDate(o.order_date)}</TableCell>
                       <TableCell className="text-xs">
                         {o.required_date ? (

@@ -44,7 +44,7 @@ export function PlatformAdminPage() {
   }, [])
 
   async function loadOrgs() {
-    const { data: orgs } = await supabase.from("organizations").select("*").order("created_at", { ascending: false })
+    const { data: orgs } = await supabase.rpc("pa_organizations")
     if (!orgs) {
       setRows([])
       return
@@ -52,16 +52,12 @@ export function PlatformAdminPage() {
 
     const withCounts = await Promise.all(
       orgs.map(async (org: Organization) => {
-        const [{ count: memberCount }, { count: customerCount }, { count: orderCount }] = await Promise.all([
-          supabase.from("user_profiles").select("*", { count: "exact", head: true }).eq("organization_id", org.id),
-          supabase.from("customers").select("*", { count: "exact", head: true }).eq("organization_id", org.id),
-          supabase.from("orders").select("*", { count: "exact", head: true }).eq("organization_id", org.id),
-        ])
+        const { data: counts } = await supabase.rpc("pa_org_counts", { p_org_id: org.id }).maybeSingle()
         return {
           ...org,
-          memberCount: memberCount || 0,
-          customerCount: customerCount || 0,
-          orderCount: orderCount || 0,
+          memberCount: counts?.member_count ?? 0,
+          customerCount: counts?.customer_count ?? 0,
+          orderCount: counts?.order_count ?? 0,
         }
       }),
     )
@@ -165,18 +161,18 @@ export function PlatformAdminOrgPage({ id }: { id: string }) {
   async function loadOrg() {
     setLoading(true)
     const [orgRes, membersRes, customersRes, ordersRes, itemsRes, paymentsRes, configRes, settingsRes] = await Promise.all([
-      supabase.from("organizations").select("*").eq("id", id).maybeSingle(),
-      supabase.from("user_profiles").select("*").eq("organization_id", id).order("display_name"),
-      supabase.from("customers").select("id,customer_business_name").eq("organization_id", id),
-      supabase.from("orders").select("*").eq("organization_id", id).order("order_date", { ascending: false }),
-      supabase.from("order_items").select("*").eq("organization_id", id),
-      supabase.from("payments").select("*").eq("organization_id", id).order("payment_date", { ascending: false }),
-      supabase.from("config_items").select("*").eq("organization_id", id).order("category").order("sort_order"),
-      supabase.from("business_settings").select("key,value").eq("organization_id", id),
+      supabase.rpc("pa_organization", { p_org_id: id }).maybeSingle(),
+      supabase.rpc("pa_members", { p_org_id: id }),
+      supabase.rpc("pa_customer_names", { p_org_id: id }),
+      supabase.rpc("pa_orders", { p_org_id: id }),
+      supabase.rpc("pa_order_items", { p_org_id: id }),
+      supabase.rpc("pa_payments", { p_org_id: id }),
+      supabase.rpc("pa_config_items", { p_org_id: id }),
+      supabase.rpc("pa_business_settings", { p_org_id: id }),
     ])
 
     setOrg(orgRes.data)
-    setMembers(membersRes.data || [])
+    setMembers((membersRes.data || []).sort((a: UserProfile, b: UserProfile) => a.display_name.localeCompare(b.display_name)))
     setConfigItems(configRes.data || [])
     setBusinessSettings(settingsRes.data || [])
 

@@ -43,7 +43,6 @@ import { Switch } from "@/components/ui/switch"
 import { useRouter } from "@/lib/router"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { fetchConfigItems } from "@/lib/config"
-import { useOrganizationDirectory } from "@/lib/platform-admin"
 import { toast } from "sonner"
 import { orderTotal, orderBalanceDue } from "@/lib/helpers"
 
@@ -55,8 +54,6 @@ export function CustomersPage() {
   const [search, setSearch] = React.useState("")
   const [typeFilter, setTypeFilter] = React.useState<Set<string>>(new Set())
   const [customerTypes, setCustomerTypes] = React.useState<string[]>([])
-  const { orgs, orgMap } = useOrganizationDirectory()
-  const [orgFilter, setOrgFilter] = React.useState<Set<string>>(new Set())
   const [editing, setEditing] = React.useState<Customer | null>(null)
   const [showForm, setShowForm] = React.useState(false)
   const [showExport, setShowExport] = React.useState(false)
@@ -89,14 +86,10 @@ export function CustomersPage() {
       (c.contact_person || "").toLowerCase().includes(search.toLowerCase()) ||
       (c.phone || "").includes(search)
     const matchesType = typeFilter.size === 0 || typeFilter.has(c.customer_type)
-    const matchesOrg = orgFilter.size === 0 || orgFilter.has(c.organization_id)
-    return matchesSearch && matchesType && matchesOrg
+    return matchesSearch && matchesType
   })
 
   const customerExportFields: ExportField<Customer>[] = [
-    ...(orgs.length > 0
-      ? [{ key: "organization", label: "Organization", value: (c: Customer) => orgMap.get(c.organization_id) || "" }]
-      : []),
     { key: "customer_code", label: "Customer Code", value: (c) => c.customer_code },
     { key: "customer_business_name", label: "Business Name", value: (c) => c.customer_business_name },
     { key: "contact_person", label: "Contact Person", value: (c) => c.contact_person || "" },
@@ -161,14 +154,6 @@ export function CustomersPage() {
           selected={typeFilter}
           onChange={setTypeFilter}
         />
-        {orgs.length > 0 && (
-          <MultiSelectFilter
-            label="Organization"
-            options={orgs.map((o) => ({ value: o.id, label: o.name }))}
-            selected={orgFilter}
-            onChange={setOrgFilter}
-          />
-        )}
       </div>
 
       <Card>
@@ -194,9 +179,6 @@ export function CustomersPage() {
                   <div className="text-sm text-muted-foreground">
                     {c.contact_person || "—"} · {c.phone || "—"}
                   </div>
-                  {orgs.length > 0 && (
-                    <div className="text-xs text-muted-foreground">Org: {orgMap.get(c.organization_id) || "—"}</div>
-                  )}
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-mono text-xs text-muted-foreground">{c.customer_code}</span>
                     <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
@@ -217,7 +199,6 @@ export function CustomersPage() {
                 <TableRow>
                   <TableHead>Code</TableHead>
                   <TableHead>Business Name</TableHead>
-                  {orgs.length > 0 && <TableHead>Organization</TableHead>}
                   <TableHead>Contact</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>Type</TableHead>
@@ -229,9 +210,6 @@ export function CustomersPage() {
                   <TableRow key={c.id} className="cursor-pointer" onClick={() => navigate({ name: "customer-detail", id: c.id })}>
                     <TableCell className="font-mono text-xs">{c.customer_code}</TableCell>
                     <TableCell className="font-medium">{c.customer_business_name}</TableCell>
-                    {orgs.length > 0 && (
-                      <TableCell className="text-xs text-muted-foreground">{orgMap.get(c.organization_id) || "—"}</TableCell>
-                    )}
                     <TableCell>{c.contact_person || "—"}</TableCell>
                     <TableCell>{c.phone || "—"}</TableCell>
                     <TableCell>

@@ -49,7 +49,6 @@ import { toast } from "sonner"
 import { MultiSelectFilter } from "@/components/multi-select-filter"
 import { DateRangeFilter } from "@/components/date-range-filter"
 import { ExportDialog } from "@/components/export-dialog"
-import { useOrganizationDirectory } from "@/lib/platform-admin"
 
 const PAYMENT_STATUSES = ["Completed", "Pending", "Reversed", "Refunded"]
 
@@ -71,8 +70,6 @@ export function PaymentsPage() {
   const [showExport, setShowExport] = React.useState(false)
   const [showForm, setShowForm] = React.useState(false)
   const [editing, setEditing] = React.useState<Payment | null>(null)
-  const { orgs, orgMap } = useOrganizationDirectory()
-  const [orgFilter, setOrgFilter] = React.useState<Set<string>>(new Set())
 
   React.useEffect(() => {
     fetchConfigItems("payment_method").then((items) => setPaymentMethods(items.map((i) => i.name)))
@@ -129,15 +126,11 @@ export function PaymentsPage() {
     const matchesStatus = statusFilter.size === 0 || statusFilter.has(p.payment_status)
     const matchesMethod = methodFilter.size === 0 || methodFilter.has(p.payment_method)
     const matchesCustomer = customerFilter.size === 0 || customerFilter.has(p.customer_id)
-    const matchesOrg = orgFilter.size === 0 || orgFilter.has(p.organization_id)
     const matchesDate = isWithinRange(p.payment_date, dateRange)
-    return matchesSearch && matchesStatus && matchesMethod && matchesCustomer && matchesOrg && matchesDate
+    return matchesSearch && matchesStatus && matchesMethod && matchesCustomer && matchesDate
   })
 
   const paymentExportFields: ExportField<EnrichedPayment>[] = [
-    ...(orgs.length > 0
-      ? [{ key: "organization", label: "Organization", value: (p: EnrichedPayment) => orgMap.get(p.organization_id) || "" }]
-      : []),
     { key: "payment_number", label: "Payment Number", value: (p) => p.payment_number },
     { key: "payment_date", label: "Payment Date", value: (p) => formatDate(p.payment_date) },
     { key: "order_number", label: "Order Number", value: (p) => p.order?.order_number || "" },
@@ -194,15 +187,6 @@ export function PaymentsPage() {
           onChange={setCustomerFilter}
           className="w-full sm:w-auto"
         />
-        {orgs.length > 0 && (
-          <MultiSelectFilter
-            label="Organization"
-            options={orgs.map((o) => ({ value: o.id, label: o.name }))}
-            selected={orgFilter}
-            onChange={setOrgFilter}
-            className="w-full sm:w-auto"
-          />
-        )}
         <DateRangeFilter
           preset={datePreset}
           onPresetChange={setDatePreset}
@@ -237,9 +221,6 @@ export function PaymentsPage() {
                     <span>{formatDate(p.payment_date)}</span>
                   </div>
                   <div className="text-sm text-muted-foreground">{p.customer?.customer_business_name || "—"}</div>
-                  {orgs.length > 0 && (
-                    <div className="text-xs text-muted-foreground">Org: {orgMap.get(p.organization_id) || "—"}</div>
-                  )}
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex flex-wrap gap-1.5">
                       <Badge variant="outline">{p.payment_method}</Badge>
@@ -260,7 +241,6 @@ export function PaymentsPage() {
                   <TableHead>Date</TableHead>
                   <TableHead>Order</TableHead>
                   <TableHead>Customer</TableHead>
-                  {orgs.length > 0 && <TableHead>Organization</TableHead>}
                   <TableHead>Method</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead>Status</TableHead>
@@ -281,9 +261,6 @@ export function PaymentsPage() {
                       </button>
                     </TableCell>
                     <TableCell className="text-sm">{p.customer?.customer_business_name || "—"}</TableCell>
-                    {orgs.length > 0 && (
-                      <TableCell className="text-xs text-muted-foreground">{orgMap.get(p.organization_id) || "—"}</TableCell>
-                    )}
                     <TableCell><Badge variant="outline">{p.payment_method}</Badge></TableCell>
                     <TableCell className="text-right font-medium">{formatCurrency(p.amount)}</TableCell>
                     <TableCell><Badge variant="outline">{p.payment_status}</Badge></TableCell>
