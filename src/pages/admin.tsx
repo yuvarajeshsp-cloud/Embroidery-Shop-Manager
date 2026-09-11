@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Plus, Shield } from "lucide-react"
+import { Plus, Shield, UserPlus } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
 import { useRouter } from "@/lib/router"
@@ -59,6 +59,12 @@ export function UsersPage() {
   const [inviteName, setInviteName] = React.useState("")
   const [inviteRole, setInviteRole] = React.useState<UserRole>("Operator")
   const [inviting, setInviting] = React.useState(false)
+  const [showCreateForm, setShowCreateForm] = React.useState(false)
+  const [createEmail, setCreateEmail] = React.useState("")
+  const [createName, setCreateName] = React.useState("")
+  const [createRole, setCreateRole] = React.useState<UserRole>("Operator")
+  const [createPassword, setCreatePassword] = React.useState("")
+  const [creating, setCreating] = React.useState(false)
 
   React.useEffect(() => {
     loadUsers()
@@ -135,9 +141,50 @@ export function UsersPage() {
     }
   }
 
+  async function handleCreateUser() {
+    if (!createEmail.trim() || !createName.trim()) {
+      toast.error("Name and email are required")
+      return
+    }
+    if (createPassword.length < 6) {
+      toast.error("Password must be at least 6 characters")
+      return
+    }
+    setCreating(true)
+    try {
+      const { data, error } = await supabase.functions.invoke("create-user", {
+        body: {
+          email: createEmail.trim(),
+          display_name: createName.trim(),
+          role: createRole,
+          password: createPassword,
+        },
+      })
+      if (error) throw error
+      if (!data?.success) throw new Error(data?.error || "Failed to create user")
+
+      await logAudit(currentUser, "user_profiles", data.user_id, "INSERT", null, { email: createEmail.trim(), role: createRole } as Record<string, unknown>, "Created directly")
+      toast.success(`${createName.trim()} can now sign in`)
+      setCreateEmail("")
+      setCreateName("")
+      setCreateRole("Operator")
+      setCreatePassword("")
+      setShowCreateForm(false)
+      loadUsers()
+    } catch (err) {
+      console.error(err)
+      toast.error(err instanceof Error ? err.message : "Failed to create user")
+    } finally {
+      setCreating(false)
+    }
+  }
+
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
       <PageHeader title="Users & Roles" description="Manage team members and their permissions">
+        <Button variant="outline" size="sm" onClick={() => setShowCreateForm(true)}>
+          <UserPlus className="size-4" /> Create User
+        </Button>
         <Button size="sm" onClick={() => setShowForm(true)}>
           <Plus className="size-4" /> Invite User
         </Button>
@@ -298,6 +345,56 @@ export function UsersPage() {
               <Button variant="outline" onClick={() => setShowForm(false)} disabled={inviting}>Cancel</Button>
               <Button onClick={handleInvite} disabled={inviting}>
                 {inviting ? "Sending..." : "Send Invite"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {showCreateForm && (
+        <Dialog open onOpenChange={() => setShowCreateForm(false)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create User</DialogTitle>
+              <DialogDescription>
+                Creates the account immediately with the password you set below — no invite email is sent, and they
+                can sign in right away.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-3 py-2">
+              <div className="flex flex-col gap-2">
+                <Label>Name</Label>
+                <Input value={createName} onChange={(e) => setCreateName(e.target.value)} disabled={creating} />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>Email</Label>
+                <Input type="email" value={createEmail} onChange={(e) => setCreateEmail(e.target.value)} disabled={creating} />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>Password</Label>
+                <Input
+                  type="password"
+                  value={createPassword}
+                  onChange={(e) => setCreatePassword(e.target.value)}
+                  disabled={creating}
+                  minLength={6}
+                  placeholder="At least 6 characters"
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>Role</Label>
+                <Select value={createRole} onValueChange={(v) => setCreateRole(v as UserRole)} disabled={creating}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowCreateForm(false)} disabled={creating}>Cancel</Button>
+              <Button onClick={handleCreateUser} disabled={creating}>
+                {creating ? "Creating..." : "Create User"}
               </Button>
             </DialogFooter>
           </DialogContent>
