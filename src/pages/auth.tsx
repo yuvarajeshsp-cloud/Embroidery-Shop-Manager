@@ -20,6 +20,7 @@ export function AuthScreen() {
   const [signUpName, setSignUpName] = React.useState("")
   const [signUpEmail, setSignUpEmail] = React.useState("")
   const [signUpPassword, setSignUpPassword] = React.useState("")
+  const [signUpPhone, setSignUpPhone] = React.useState("")
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -34,7 +35,7 @@ export function AuthScreen() {
     e.preventDefault()
     setError(null)
     setLoading(true)
-    const { error } = await signUp(signUpEmail, signUpPassword, signUpName, signUpShopName)
+    const { error } = await signUp(signUpEmail, signUpPassword, signUpName, signUpShopName, signUpPhone)
     setLoading(false)
     if (error) setError(error)
   }
@@ -126,6 +127,20 @@ export function AuthScreen() {
                       onChange={(e) => setSignUpEmail(e.target.value)}
                       required
                     />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="signup-phone">Phone Number</Label>
+                    <Input
+                      id="signup-phone"
+                      type="tel"
+                      placeholder="+91 98765 43210"
+                      value={signUpPhone}
+                      onChange={(e) => setSignUpPhone(e.target.value)}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      We'll text a verification code to this number on WhatsApp before your account is active.
+                    </p>
                   </div>
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="signup-password">Password</Label>

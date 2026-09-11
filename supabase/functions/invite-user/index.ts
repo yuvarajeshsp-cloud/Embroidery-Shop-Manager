@@ -122,6 +122,9 @@ Deno.serve(async (req) => {
       email,
       role,
       is_active: true,
+      // Invited by a trusted Administrator, not the public sign-up form —
+      // exempt from the sign-up phone verification gate.
+      phone_verified: true,
       organization_id: callerProfile.organization_id,
     }),
   })

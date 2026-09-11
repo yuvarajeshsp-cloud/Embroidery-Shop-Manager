@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
 import { useRouter } from "@/lib/router"
 import { logAudit } from "@/lib/audit"
+import { edgeFunctionErrorMessage } from "@/lib/edge-function-error"
 import { formatDateTime } from "@/lib/helpers"
 import type { UserProfile, UserRole, AuditLog } from "@/lib/types"
 import { PageHeader } from "@/components/page-header"
@@ -123,7 +124,7 @@ export function UsersPage() {
           role: inviteRole,
         },
       })
-      if (error) throw error
+      if (error) throw new Error(await edgeFunctionErrorMessage(error, "Failed to send invite"))
       if (!data?.success) throw new Error(data?.error || "Failed to send invite")
 
       await logAudit(currentUser, "user_profiles", data.user_id, "INSERT", null, { email: inviteEmail.trim(), role: inviteRole } as Record<string, unknown>, "Invited")
@@ -160,7 +161,7 @@ export function UsersPage() {
           password: createPassword,
         },
       })
-      if (error) throw error
+      if (error) throw new Error(await edgeFunctionErrorMessage(error, "Failed to create user"))
       if (!data?.success) throw new Error(data?.error || "Failed to create user")
 
       await logAudit(currentUser, "user_profiles", data.user_id, "INSERT", null, { email: createEmail.trim(), role: createRole } as Record<string, unknown>, "Created directly")

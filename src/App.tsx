@@ -9,6 +9,7 @@ import { BottomNav } from "@/components/bottom-nav"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { AuthScreen } from "@/pages/auth"
 import { SetPasswordScreen } from "@/pages/set-password"
+import { VerifyPhoneScreen } from "@/pages/verify-phone"
 import { ProfilePage } from "@/pages/profile"
 import { DashboardPage } from "@/pages/dashboard"
 import { CustomersPage, CustomerDetailPage } from "@/pages/customers"
@@ -98,7 +99,7 @@ function RouteRenderer() {
 }
 
 function AppContent() {
-  const { session, loading } = useAuth()
+  const { session, profile, loading } = useAuth()
   const isMobile = useIsMobile()
   const businessProfile = useBusinessProfile()
   const [pendingAuthType, setPendingAuthType] = React.useState<string | null>(
@@ -123,6 +124,10 @@ function AppContent() {
 
   if (!session) {
     return <AuthScreen />
+  }
+
+  if (profile && !profile.phone_verified) {
+    return <VerifyPhoneScreen />
   }
 
   if (isMobile) {

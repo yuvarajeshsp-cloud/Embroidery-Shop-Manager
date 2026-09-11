@@ -25,6 +25,7 @@ export interface AuthContextValue {
     password: string,
     displayName: string,
     shopName: string,
+    phone: string,
   ) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
@@ -105,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 
   const signUp = React.useCallback(
-    async (email: string, password: string, displayName: string, shopName: string) => {
+    async (email: string, password: string, displayName: string, shopName: string, phone: string) => {
       const { data, error } = await supabase.auth.signUp({ email, password })
       if (error) return { error: error.message }
 
@@ -136,6 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             id: data.user.id,
             display_name: displayName,
             email,
+            phone,
             role: "Administrator" satisfies UserRole,
             organization_id: org.id,
           })
