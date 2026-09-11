@@ -71,6 +71,23 @@ export function getCachedBusinessProfile(): BusinessProfile {
   return current
 }
 
+/**
+ * Drops the cached name/logo (in memory and in localStorage) and notifies
+ * every mounted consumer immediately. Call this whenever the signed-in user
+ * changes — otherwise whichever organization's settings got fetched first
+ * in this tab's lifetime keeps showing for every account signed into afterward.
+ */
+export function resetBusinessProfile() {
+  current = DEFAULT_PROFILE
+  inFlight = null
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // ignore
+  }
+  notify()
+}
+
 export function useBusinessProfile(): BusinessProfile {
   const [profile, setProfile] = React.useState(current)
 

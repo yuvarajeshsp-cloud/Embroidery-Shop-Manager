@@ -2,6 +2,8 @@ import * as React from "react"
 import type { Session, User } from "@supabase/supabase-js"
 import { supabase } from "./supabase"
 import type { UserProfile, UserRole } from "./types"
+import { clearConfigCache } from "./config"
+import { resetBusinessProfile, refreshBusinessProfile } from "./business-profile"
 
 function slugify(name: string): string {
   const slug = name
@@ -34,6 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = React.useState<Session | null>(null)
   const [profile, setProfile] = React.useState<UserProfile | null>(null)
   const [loading, setLoading] = React.useState(true)
+  const lastUserId = React.useRef<string | null>(null)
 
   const loadProfile = React.useCallback(async (userId: string) => {
     const { data, error } = await supabase
@@ -49,9 +52,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(data as UserProfile | null)
   }, [])
 
+  // Business name/logo (and config dropdown values) are cached outside React
+  // for instant, flash-free loads — but that cache is keyed globally, not
+  // per user. If this tab's signed-in user actually changes (sign out then
+  // a different account signs in, or a stale session gets replaced), drop
+  // it — otherwise whichever organization was fetched first in this tab's
+  // lifetime keeps showing for every account afterward.
+  const handleUserChange = React.useCallback((userId: string | null) => {
+    if (userId !== lastUserId.current) {
+      lastUserId.current = userId
+      clearConfigCache()
+      resetBusinessProfile()
+      if (userId) void refreshBusinessProfile()
+    }
+  }, [])
+
   React.useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
+      handleUserChange(data.session?.user?.id ?? null)
       if (data.session?.user) {
         loadProfile(data.session.user.id).finally(() => setLoading(false))
       } else {
@@ -63,6 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
+      handleUserChange(session?.user?.id ?? null)
       if (session?.user) {
         loadProfile(session.user.id)
       } else {
@@ -71,7 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
 
     return () => subscription.unsubscribe()
-  }, [loadProfile])
+  }, [loadProfile, handleUserChange])
 
   const signIn = React.useCallback(
     async (email: string, password: string) => {
