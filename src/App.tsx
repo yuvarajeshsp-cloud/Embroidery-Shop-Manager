@@ -28,38 +28,35 @@ import { setFavicon } from "@/lib/favicon"
 import { canAccessRoute } from "@/lib/permissions"
 import * as React from "react"
 
-function AccessDenied() {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
-      <h2 className="text-lg font-semibold">Access Denied</h2>
-      <p className="text-sm text-muted-foreground">Your role doesn't have permission to view this page.</p>
-    </div>
-  )
-}
-
 function RouteRenderer() {
   const { route, navigate } = useRouter()
   const { profile } = useAuth()
   const isPlatformAdmin = usePlatformAdmin()
+  const isPlatformAdminRoute = route.name === "platform-admin" || route.name === "platform-admin-org"
 
   // The router remembers the last-visited page across sessions (browser
   // history), so a different, more limited role signing into the same
   // browser/tab can land directly on a page their role no longer permits —
   // e.g. a shared shop device where an Administrator was last on Users &
-  // Roles and an Operator signs in next. Bounce to Dashboard instead of
-  // stranding them on a dead-end "Access Denied" screen.
+  // Roles and an Operator signs in next, or a brand-new sign-up inheriting
+  // the previous session's Platform Admin page. Bounce to Dashboard instead
+  // of stranding them on a dead-end "Access Denied" screen.
   const hasAccess = canAccessRoute(profile?.role, route.name)
   React.useEffect(() => {
-    if (!hasAccess && route.name !== "platform-admin" && route.name !== "platform-admin-org" && route.name !== "dashboard") {
+    if (isPlatformAdminRoute) {
+      if (isPlatformAdmin === false) navigate({ name: "dashboard" })
+      return
+    }
+    if (!hasAccess && route.name !== "dashboard") {
       navigate({ name: "dashboard" })
     }
-  }, [hasAccess, route.name, navigate])
+  }, [hasAccess, route.name, navigate, isPlatformAdminRoute, isPlatformAdmin])
 
   if (route.name === "platform-admin") {
-    return isPlatformAdmin ? <PlatformAdminPage /> : <AccessDenied />
+    return isPlatformAdmin ? <PlatformAdminPage /> : <AppLoader />
   }
   if (route.name === "platform-admin-org") {
-    return isPlatformAdmin ? <PlatformAdminOrgPage id={route.id} /> : <AccessDenied />
+    return isPlatformAdmin ? <PlatformAdminOrgPage id={route.id} /> : <AppLoader />
   }
 
   if (!hasAccess) {
