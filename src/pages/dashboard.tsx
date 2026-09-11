@@ -15,6 +15,53 @@ import { Plus } from "lucide-react"
 import { toast } from "sonner"
 import { DateRangeFilter } from "@/components/date-range-filter"
 import { computeDateRange, isWithinRange, type DateRangePreset } from "@/lib/date-range"
+import {
+  differenceInCalendarDays,
+  startOfDay,
+  startOfWeek,
+  startOfMonth,
+  startOfYear,
+  eachDayOfInterval,
+  eachWeekOfInterval,
+  eachMonthOfInterval,
+  eachYearOfInterval,
+  format,
+} from "date-fns"
+
+type TrendGranularity = "day" | "week" | "month" | "year"
+
+function pickTrendGranularity(from: Date, to: Date): TrendGranularity {
+  const spanDays = differenceInCalendarDays(to, from) + 1
+  if (spanDays <= 31) return "day"
+  if (spanDays <= 120) return "week"
+  if (spanDays <= 900) return "month"
+  return "year"
+}
+
+function bucketStart(date: Date, granularity: TrendGranularity): Date {
+  switch (granularity) {
+    case "day": return startOfDay(date)
+    case "week": return startOfWeek(date, { weekStartsOn: 1 })
+    case "month": return startOfMonth(date)
+    case "year": return startOfYear(date)
+  }
+}
+
+function bucketLabel(date: Date, granularity: TrendGranularity): string {
+  switch (granularity) {
+    case "day": return format(date, "d MMM")
+    case "week": return format(date, "d MMM")
+    case "month": return format(date, "MMM yyyy")
+    case "year": return format(date, "yyyy")
+  }
+}
+
+const GRANULARITY_DESCRIPTION: Record<TrendGranularity, string> = {
+  day: "Orders and revenue by day",
+  week: "Orders and revenue by week",
+  month: "Orders and revenue by month",
+  year: "Orders and revenue by year",
+}
 
 interface DashboardData {
   totalOrders: number
@@ -26,7 +73,8 @@ interface DashboardData {
   inProduction: number
   recentOrders: (Order & { customer?: Customer })[]
   urgentOrders: (Order & { customer?: Customer })[]
-  monthlyData: { month: string; orders: number; revenue: number }[]
+  trendData: { label: string; orders: number; revenue: number }[]
+  trendDescription: string
   statusBreakdown: { status: string; count: number }[]
 }
 
@@ -37,7 +85,7 @@ export function DashboardPage() {
   const [rawCustomers, setRawCustomers] = React.useState<Customer[]>([])
   const [rawItems, setRawItems] = React.useState<OrderItem[]>([])
   const [rawPayments, setRawPayments] = React.useState<Payment[]>([])
-  const [datePreset, setDatePreset] = React.useState<DateRangePreset>("all_time")
+  const [datePreset, setDatePreset] = React.useState<DateRangePreset>("this_week")
   const [customFrom, setCustomFrom] = React.useState("")
   const [customTo, setCustomTo] = React.useState("")
 
@@ -118,23 +166,44 @@ export function DashboardPage() {
         .slice(0, 5)
         .map((o) => ({ ...o, customer: customerMap.get(o.customer_id) }))
 
-      // Monthly data for last 6 months
-      const now = new Date()
-      const monthlyData: { month: string; orders: number; revenue: number }[] = []
-      for (let i = 5; i >= 0; i--) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-        const monthName = d.toLocaleString("en-IN", { month: "short" })
-        const monthOrders = orders.filter((o) => {
-          const od = new Date(o.order_date)
-          return od.getFullYear() === d.getFullYear() && od.getMonth() === d.getMonth()
-        })
-        let monthRevenue = 0
-        for (const o of monthOrders) {
-          const pays = paymentsByOrder.get(o.id) || []
-          monthRevenue += orderAmountPaid(pays)
-        }
-        monthlyData.push({ month: monthName, orders: monthOrders.length, revenue: monthRevenue })
+      // Trend chart: bucket the filtered orders across the selected range, at a
+      // granularity (day/week/month/year) chosen from how wide that range is —
+      // so "This Week" shows 7 daily bars while "Yearly" shows monthly bars.
+      // "All Time" spans from an arbitrary fixed start, so bucket it against
+      // the actual earliest order instead of an empty multi-decade range.
+      let trendFrom = dateRange.from
+      const trendTo = dateRange.to
+      if (datePreset === "all_time" && orders.length > 0) {
+        trendFrom = orders.reduce(
+          (min, o) => (new Date(o.order_date) < min ? new Date(o.order_date) : min),
+          new Date(orders[0].order_date),
+        )
       }
+      const granularity = pickTrendGranularity(trendFrom, trendTo)
+      const bucketRanges: Record<TrendGranularity, (interval: { start: Date; end: Date }) => Date[]> = {
+        day: eachDayOfInterval,
+        week: (interval) => eachWeekOfInterval(interval, { weekStartsOn: 1 }),
+        month: eachMonthOfInterval,
+        year: eachYearOfInterval,
+      }
+      const bucketStarts = orders.length > 0 && trendFrom <= trendTo
+        ? bucketRanges[granularity]({ start: trendFrom, end: trendTo })
+        : []
+
+      const trendBuckets = new Map<string, { label: string; orders: number; revenue: number }>()
+      for (const start of bucketStarts) {
+        const key = start.toISOString()
+        trendBuckets.set(key, { label: bucketLabel(start, granularity), orders: 0, revenue: 0 })
+      }
+      for (const o of orders) {
+        const key = bucketStart(new Date(o.order_date), granularity).toISOString()
+        const bucket = trendBuckets.get(key)
+        if (!bucket) continue
+        bucket.orders += 1
+        bucket.revenue += orderAmountPaid(paymentsByOrder.get(o.id) || [])
+      }
+      const trendData = [...trendBuckets.values()]
+      const trendDescription = GRANULARITY_DESCRIPTION[granularity]
 
       // Status breakdown
       const statusCounts: Record<string, number> = {}
@@ -153,7 +222,8 @@ export function DashboardPage() {
         inProduction: inProduction.length,
         recentOrders,
         urgentOrders,
-        monthlyData,
+        trendData,
+        trendDescription,
         statusBreakdown,
       }
   }, [rawOrders, rawCustomers, rawItems, rawPayments, datePreset, customFrom, customTo])
@@ -220,18 +290,24 @@ export function DashboardPage() {
       <div className="grid min-w-0 gap-4 lg:grid-cols-3">
         <Card className="min-w-0 lg:col-span-2">
           <CardHeader>
-            <CardTitle>Monthly Trends</CardTitle>
-            <CardDescription>Orders and revenue over the last 6 months</CardDescription>
+            <CardTitle>Trends</CardTitle>
+            <CardDescription>{data.trendDescription}</CardDescription>
           </CardHeader>
           <CardContent className="min-w-0">
-            <ChartContainer config={chartConfig} className="h-[280px] w-full min-w-0">
-              <BarChart data={data.monthlyData}>
-                <CartesianGrid vertical={false} />
-                <XAxis dataKey="month" tickLine={false} axisLine={false} />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="orders" fill="var(--color-orders)" radius={4} />
-              </BarChart>
-            </ChartContainer>
+            {data.trendData.length > 0 ? (
+              <ChartContainer config={chartConfig} className="h-[280px] w-full min-w-0">
+                <BarChart data={data.trendData}>
+                  <CartesianGrid vertical={false} />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="orders" fill="var(--color-orders)" radius={4} />
+                </BarChart>
+              </ChartContainer>
+            ) : (
+              <div className="flex h-[280px] items-center justify-center text-sm text-muted-foreground">
+                No orders yet
+              </div>
+            )}
           </CardContent>
         </Card>
 
