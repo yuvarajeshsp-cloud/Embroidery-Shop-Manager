@@ -289,13 +289,23 @@ export function DashboardPage() {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
       <PageHeader title="Dashboard" description="Overview of your embroidery business">
+        <div className="hidden items-center gap-2 sm:flex">
+          <DateRangeFilter
+            preset={datePreset}
+            onPresetChange={setDatePreset}
+            customFrom={customFrom}
+            customTo={customTo}
+            onCustomFromChange={setCustomFrom}
+            onCustomToChange={setCustomTo}
+          />
+        </div>
         <Button onClick={() => navigate({ name: "order-new" })} size="sm">
           <Plus className="size-4" />
           New Order
         </Button>
       </PageHeader>
 
-      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+      <div className="grid grid-cols-2 gap-2 sm:hidden">
         <DateRangeFilter
           preset={datePreset}
           onPresetChange={setDatePreset}
