@@ -85,7 +85,7 @@ export async function generateOrderPdf(data: OrderPdfData): Promise<Blob> {
   const { order, customer, items, payments } = data
   const settings = await fetchBusinessSettings()
 
-  const companyName = (settings.company_name || "Embroidery Shop Manager").trim()
+  const companyName = (settings.company_name || "Business Management System").trim()
   const companyTagline = (settings.company_tagline || "").trim()
   const companyEmail = (settings.company_email || "").trim()
   const companyPhone = (settings.company_phone || "").trim()

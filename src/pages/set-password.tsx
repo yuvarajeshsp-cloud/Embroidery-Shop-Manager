@@ -46,7 +46,7 @@ export function SetPasswordScreen({ onDone }: { onDone: () => void }) {
               <KeyRound className="size-5" /> Set your password
             </CardTitle>
             <CardDescription>
-              You've been invited to Paavai Embroidery. Choose a password to finish setting up your account.
+              You've been invited to join. Choose a password to finish setting up your account.
             </CardDescription>
           </CardHeader>
           <CardContent>

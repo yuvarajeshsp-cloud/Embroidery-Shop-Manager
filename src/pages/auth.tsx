@@ -44,8 +44,7 @@ export function AuthScreen() {
       <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center gap-2">
           <img src="/favicon.svg" alt="" className="size-14 rounded-xl shadow-lg" />
-          <h1 className="text-2xl font-bold tracking-tight">Paavai Embroidery</h1>
-          <p className="text-sm text-muted-foreground">Business Management System</p>
+          <h1 className="text-2xl font-bold tracking-tight">Business Management System</h1>
         </div>
 
         <Card>

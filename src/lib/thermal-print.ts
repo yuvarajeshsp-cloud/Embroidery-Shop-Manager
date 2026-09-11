@@ -133,7 +133,7 @@ function drawThermalRow(doc: jsPDF, label: string, value: string, y: number, bol
 type BusinessSettings = Record<string, string>
 
 function drawThermalHeader(doc: jsPDF, y: number, settings: BusinessSettings): number {
-  const name = (settings.company_name || "Embroidery Shop Manager").trim()
+  const name = (settings.company_name || "Business Management System").trim()
   const tagline = (settings.company_tagline || "").trim()
   const phone = (settings.company_phone || "").trim()
   const email = (settings.company_email || "").trim()
@@ -349,7 +349,7 @@ async function generateThermalOrderTagPdf(order: Order, customer: Customer | nul
 
 async function businessHeaderHtml(): Promise<string> {
   const settings = await fetchBusinessSettings()
-  const name = (settings.company_name || "Embroidery Shop Manager").trim()
+  const name = (settings.company_name || "Business Management System").trim()
   const tagline = (settings.company_tagline || "").trim()
   const phone = (settings.company_phone || "").trim()
   const email = (settings.company_email || "").trim()

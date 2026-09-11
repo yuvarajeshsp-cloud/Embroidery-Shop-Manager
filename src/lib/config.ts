@@ -22,7 +22,7 @@ export const BUSINESS_PROFILE_FIELDS = [
 export type BusinessProfileField = (typeof BUSINESS_PROFILE_FIELDS)[number]
 
 export function setDocumentTitleFromSettings(settings: Record<string, string>) {
-  const companyName = (settings.company_name || "Embroidery Shop Manager").trim()
+  const companyName = (settings.company_name || "Business Management System").trim()
   document.title = companyName
 }
 

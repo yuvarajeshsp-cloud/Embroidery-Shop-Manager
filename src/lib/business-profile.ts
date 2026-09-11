@@ -11,7 +11,7 @@ import { fetchBusinessSettings } from "./config"
  */
 
 const STORAGE_KEY = "business_profile_cache_v1"
-const DEFAULT_NAME = "Embroidery Shop Manager"
+const DEFAULT_NAME = "Business Management System"
 
 export interface BusinessProfile {
   companyName: string

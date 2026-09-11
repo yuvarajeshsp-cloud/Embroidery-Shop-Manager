@@ -123,7 +123,7 @@ export function AppSidebar() {
           </div>
           <div className="flex flex-col">
             <span className="text-sm font-bold text-sidebar-foreground">{companyName}</span>
-            <span className="text-xs text-sidebar-foreground/60">Embroidery Shop Manager</span>
+            <span className="text-xs text-sidebar-foreground/60">Business Management System</span>
           </div>
         </div>
       </SidebarHeader>
