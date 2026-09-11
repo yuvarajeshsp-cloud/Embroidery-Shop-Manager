@@ -38,9 +38,22 @@ function AccessDenied() {
 }
 
 function RouteRenderer() {
-  const { route } = useRouter()
+  const { route, navigate } = useRouter()
   const { profile } = useAuth()
   const isPlatformAdmin = usePlatformAdmin()
+
+  // The router remembers the last-visited page across sessions (browser
+  // history), so a different, more limited role signing into the same
+  // browser/tab can land directly on a page their role no longer permits —
+  // e.g. a shared shop device where an Administrator was last on Users &
+  // Roles and an Operator signs in next. Bounce to Dashboard instead of
+  // stranding them on a dead-end "Access Denied" screen.
+  const hasAccess = canAccessRoute(profile?.role, route.name)
+  React.useEffect(() => {
+    if (!hasAccess && route.name !== "platform-admin" && route.name !== "platform-admin-org" && route.name !== "dashboard") {
+      navigate({ name: "dashboard" })
+    }
+  }, [hasAccess, route.name, navigate])
 
   if (route.name === "platform-admin") {
     return isPlatformAdmin ? <PlatformAdminPage /> : <AccessDenied />
@@ -49,8 +62,8 @@ function RouteRenderer() {
     return isPlatformAdmin ? <PlatformAdminOrgPage id={route.id} /> : <AccessDenied />
   }
 
-  if (!canAccessRoute(profile?.role, route.name)) {
-    return <AccessDenied />
+  if (!hasAccess) {
+    return <AppLoader />
   }
 
   switch (route.name) {
