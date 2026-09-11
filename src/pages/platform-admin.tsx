@@ -3,7 +3,7 @@ import { ShieldCheck, ArrowLeft } from "lucide-react"
 
 import { supabase } from "@/lib/supabase"
 import { formatDateTime, formatDate, formatCurrency, orderTotal, orderAmountPaid } from "@/lib/helpers"
-import type { Organization, UserProfile, Order, Customer, OrderItem, Payment, ConfigItem } from "@/lib/types"
+import type { Organization, UserProfile, Order, OrderItem, Payment, ConfigItem } from "@/lib/types"
 import { useRouter } from "@/lib/router"
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/page-header"
@@ -44,20 +44,22 @@ export function PlatformAdminPage() {
   }, [])
 
   async function loadOrgs() {
-    const { data: orgs } = await supabase.rpc("pa_organizations")
-    if (!orgs) {
+    const { data } = await supabase.rpc("pa_organizations")
+    const orgs = (data || []) as Organization[]
+    if (orgs.length === 0) {
       setRows([])
       return
     }
 
     const withCounts = await Promise.all(
-      orgs.map(async (org: Organization) => {
+      orgs.map(async (org) => {
         const { data: counts } = await supabase.rpc("pa_org_counts", { p_org_id: org.id }).maybeSingle()
+        const c = counts as { member_count: number; customer_count: number; order_count: number } | null
         return {
           ...org,
-          memberCount: counts?.member_count ?? 0,
-          customerCount: counts?.customer_count ?? 0,
-          orderCount: counts?.order_count ?? 0,
+          memberCount: c?.member_count ?? 0,
+          customerCount: c?.customer_count ?? 0,
+          orderCount: c?.order_count ?? 0,
         }
       }),
     )
@@ -171,28 +173,37 @@ export function PlatformAdminOrgPage({ id }: { id: string }) {
       supabase.rpc("pa_business_settings", { p_org_id: id }),
     ])
 
-    setOrg(orgRes.data)
-    setMembers((membersRes.data || []).sort((a: UserProfile, b: UserProfile) => a.display_name.localeCompare(b.display_name)))
-    setConfigItems(configRes.data || [])
-    setBusinessSettings(settingsRes.data || [])
+    const org = (orgRes.data || null) as Organization | null
+    const members = (membersRes.data || []) as UserProfile[]
+    const customers = (customersRes.data || []) as { id: string; customer_business_name: string }[]
+    const orders = (ordersRes.data || []) as Order[]
+    const items = (itemsRes.data || []) as OrderItem[]
+    const paymentsData = (paymentsRes.data || []) as Payment[]
+    const configItemsData = (configRes.data || []) as ConfigItem[]
+    const settingsData = (settingsRes.data || []) as { key: string; value: string }[]
 
-    const customerMap = new Map((customersRes.data || []).map((c: { id: string; customer_business_name: string }) => [c.id, c.customer_business_name]))
+    setOrg(org)
+    setMembers([...members].sort((a, b) => a.display_name.localeCompare(b.display_name)))
+    setConfigItems(configItemsData)
+    setBusinessSettings(settingsData)
+
+    const customerMap = new Map(customers.map((c) => [c.id, c.customer_business_name]))
     const itemsByOrder = new Map<string, OrderItem[]>()
-    for (const item of itemsRes.data || []) {
+    for (const item of items) {
       const arr = itemsByOrder.get(item.order_id) || []
       arr.push(item)
       itemsByOrder.set(item.order_id, arr)
     }
     const paymentsByOrder = new Map<string, Payment[]>()
-    for (const p of paymentsRes.data || []) {
+    for (const p of paymentsData) {
       const arr = paymentsByOrder.get(p.order_id) || []
       arr.push(p)
       paymentsByOrder.set(p.order_id, arr)
     }
-    const orderMap = new Map((ordersRes.data || []).map((o: Order) => [o.id, o]))
+    const orderMap = new Map(orders.map((o) => [o.id, o]))
 
     setOrders(
-      (ordersRes.data || []).map((o: Order) => ({
+      orders.map((o) => ({
         ...o,
         customerName: customerMap.get(o.customer_id),
         total: orderTotal(itemsByOrder.get(o.id) || []),
@@ -200,7 +211,7 @@ export function PlatformAdminOrgPage({ id }: { id: string }) {
       })),
     )
     setPayments(
-      (paymentsRes.data || []).map((p: Payment) => ({
+      paymentsData.map((p) => ({
         ...p,
         orderNumber: orderMap.get(p.order_id)?.order_number,
         customerName: customerMap.get(p.customer_id),
