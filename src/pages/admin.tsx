@@ -2,6 +2,7 @@ import * as React from "react"
 import { Plus, Shield } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
+import { useRouter } from "@/lib/router"
 import { logAudit } from "@/lib/audit"
 import { formatDateTime } from "@/lib/helpers"
 import type { UserProfile, UserRole, AuditLog } from "@/lib/types"
@@ -306,9 +307,22 @@ export function UsersPage() {
   )
 }
 
+interface RecordRef {
+  label: string
+  onOpen?: () => void
+}
+
+async function fetchByIds<T>(table: string, ids: string[], columns: string): Promise<T[]> {
+  if (ids.length === 0) return []
+  const { data } = await supabase.from(table).select(columns).in("id", ids)
+  return (data || []) as T[]
+}
+
 export function AuditPage() {
   const isMobile = useIsMobile()
+  const { navigate } = useRouter()
   const [logs, setLogs] = React.useState<AuditLog[]>([])
+  const [recordRefs, setRecordRefs] = React.useState<Record<string, RecordRef>>({})
   const [loading, setLoading] = React.useState(true)
   const [tableFilter, setTableFilter] = React.useState("all")
 
@@ -327,8 +341,54 @@ export function AuditPage() {
       toast.error("Failed to load audit logs")
     } else {
       setLogs(data || [])
+      await loadRecordRefs(data || [])
     }
     setLoading(false)
+  }
+
+  // Audit entries only store a table name + a raw record id. Resolve each
+  // one into a human-readable label (order number, customer name, ...) and,
+  // where the app has an actual detail page for that kind of record, a way
+  // to jump straight to it — instead of showing the opaque backend id.
+  async function loadRecordRefs(entries: AuditLog[]) {
+    const idsFor = (table: string) => [...new Set(entries.filter((l) => l.table_name === table).map((l) => l.record_id))]
+
+    const [orders, customers, payments, users] = await Promise.all([
+      fetchByIds<{ id: string; order_number: string }>("orders", idsFor("orders"), "id, order_number"),
+      fetchByIds<{ id: string; customer_business_name: string }>("customers", idsFor("customers"), "id, customer_business_name"),
+      fetchByIds<{ id: string; payment_number: string; order_id: string }>("payments", idsFor("payments"), "id, payment_number, order_id"),
+      fetchByIds<{ id: string; display_name: string; email: string }>("user_profiles", idsFor("user_profiles"), "id, display_name, email"),
+    ])
+
+    const refs: Record<string, RecordRef> = {}
+    for (const o of orders) {
+      refs[`orders:${o.id}`] = { label: o.order_number, onOpen: () => navigate({ name: "order-detail", id: o.id }) }
+    }
+    for (const c of customers) {
+      refs[`customers:${c.id}`] = { label: c.customer_business_name, onOpen: () => navigate({ name: "customer-detail", id: c.id }) }
+    }
+    for (const p of payments) {
+      refs[`payments:${p.id}`] = { label: p.payment_number, onOpen: () => navigate({ name: "order-detail", id: p.order_id }) }
+    }
+    for (const u of users) {
+      refs[`user_profiles:${u.id}`] = { label: u.display_name || u.email }
+    }
+    setRecordRefs(refs)
+  }
+
+  function RecordCell({ log }: { log: AuditLog }) {
+    const ref = recordRefs[`${log.table_name}:${log.record_id}`]
+    if (!ref) {
+      return <span className="font-mono text-xs text-muted-foreground">{log.record_id.substring(0, 8)}...</span>
+    }
+    if (ref.onOpen) {
+      return (
+        <button type="button" onClick={ref.onOpen} className="text-xs font-medium text-primary hover:underline">
+          {ref.label}
+        </button>
+      )
+    }
+    return <span className="text-xs">{ref.label}</span>
   }
 
   const tables = [...new Set(logs.map((l) => l.table_name))]
@@ -374,7 +434,7 @@ export function AuditPage() {
                     </div>
                     <div className="text-sm text-muted-foreground">{log.user_name || "—"}</div>
                     <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                      <span className="font-mono">{log.record_id.substring(0, 8)}...</span>
+                      <RecordCell log={log} />
                       {log.reason && <span>{log.reason}</span>}
                     </div>
                   </div>
@@ -411,7 +471,7 @@ export function AuditPage() {
                         {log.action}
                       </Badge>
                     </TableCell>
-                    <TableCell className="font-mono text-xs">{log.record_id.substring(0, 8)}...</TableCell>
+                    <TableCell><RecordCell log={log} /></TableCell>
                     <TableCell className="text-xs text-muted-foreground">{log.reason || "—"}</TableCell>
                   </TableRow>
                 ))}
