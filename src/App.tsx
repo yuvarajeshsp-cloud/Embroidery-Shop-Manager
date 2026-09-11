@@ -20,7 +20,7 @@ import { ReportsPage } from "@/pages/reports"
 import { ConfigPage } from "@/pages/config"
 import { WhatsAppPage } from "@/pages/whatsapp"
 import { UsersPage, AuditPage } from "@/pages/admin"
-import { PlatformAdminPage } from "@/pages/platform-admin"
+import { PlatformAdminPage, PlatformAdminOrgPage } from "@/pages/platform-admin"
 import { AppLoader } from "@/components/app-loader"
 import { useBusinessProfile } from "@/lib/business-profile"
 import { usePlatformAdmin } from "@/lib/platform-admin"
@@ -44,6 +44,9 @@ function RouteRenderer() {
 
   if (route.name === "platform-admin") {
     return isPlatformAdmin ? <PlatformAdminPage /> : <AccessDenied />
+  }
+  if (route.name === "platform-admin-org") {
+    return isPlatformAdmin ? <PlatformAdminOrgPage id={route.id} /> : <AccessDenied />
   }
 
   if (!canAccessRoute(profile?.role, route.name)) {

@@ -16,6 +16,7 @@ export type Route =
   | { name: "audit" }
   | { name: "profile" }
   | { name: "platform-admin" }
+  | { name: "platform-admin-org"; id: string }
   | { name: "login" }
 
 interface RouterContextValue {

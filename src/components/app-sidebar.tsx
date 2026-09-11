@@ -80,6 +80,7 @@ function routeMatches(current: Route, item: Route): boolean {
     if (item.name === "orders" && current.name === "order-detail") return true
     if (item.name === "orders" && current.name === "order-new") return true
     if (item.name === "customers" && current.name === "customer-detail") return true
+    if (item.name === "platform-admin" && current.name === "platform-admin-org") return true
     return false
   }
   return true
