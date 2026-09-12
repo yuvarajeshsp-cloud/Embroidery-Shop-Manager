@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Plus, Trash2, ArrowUp, ArrowDown, Building2 } from "lucide-react"
+import { Plus, Trash2, ArrowUp, ArrowDown, Building2, Upload, X } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { BUSINESS_PROFILE_FIELDS, PRODUCTION_BOARD_STAGE_CATEGORY, clearConfigCache, fetchBusinessSettings, saveBusinessSettings, setDocumentTitleFromSettings } from "@/lib/config"
 import { refreshBusinessProfile } from "@/lib/business-profile"
@@ -73,6 +73,7 @@ const colorPickers = [
 ] as const
 
 export function ConfigPage() {
+  const logoInputRef = React.useRef<HTMLInputElement>(null)
   const [activeCategory, setActiveCategory] = React.useState("order_status")
   const [items, setItems] = React.useState<ConfigItem[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -243,17 +244,38 @@ export function ConfigPage() {
                   )}
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="company-logo-upload">Company Logo</Label>
+                  <Label>Company Logo</Label>
                   <div className="flex items-center gap-2">
-                    <Input id="company-logo-upload" type="file" accept="image/*" onChange={handleLogoUpload} className="max-w-xs" />
+                    <input
+                      ref={logoInputRef}
+                      id="company-logo-upload"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleLogoUpload}
+                      className="hidden"
+                    />
                     <Button
                       type="button"
                       variant="outline"
-                      size="sm"
-                      onClick={() => setProfile((current) => ({ ...current, company_logo_data_url: "" }))}
+                      size="icon"
+                      title="Upload logo"
+                      aria-label="Upload logo"
+                      onClick={() => logoInputRef.current?.click()}
                     >
-                      Remove
+                      <Upload className="size-4" />
                     </Button>
+                    {profile.company_logo_data_url && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        title="Remove logo"
+                        aria-label="Remove logo"
+                        onClick={() => setProfile((current) => ({ ...current, company_logo_data_url: "" }))}
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
