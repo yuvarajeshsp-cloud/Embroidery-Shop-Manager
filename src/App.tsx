@@ -124,8 +124,17 @@ function AppContent() {
   // persisted Supabase session, not a separate credential — it only ever
   // runs once a real session exists. Re-armed whenever the app returns to
   // the foreground, so backgrounding the app re-locks it.
+  //
+  // Keyed on the user id, NOT the session object itself: autoRefreshToken
+  // silently swaps in a new session object (new access token) on every
+  // background refresh while the user stays signed in, and that object is
+  // a new reference each time. Depending on `session` directly re-ran this
+  // effect on every refresh and re-prompted Face ID even though nothing
+  // about the sign-in actually changed — that was the "keeps asking for
+  // Face ID" bug. The user id is stable across refreshes.
+  const userId = session?.user?.id ?? null
   React.useEffect(() => {
-    if (!session) return
+    if (!userId) return
     let cancelled = false
 
     async function checkLock() {
@@ -143,7 +152,7 @@ function AppContent() {
       cancelled = true
       void sub.then((s) => s.remove())
     }
-  }, [session])
+  }, [userId])
 
   if (loading) {
     return <AppLoader />
