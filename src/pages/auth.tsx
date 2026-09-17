@@ -1,6 +1,8 @@
 import * as React from "react"
-import { Loader2 } from "lucide-react"
+import { Capacitor } from "@capacitor/core"
+import { Loader2, Fingerprint } from "lucide-react"
 
+import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -8,10 +10,24 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/lib/use-auth"
 
+// Passkeys (WebAuthn) are a desktop/mobile *browser* feature, not something
+// the app's embedded native WebView reliably supports — same split the
+// product owner asked for: biometrics for the app, passkeys for browsers.
+const supportsPasskey = !Capacitor.isNativePlatform() && typeof window !== "undefined" && !!window.PublicKeyCredential
+
 export function AuthScreen() {
   const { signIn, signUp } = useAuth()
   const [loading, setLoading] = React.useState(false)
+  const [passkeyLoading, setPasskeyLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+
+  const handlePasskeySignIn = async () => {
+    setError(null)
+    setPasskeyLoading(true)
+    const { error } = await supabase.auth.signInWithPasskey()
+    setPasskeyLoading(false)
+    if (error) setError(error.message)
+  }
 
   const [signInEmail, setSignInEmail] = React.useState("")
   const [signInPassword, setSignInPassword] = React.useState("")
@@ -90,6 +106,20 @@ export function AuthScreen() {
                     Sign In
                   </Button>
                 </form>
+
+                {supportsPasskey && (
+                  <>
+                    <div className="my-4 flex items-center gap-3">
+                      <div className="h-px flex-1 bg-border" />
+                      <span className="text-xs text-muted-foreground">or</span>
+                      <div className="h-px flex-1 bg-border" />
+                    </div>
+                    <Button type="button" variant="outline" className="w-full" onClick={handlePasskeySignIn} disabled={passkeyLoading}>
+                      {passkeyLoading ? <Loader2 className="size-4 animate-spin" /> : <Fingerprint className="size-4" />}
+                      Sign in with a Passkey
+                    </Button>
+                  </>
+                )}
               </TabsContent>
 
               <TabsContent value="signup">

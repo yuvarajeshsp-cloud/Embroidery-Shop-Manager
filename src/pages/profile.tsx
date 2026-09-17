@@ -1,10 +1,12 @@
 import * as React from "react"
-import { Loader2, User as UserIcon, KeyRound } from "lucide-react"
+import { Capacitor } from "@capacitor/core"
+import { Loader2, User as UserIcon, KeyRound, Fingerprint, Trash2, ShieldCheck } from "lucide-react"
 
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
 import { formatDateTime } from "@/lib/helpers"
+import { isBiometricUnlockEnabled, setBiometricUnlockEnabled, getBiometryAvailability, authenticateWithBiometry } from "@/lib/biometric-unlock"
 import { PageHeader } from "@/components/page-header"
 import { PageLoader } from "@/components/app-loader"
 import { Button } from "@/components/ui/button"
@@ -12,7 +14,17 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
+
+const supportsPasskey = !Capacitor.isNativePlatform() && typeof window !== "undefined" && !!window.PublicKeyCredential
+
+interface PasskeyItem {
+  id: string
+  friendly_name?: string
+  created_at: string
+  last_used_at?: string
+}
 
 const roleColors: Record<string, string> = {
   Administrator: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
@@ -31,10 +43,79 @@ export function ProfilePage() {
   const [confirmPassword, setConfirmPassword] = React.useState("")
   const [changingPassword, setChangingPassword] = React.useState(false)
 
+  const [passkeys, setPasskeys] = React.useState<PasskeyItem[] | null>(null)
+  const [passkeyBusy, setPasskeyBusy] = React.useState(false)
+
+  const [biometryLabel, setBiometryLabel] = React.useState<string | null>(null)
+  const [biometricEnabled, setBiometricEnabled] = React.useState(false)
+  const [biometricBusy, setBiometricBusy] = React.useState(false)
+
   React.useEffect(() => {
     setDisplayName(profile?.display_name || "")
     setPhone(profile?.phone || "")
   }, [profile?.display_name, profile?.phone])
+
+  React.useEffect(() => {
+    if (supportsPasskey) {
+      supabase.auth.passkey.list().then(({ data }) => setPasskeys(data || []))
+    }
+    getBiometryAvailability().then((result) => {
+      if (!result?.isAvailable) return
+      setBiometryLabel(
+        result.biometryTypes.includes(2) ? "Face ID" :
+        result.biometryTypes.includes(1) ? "Touch ID" :
+        "Fingerprint",
+      )
+    })
+    isBiometricUnlockEnabled().then(setBiometricEnabled)
+  }, [])
+
+  async function loadPasskeys() {
+    const { data } = await supabase.auth.passkey.list()
+    setPasskeys(data || [])
+  }
+
+  async function handleRegisterPasskey() {
+    setPasskeyBusy(true)
+    try {
+      const { error } = await supabase.auth.registerPasskey()
+      if (error) throw error
+      toast.success("Passkey added")
+      await loadPasskeys()
+    } catch (err) {
+      console.error(err)
+      toast.error(err instanceof Error ? err.message : "Failed to add passkey")
+    } finally {
+      setPasskeyBusy(false)
+    }
+  }
+
+  async function handleDeletePasskey(passkeyId: string) {
+    if (!confirm("Remove this passkey? You'll need another way to sign in with it.")) return
+    const { error } = await supabase.auth.passkey.delete({ passkeyId })
+    if (error) {
+      toast.error("Failed to remove passkey")
+    } else {
+      toast.success("Passkey removed")
+      await loadPasskeys()
+    }
+  }
+
+  async function handleToggleBiometric(enabled: boolean) {
+    setBiometricBusy(true)
+    if (enabled) {
+      const ok = await authenticateWithBiometry(`Confirm it's you to enable ${biometryLabel || "biometric"} unlock`)
+      if (!ok) {
+        toast.error("Could not verify — biometric unlock not enabled")
+        setBiometricBusy(false)
+        return
+      }
+    }
+    await setBiometricUnlockEnabled(enabled)
+    setBiometricEnabled(enabled)
+    setBiometricBusy(false)
+    toast.success(enabled ? `${biometryLabel || "Biometric"} unlock enabled` : "Biometric unlock disabled")
+  }
 
   const dirty = displayName !== (profile?.display_name || "") || phone !== (profile?.phone || "")
 
@@ -184,6 +265,64 @@ export function ProfilePage() {
             </div>
           </CardContent>
         </Card>
+
+        {supportsPasskey && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Fingerprint className="size-4" /> Passkeys
+              </CardTitle>
+              <CardDescription>Sign in on this computer with Windows Hello, Touch ID, or your security key — no password</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              {passkeys === null ? (
+                <p className="text-sm text-muted-foreground">Loading...</p>
+              ) : passkeys.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No passkeys added yet</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {passkeys.map((pk) => (
+                    <div key={pk.id} className="flex items-center justify-between gap-2 rounded-lg border p-3">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">{pk.friendly_name || "Passkey"}</span>
+                        <span className="text-xs text-muted-foreground">
+                          Added {formatDateTime(pk.created_at)}
+                          {pk.last_used_at && ` · Last used ${formatDateTime(pk.last_used_at)}`}
+                        </span>
+                      </div>
+                      <Button variant="ghost" size="icon-sm" onClick={() => handleDeletePasskey(pk.id)}>
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={handleRegisterPasskey} disabled={passkeyBusy}>
+                  {passkeyBusy && <Loader2 className="size-4 animate-spin" />}
+                  Add a Passkey
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {biometryLabel && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ShieldCheck className="size-4" /> {biometryLabel} Unlock
+              </CardTitle>
+              <CardDescription>Skip re-entering your password on this device — unlock the app with {biometryLabel} instead</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-sm">Unlock with {biometryLabel}</span>
+                <Switch checked={biometricEnabled} onCheckedChange={handleToggleBiometric} disabled={biometricBusy} />
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   )

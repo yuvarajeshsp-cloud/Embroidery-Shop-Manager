@@ -28,6 +28,8 @@
 	<string>Used to take photos of orders and designs to attach to orders.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Used to attach photos from your library to orders.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Used to unlock the app instead of entering your password.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

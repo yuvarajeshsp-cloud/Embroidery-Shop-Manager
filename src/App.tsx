@@ -10,6 +10,8 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { AuthScreen } from "@/pages/auth"
 import { SetPasswordScreen } from "@/pages/set-password"
 import { VerifyPhoneScreen } from "@/pages/verify-phone"
+import { BiometricLockScreen } from "@/pages/biometric-lock"
+import { isBiometricUnlockEnabled, getBiometryAvailability } from "@/lib/biometric-unlock"
 import { ProfilePage } from "@/pages/profile"
 import { DashboardPage } from "@/pages/dashboard"
 import { CustomersPage, CustomerDetailPage } from "@/pages/customers"
@@ -108,6 +110,7 @@ function AppContent() {
   const [pendingAuthType, setPendingAuthType] = React.useState<string | null>(
     () => sessionStorage.getItem("pendingAuthType"),
   )
+  const [biometricLock, setBiometricLock] = React.useState<{ locked: boolean; label: string } | null>(null)
 
   React.useEffect(() => {
     setFavicon(session ? businessProfile.companyLogo : null)
@@ -116,6 +119,31 @@ function AppContent() {
   React.useEffect(() => {
     document.title = businessProfile.companyName
   }, [businessProfile.companyName])
+
+  // Biometric unlock is a per-device lock screen in front of the already-
+  // persisted Supabase session, not a separate credential — it only ever
+  // runs once a real session exists. Re-armed whenever the app returns to
+  // the foreground, so backgrounding the app re-locks it.
+  React.useEffect(() => {
+    if (!session) return
+    let cancelled = false
+
+    async function checkLock() {
+      const [enabled, availability] = await Promise.all([isBiometricUnlockEnabled(), getBiometryAvailability()])
+      if (cancelled || !enabled || !availability?.isAvailable) return
+      const label = availability.biometryTypes.includes(2) ? "Face ID" : availability.biometryTypes.includes(1) ? "Touch ID" : "Fingerprint"
+      setBiometricLock({ locked: true, label })
+    }
+    checkLock()
+
+    const sub = CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+      if (isActive) checkLock()
+    })
+    return () => {
+      cancelled = true
+      void sub.then((s) => s.remove())
+    }
+  }, [session])
 
   if (loading) {
     return <AppLoader />
@@ -127,6 +155,10 @@ function AppContent() {
 
   if (!session) {
     return <AuthScreen />
+  }
+
+  if (biometricLock?.locked) {
+    return <BiometricLockScreen label={biometricLock.label} onUnlocked={() => setBiometricLock(null)} />
   }
 
   if (profile && !profile.phone_verified) {
