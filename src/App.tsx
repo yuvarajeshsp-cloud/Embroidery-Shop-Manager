@@ -11,7 +11,7 @@ import { AuthScreen } from "@/pages/auth"
 import { SetPasswordScreen } from "@/pages/set-password"
 import { VerifyPhoneScreen } from "@/pages/verify-phone"
 import { BiometricLockScreen } from "@/pages/biometric-lock"
-import { isBiometricUnlockEnabled, getBiometryAvailability } from "@/lib/biometric-unlock"
+import { isBiometricUnlockEnabled, getBiometryAvailability, isBiometricAuthInFlight } from "@/lib/biometric-unlock"
 import { ProfilePage } from "@/pages/profile"
 import { DashboardPage } from "@/pages/dashboard"
 import { CustomersPage, CustomerDetailPage } from "@/pages/customers"
@@ -146,7 +146,9 @@ function AppContent() {
     checkLock()
 
     const sub = CapacitorApp.addListener("appStateChange", ({ isActive }) => {
-      if (isActive) checkLock()
+      // Skip transitions caused by our own Face ID/Touch ID sheet opening
+      // and closing — see isBiometricAuthInFlight's doc comment.
+      if (isActive && !isBiometricAuthInFlight()) checkLock()
     })
     return () => {
       cancelled = true
