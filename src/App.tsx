@@ -16,6 +16,7 @@ import { CustomersPage, CustomerDetailPage } from "@/pages/customers"
 import { OrdersPage, OrderDetailPage } from "@/pages/orders"
 import { NewOrderPage } from "@/pages/order-new"
 import { PaymentsPage } from "@/pages/payments"
+import { ExpensesPage } from "@/pages/expenses"
 import { ProductionPage } from "@/pages/production"
 import { ReportsPage } from "@/pages/reports"
 import { ConfigPage } from "@/pages/config"
@@ -79,6 +80,8 @@ function RouteRenderer() {
       return <NewOrderPage />
     case "payments":
       return <PaymentsPage />
+    case "expenses":
+      return <ExpensesPage />
     case "production":
       return <ProductionPage />
     case "reports":

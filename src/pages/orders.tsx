@@ -37,7 +37,7 @@ import {
   derivePaymentStatus,
   isOverdue,
 } from "@/lib/helpers"
-import type { Order, OrderItem, Payment, Customer, UserProfile } from "@/lib/types"
+import type { Order, OrderItem, Payment, Customer, UserProfile, Expense } from "@/lib/types"
 import { ASSIGNABLE_ROLES } from "@/lib/permissions"
 import type { ExportField } from "@/lib/export"
 import { computeDateRange, isWithinRange, type DateRangePreset } from "@/lib/date-range"
@@ -443,6 +443,7 @@ export function OrderDetailPage({ id }: { id: string }) {
   const [attachments, setAttachments] = React.useState<OrderItemAttachment[]>([])
   const [viewingAttachment, setViewingAttachment] = React.useState<OrderItemAttachment | null>(null)
   const [payments, setPayments] = React.useState<Payment[]>([])
+  const [expenses, setExpenses] = React.useState<Expense[]>([])
   const [loading, setLoading] = React.useState(true)
   const [editingItem, setEditingItem] = React.useState<OrderItem | null>(null)
   const [showItemForm, setShowItemForm] = React.useState(false)
@@ -469,15 +470,17 @@ export function OrderDetailPage({ id }: { id: string }) {
     if (!orderData) { setLoading(false); return }
     setOrder(orderData as Order)
 
-    const [custRes, itemsRes, payRes] = await Promise.all([
+    const [custRes, itemsRes, payRes, expRes] = await Promise.all([
       supabase.from("customers").select("*").eq("id", orderData.customer_id).maybeSingle(),
       supabase.from("order_items").select("*").eq("order_id", id).order("item_number"),
       supabase.from("payments").select("*").eq("order_id", id).order("payment_date", { ascending: false }),
+      supabase.from("expenses").select("*").eq("order_id", id).order("expense_date", { ascending: false }),
     ])
     setCustomer(custRes.data as Customer | null)
     const orderItems = itemsRes.data || []
     setItems(orderItems)
     setPayments(payRes.data || [])
+    setExpenses(expRes.data || [])
     setAttachments(await fetchAttachmentsForItems(orderItems.map((i: OrderItem) => i.id)))
     setLoading(false)
   }
@@ -955,6 +958,57 @@ export function OrderDetailPage({ id }: { id: string }) {
           )}
         </CardContent>
       </Card>
+
+      {/* Expenses */}
+      {expenses.length > 0 && (
+        <Card>
+          <CardHeader className="flex-row items-center justify-between">
+            <CardTitle>Expenses</CardTitle>
+            <Button variant="outline" size="sm" onClick={() => navigate({ name: "expenses" })}>
+              Manage
+            </Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            {isMobile ? (
+              <div className="flex flex-col divide-y">
+                {expenses.map((e) => (
+                  <div key={e.id} className="flex flex-col gap-2 p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-sm">{e.expense_number}</span>
+                      <span className="font-semibold">{formatCurrency(e.amount)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+                      <Badge variant="outline">{e.category}</Badge>
+                      <span>{formatDate(e.expense_date)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Expense #</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {expenses.map((e) => (
+                    <TableRow key={e.id}>
+                      <TableCell className="font-mono text-xs">{e.expense_number}</TableCell>
+                      <TableCell className="text-sm">{formatDate(e.expense_date)}</TableCell>
+                      <TableCell><Badge variant="outline">{e.category}</Badge></TableCell>
+                      <TableCell className="text-right font-medium">{formatCurrency(e.amount)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Notes */}
       {(order.special_instructions || order.internal_notes) && (

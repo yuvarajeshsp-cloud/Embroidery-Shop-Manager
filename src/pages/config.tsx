@@ -47,11 +47,14 @@ const CATEGORIES = [
   { key: "customer_type", label: "Customer Types" },
   { key: "product_type", label: "Product Types" },
   { key: "sales_channel", label: "Sales Channels" },
+  { key: "expense_category", label: "Expense Categories" },
 ]
 
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
   [PRODUCTION_BOARD_CATEGORY]:
     "Pick which order statuses show up as columns on the Production Board, and in what order. Manage the full status list itself under Order Statuses.",
+  expense_category:
+    "Mark a category Restricted to limit it (and every expense recorded under it) to Administrators only — useful for Salary or anything else staff shouldn't see.",
 }
 
 const profileFields = [
@@ -187,6 +190,18 @@ export function ConfigPage() {
     const { error } = await supabase
       .from("config_items")
       .update({ is_active: !item.is_active, updated_at: new Date().toISOString() })
+      .eq("id", item.id)
+    if (error) {
+      toast.error("Failed to update")
+    } else {
+      loadItems()
+    }
+  }
+
+  async function handleToggleSensitive(item: ConfigItem) {
+    const { error } = await supabase
+      .from("config_items")
+      .update({ is_sensitive: !item.is_sensitive, updated_at: new Date().toISOString() })
       .eq("id", item.id)
     if (error) {
       toast.error("Failed to update")
@@ -362,6 +377,7 @@ export function ConfigPage() {
                   <TableHead className="w-16">Order</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Status</TableHead>
+                  {activeCategory === "expense_category" && <TableHead>Access</TableHead>}
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -390,6 +406,19 @@ export function ConfigPage() {
                         </span>
                       </div>
                     </TableCell>
+                    {activeCategory === "expense_category" && (
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={item.is_sensitive}
+                            onCheckedChange={() => handleToggleSensitive(item)}
+                          />
+                          <span className="text-xs text-muted-foreground">
+                            {item.is_sensitive ? "Restricted" : "Everyone"}
+                          </span>
+                        </div>
+                      </TableCell>
+                    )}
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(item)}>
                         <Trash2 className="size-3.5" />

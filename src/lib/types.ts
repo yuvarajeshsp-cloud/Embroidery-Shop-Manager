@@ -149,6 +149,23 @@ export interface ConfigItem {
   name: string
   sort_order: number
   is_active: boolean
+  is_sensitive: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface Expense {
+  id: string
+  organization_id: string
+  expense_number: string
+  category: string
+  is_sensitive: boolean
+  amount: number
+  expense_date: string
+  description: string | null
+  order_id: string | null
+  created_by: string | null
+  updated_by: string | null
   created_at: string
   updated_at: string
 }

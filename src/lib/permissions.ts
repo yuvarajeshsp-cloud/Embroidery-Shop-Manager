@@ -11,14 +11,14 @@ import type { Route } from "@/lib/router"
 const ROLE_ROUTES: Record<Exclude<UserRole, "Administrator">, Route["name"][]> = {
   Manager: [
     "dashboard", "customers", "customer-detail", "orders", "order-detail",
-    "order-new", "payments", "production", "reports", "whatsapp", "profile",
+    "order-new", "payments", "expenses", "production", "reports", "whatsapp", "profile",
   ],
   Operator: [
     "dashboard", "orders", "order-detail", "production", "profile",
   ],
   Accounts: [
     "dashboard", "orders", "order-detail", "customers", "customer-detail",
-    "payments", "reports", "profile",
+    "payments", "expenses", "reports", "profile",
   ],
 }
 
@@ -32,7 +32,7 @@ export function allowedRouteNames(role: UserRole | undefined): Set<Route["name"]
   if (!role || role === "Administrator") {
     return new Set([
       "dashboard", "customers", "customer-detail", "orders", "order-detail",
-      "order-new", "payments", "production", "reports", "config", "whatsapp",
+      "order-new", "payments", "expenses", "production", "reports", "config", "whatsapp",
       "users", "audit", "profile",
     ])
   }

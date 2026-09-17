@@ -4,6 +4,7 @@ import {
   Users,
   ShoppingCart,
   CreditCard,
+  Wallet,
   Factory,
   BarChart3,
   Settings,
@@ -49,6 +50,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { label: "Orders", icon: ShoppingCart, route: { name: "orders" } },
       { label: "Customers", icon: Users, route: { name: "customers" } },
       { label: "Payments", icon: CreditCard, route: { name: "payments" } },
+      { label: "Expenses", icon: Wallet, route: { name: "expenses" } },
     ],
   },
   {

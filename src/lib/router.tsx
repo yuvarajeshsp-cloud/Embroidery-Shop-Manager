@@ -8,6 +8,7 @@ export type Route =
   | { name: "order-detail"; id: string }
   | { name: "order-new" }
   | { name: "payments" }
+  | { name: "expenses" }
   | { name: "production" }
   | { name: "reports" }
   | { name: "config" }

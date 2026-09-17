@@ -142,6 +142,12 @@ export async function generateCustomerCode(): Promise<string> {
   return `${prefix}${String(next).padStart(4, "0")}`
 }
 
+export function generateExpenseNumber(): string {
+  const year = new Date().getFullYear()
+  const random = Math.floor(1000 + Math.random() * 9000)
+  return `EXP-${year}-${random}`
+}
+
 export function generateTaskNumber(): string {
   const year = new Date().getFullYear()
   const random = Math.floor(1000 + Math.random() * 9000)
