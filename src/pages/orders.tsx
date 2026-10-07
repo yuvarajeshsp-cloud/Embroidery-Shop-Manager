@@ -73,7 +73,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { OrderStatusBadge, PriorityBadge, PaymentStatusBadge } from "@/components/status-badges"
+import { OrderStatusBadge, PriorityBadge, PaymentStatusBadge, PaymentMethodBadge } from "@/components/status-badges"
 import { Spinner } from "@/components/ui/spinner"
 import { useRouter } from "@/lib/router"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -929,7 +929,7 @@ export function OrderDetailPage({ id }: { id: string }) {
                     {p.transaction_reference && <span>{p.transaction_reference}</span>}
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <Badge variant="outline">{p.payment_method}</Badge>
+                    <PaymentMethodBadge method={p.payment_method} />
                     <Badge variant="outline">{p.payment_status}</Badge>
                   </div>
                 </div>
@@ -952,7 +952,7 @@ export function OrderDetailPage({ id }: { id: string }) {
                   <TableRow key={p.id}>
                     <TableCell className="font-mono text-xs">{p.payment_number}</TableCell>
                     <TableCell className="text-sm">{formatDate(p.payment_date)}</TableCell>
-                    <TableCell><Badge variant="outline">{p.payment_method}</Badge></TableCell>
+                    <TableCell><PaymentMethodBadge method={p.payment_method} /></TableCell>
                     <TableCell className="text-sm">{p.transaction_reference || "—"}</TableCell>
                     <TableCell className="text-right font-medium">{formatCurrency(p.amount)}</TableCell>
                     <TableCell><Badge variant="outline">{p.payment_status}</Badge></TableCell>

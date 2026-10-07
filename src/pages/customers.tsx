@@ -39,7 +39,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
+import { CustomerTypeBadge, OrderStatusBadge } from "@/components/status-badges"
 import { Switch } from "@/components/ui/switch"
 import { useRouter } from "@/lib/router"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -175,7 +175,7 @@ export function CustomersPage() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium">{c.customer_business_name}</span>
-                    <Badge variant="outline">{c.customer_type}</Badge>
+                    <CustomerTypeBadge type={c.customer_type} />
                   </div>
                   <div className="text-sm text-muted-foreground">
                     {c.contact_person || "—"} · {c.phone || "—"}
@@ -214,7 +214,7 @@ export function CustomersPage() {
                     <TableCell>{c.contact_person || "—"}</TableCell>
                     <TableCell>{c.phone || "—"}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">{c.customer_type}</Badge>
+                      <CustomerTypeBadge type={c.customer_type} />
                     </TableCell>
                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-1">
@@ -561,7 +561,7 @@ export function CustomerDetailPage({ id }: { id: string }) {
             )}
             <div className="flex flex-col gap-1">
               <span className="text-xs text-muted-foreground">Type</span>
-              <Badge variant="outline" className="w-fit">{customer.customer_type}</Badge>
+              <CustomerTypeBadge type={customer.customer_type} />
             </div>
             {customer.gst_tax_number && (
               <div className="flex flex-col gap-1">
@@ -620,7 +620,7 @@ export function CustomerDetailPage({ id }: { id: string }) {
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-sm font-medium">{formatCurrency(orderTotal(o.order_items || []))}</span>
-                        <Badge variant="outline">{o.order_status}</Badge>
+                        <OrderStatusBadge status={o.order_status} />
                       </div>
                     </button>
                   ))}
