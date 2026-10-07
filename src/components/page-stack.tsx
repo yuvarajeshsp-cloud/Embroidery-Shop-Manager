@@ -159,15 +159,30 @@ export function PageStack({ renderRoute }: { renderRoute: (route: Route) => Reac
       }, SNAP_MS)
     }
 
-    document.addEventListener("touchstart", onStart, { passive: true })
-    document.addEventListener("touchmove", onMove, { passive: false })
-    document.addEventListener("touchend", onEnd)
-    document.addEventListener("touchcancel", onEnd)
-    return () => {
-      document.removeEventListener("touchstart", onStart)
+    // The (non-passive) move listener is only attached for the length of a
+    // swipe that begins at the left edge. Leaving a permanent non-passive
+    // touchmove listener on the document left patches of the Android WebView
+    // unpainted after page changes.
+    function onStartEdge(e: TouchEvent) {
+      onStart(e)
+      if (start) {
+        document.addEventListener("touchmove", onMove, { passive: false })
+        document.addEventListener("touchend", finish)
+        document.addEventListener("touchcancel", finish)
+      }
+    }
+    function finish() {
       document.removeEventListener("touchmove", onMove)
-      document.removeEventListener("touchend", onEnd)
-      document.removeEventListener("touchcancel", onEnd)
+      document.removeEventListener("touchend", finish)
+      document.removeEventListener("touchcancel", finish)
+      onEnd()
+    }
+    document.addEventListener("touchstart", onStartEdge, { passive: true })
+    return () => {
+      document.removeEventListener("touchstart", onStartEdge)
+      document.removeEventListener("touchmove", onMove)
+      document.removeEventListener("touchend", finish)
+      document.removeEventListener("touchcancel", finish)
     }
   }, [])
 
@@ -181,7 +196,13 @@ export function PageStack({ renderRoute }: { renderRoute: (route: Route) => Reac
   layers.push({ route: shown, role: leaving ? (leaving.dir === "forward" ? "in" : "under-in") : "shown" })
 
   return (
-    <div ref={containerRef} className="relative overflow-x-clip">
+    <div
+      ref={containerRef}
+      // Clipping and positioning only while pages are actually moving; a
+      // permanent clip on the page host left patches of the Android WebView
+      // unpainted (blank headers).
+      className={cn((leaving || dragging) && "relative overflow-x-clip")}
+    >
       {layers.map((layer) => (
         <div
           key={routeKey(layer.route)}
