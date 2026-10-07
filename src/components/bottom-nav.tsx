@@ -17,6 +17,7 @@ import {
   Monitor,
   CircleUser,
   Crown,
+  Wallet,
 } from "lucide-react"
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
@@ -40,6 +41,7 @@ const tabs: NavItem[] = [
 ]
 
 const moreItems: NavItem[] = [
+  { label: "Expenses", icon: Wallet, route: { name: "expenses" } },
   { label: "Production Board", icon: Factory, route: { name: "production" } },
   { label: "Reports", icon: BarChart3, route: { name: "reports" } },
   { label: "Configuration", icon: Settings, route: { name: "config" } },

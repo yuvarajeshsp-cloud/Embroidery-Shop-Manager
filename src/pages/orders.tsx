@@ -665,7 +665,7 @@ export function OrderDetailPage({ id }: { id: string }) {
 
         <Card>
           <CardHeader><CardTitle>Actions</CardTitle></CardHeader>
-          <CardContent className="grid grid-cols-2 gap-2">
+          <CardContent className="grid grid-cols-[repeat(auto-fit,minmax(10.5rem,1fr))] gap-2">
             <Button variant="outline" size="sm" onClick={() => setShowStatusChange(true)}>
               Change Status
             </Button>
