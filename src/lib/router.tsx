@@ -2,6 +2,7 @@ import * as React from "react"
 
 export type Route =
   | { name: "dashboard" }
+  | { name: "more" }
   | { name: "customers" }
   | { name: "customer-detail"; id: string }
   | { name: "orders" }
@@ -24,9 +25,21 @@ export type Route =
   | { name: "platform-admin-org"; id: string }
   | { name: "login" }
 
+export type NavDirection = "forward" | "back"
+
 interface RouterContextValue {
   route: Route
+  /** Whether the latest route change moved deeper into history or back out of it. */
+  direction: NavDirection
   navigate: (route: Route) => void
+  /** The page one step back in this session's history, if the app knows it. */
+  previousRoute: () => Route | undefined
+  /**
+   * Go back one page like a native app. Falls back to showing `fallback` in
+   * place of the current page when there is nothing earlier to go back to
+   * (opened from a reload or deep link).
+   */
+  goBack: (fallback: Route) => void
 }
 
 const RouterContext = React.createContext<RouterContextValue | undefined>(undefined)
@@ -47,6 +60,11 @@ export function canGoBackInApp(): boolean {
 
 export function RouterProvider({ children }: { children: React.ReactNode }) {
   const [route, setRoute] = React.useState<Route>(() => historyEntry()?.route ?? { name: "dashboard" })
+  const [direction, setDirection] = React.useState<NavDirection>("forward")
+  // Routes by history depth, kept in memory so "back" knows where it lands.
+  // Lost on reload, in which case goBack() uses its fallback.
+  const depthRef = React.useRef(historyEntry()?.depth ?? 0)
+  const stackRef = React.useRef<Record<number, Route>>({ [depthRef.current]: route })
 
   React.useEffect(() => {
     if (!historyEntry()) {
@@ -55,7 +73,12 @@ export function RouterProvider({ children }: { children: React.ReactNode }) {
 
     const onPopState = (e: PopStateEvent) => {
       const entry = e.state as HistoryEntry | null
-      setRoute(entry?.route ?? { name: "dashboard" })
+      const depth = entry?.depth ?? 0
+      setDirection(depth < depthRef.current ? "back" : "forward")
+      depthRef.current = depth
+      const next = entry?.route ?? { name: "dashboard" }
+      stackRef.current[depth] = next
+      setRoute(next)
       window.scrollTo(0, 0)
     }
     window.addEventListener("popstate", onPopState)
@@ -66,12 +89,36 @@ export function RouterProvider({ children }: { children: React.ReactNode }) {
   const navigate = React.useCallback((r: Route) => {
     const depth = (historyEntry()?.depth ?? 0) + 1
     window.history.pushState({ route: r, depth } satisfies HistoryEntry, "")
+    for (const key of Object.keys(stackRef.current)) {
+      if (Number(key) >= depth) delete stackRef.current[Number(key)]
+    }
+    stackRef.current[depth] = r
+    depthRef.current = depth
+    setDirection("forward")
     setRoute(r)
     window.scrollTo(0, 0)
   }, [])
 
+  const previousRoute = React.useCallback(
+    () => (depthRef.current > 0 ? stackRef.current[depthRef.current - 1] : undefined),
+    [],
+  )
+
+  const goBack = React.useCallback((fallback: Route) => {
+    if (previousRoute()) {
+      window.history.back()
+      return
+    }
+    const depth = historyEntry()?.depth ?? 0
+    window.history.replaceState({ route: fallback, depth } satisfies HistoryEntry, "")
+    stackRef.current[depth] = fallback
+    setDirection("back")
+    setRoute(fallback)
+    window.scrollTo(0, 0)
+  }, [previousRoute])
+
   return (
-    <RouterContext.Provider value={{ route, navigate }}>
+    <RouterContext.Provider value={{ route, direction, navigate, previousRoute, goBack }}>
       {children}
     </RouterContext.Provider>
   )

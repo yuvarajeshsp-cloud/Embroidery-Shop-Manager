@@ -3,9 +3,10 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { Toaster } from "@/components/ui/sonner"
 import { AuthProvider } from "@/lib/auth"
 import { useAuth } from "@/lib/use-auth"
-import { RouterProvider, useRouter, canGoBackInApp } from "@/lib/router"
+import { RouterProvider, useRouter, canGoBackInApp, type Route } from "@/lib/router"
 import { AppSidebar } from "@/components/app-sidebar"
 import { BottomNav } from "@/components/bottom-nav"
+import { PageStack } from "@/components/page-stack"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { AuthScreen } from "@/pages/auth"
 import { SetPasswordScreen } from "@/pages/set-password"
@@ -34,6 +35,7 @@ import { WhatsAppPage } from "@/pages/whatsapp"
 import { UsersPage, AuditPage } from "@/pages/admin"
 import { PlatformAdminPage, PlatformAdminOrgPage } from "@/pages/platform-admin"
 import { SubscriptionPage } from "@/pages/subscription"
+import { MorePage } from "@/pages/more"
 import { HelpPage, FaqPage, PrivacyPage } from "@/pages/help"
 import { AccessLockedScreen } from "@/pages/access-locked"
 import { AppLoader } from "@/components/app-loader"
@@ -46,29 +48,39 @@ import { FEATURES } from "@/lib/features"
 import { Button } from "@/components/ui/button"
 import * as React from "react"
 
-function RouteRenderer() {
+// The router remembers the last-visited page across sessions (browser
+// history), so a different, more limited role signing into the same
+// browser/tab can land directly on a page their role no longer permits —
+// e.g. a shared shop device where an Administrator was last on Users &
+// Roles and an Operator signs in next, or a brand-new sign-up inheriting
+// the previous session's Platform Admin page. Bounce to Dashboard instead
+// of stranding them on a dead-end "Access Denied" screen. The More list only
+// exists on mobile, so it bounces too when there is no bottom nav.
+function useRouteGuard(isMobile: boolean) {
   const { route, navigate } = useRouter()
   const { profile } = useAuth()
   const isPlatformAdmin = usePlatformAdmin()
   const isPlatformAdminRoute = route.name === "platform-admin" || route.name === "platform-admin-org"
-
-  // The router remembers the last-visited page across sessions (browser
-  // history), so a different, more limited role signing into the same
-  // browser/tab can land directly on a page their role no longer permits —
-  // e.g. a shared shop device where an Administrator was last on Users &
-  // Roles and an Operator signs in next, or a brand-new sign-up inheriting
-  // the previous session's Platform Admin page. Bounce to Dashboard instead
-  // of stranding them on a dead-end "Access Denied" screen.
   const hasAccess = canAccessRoute(profile?.role, route.name)
+
   React.useEffect(() => {
     if (isPlatformAdminRoute) {
       if (isPlatformAdmin === false) navigate({ name: "dashboard" })
       return
     }
+    if (route.name === "more" && !isMobile) {
+      navigate({ name: "dashboard" })
+      return
+    }
     if (!hasAccess && route.name !== "dashboard") {
       navigate({ name: "dashboard" })
     }
-  }, [hasAccess, route.name, navigate, isPlatformAdminRoute, isPlatformAdmin])
+  }, [hasAccess, route.name, navigate, isPlatformAdminRoute, isPlatformAdmin, isMobile])
+}
+
+function RouteView({ route }: { route: Route }) {
+  const { profile } = useAuth()
+  const isPlatformAdmin = usePlatformAdmin()
 
   if (route.name === "platform-admin") {
     return isPlatformAdmin ? <PlatformAdminPage /> : <AppLoader />
@@ -77,13 +89,15 @@ function RouteRenderer() {
     return isPlatformAdmin ? <PlatformAdminOrgPage id={route.id} /> : <AppLoader />
   }
 
-  if (!hasAccess) {
+  if (!canAccessRoute(profile?.role, route.name)) {
     return <AppLoader />
   }
 
   switch (route.name) {
     case "dashboard":
       return <DashboardPage />
+    case "more":
+      return <MorePage />
     case "customers":
       return <CustomersPage />
     case "customer-detail":
@@ -229,13 +243,15 @@ function AppContent() {
 
 function AppShell({ banner }: { banner?: React.ReactNode }) {
   const isMobile = useIsMobile()
+  const { route } = useRouter()
+  useRouteGuard(isMobile)
 
   if (isMobile) {
     return (
       <div className="flex min-h-svh flex-col pt-[env(safe-area-inset-top)]">
         {banner}
         <div className="flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))]">
-          <RouteRenderer />
+          <PageStack renderRoute={(r) => <RouteView route={r} />} />
         </div>
         <BottomNav />
       </div>
@@ -247,7 +263,7 @@ function AppShell({ banner }: { banner?: React.ReactNode }) {
       <AppSidebar />
       <SidebarInset>
         {banner}
-        <RouteRenderer />
+        <RouteView route={route} />
       </SidebarInset>
     </SidebarProvider>
   )

@@ -8,7 +8,7 @@ const DISABLED_ROUTES: Set<Route["name"]> = new Set([
 ])
 
 // Reference pages every signed-in role can open.
-const INFO_ROUTES: Route["name"][] = ["help", "faq", "privacy"]
+const INFO_ROUTES: Route["name"][] = ["more", "help", "faq", "privacy"]
 
 /**
  * Which pages each role may open. Administrator always has full access.
