@@ -29,6 +29,59 @@ function routeMatches(current: Route, item: Route): boolean {
   return true
 }
 
+// The selected tab is cut out of the bar in the page's own colour, with
+// rounded bottom corners and softened shoulders where it meets the bar's top
+// edge, so the page appears to flow down into the bar.
+const FILLET = 14
+
+function ActiveNotch() {
+  const fillet = (side: "left" | "right") => (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute top-0"
+      style={{
+        width: FILLET,
+        height: FILLET,
+        [side === "left" ? "left" : "right"]: 6 - FILLET,
+        background: `radial-gradient(circle at ${side === "left" ? "0" : "100%"} 100%, transparent ${FILLET}px, var(--background) ${FILLET + 0.5}px)`,
+      }}
+    />
+  )
+  return (
+    <>
+      <span aria-hidden className="pointer-events-none absolute inset-x-1.5 top-0 bottom-2 rounded-b-[22px] bg-background" />
+      {fillet("left")}
+      {fillet("right")}
+    </>
+  )
+}
+
+function Tab({
+  label,
+  icon: Icon,
+  active,
+  onClick,
+}: {
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "relative flex flex-1 flex-col items-center justify-center gap-1 pb-2 text-[11px] transition-colors",
+        active ? "font-semibold text-foreground" : "text-sidebar-foreground/75",
+      )}
+    >
+      {active && <ActiveNotch />}
+      <Icon className={cn("relative size-5", active && "text-primary")} />
+      <span className="relative">{label}</span>
+    </button>
+  )
+}
+
 export function BottomNav() {
   const { route, navigate, previousRoute, goBack } = useRouter()
   const { profile } = useAuth()
@@ -48,38 +101,17 @@ export function BottomNav() {
   }
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-stretch border-t border-sidebar-border bg-sidebar pb-[env(safe-area-inset-bottom)]">
-      {visibleTabs.map((tab) => {
-        const Icon = tab.icon
-        const isActive = routeMatches(route, tab.route)
-        return (
-          <button
-            key={tab.label}
-            onClick={() => navigate(tab.route)}
-            className={cn(
-              "flex flex-1 flex-col items-center justify-center gap-1 text-[11px]",
-              isActive ? "font-semibold text-sidebar-foreground" : "text-sidebar-foreground/75",
-            )}
-          >
-            <span className={cn("flex h-7 w-12 items-center justify-center rounded-full transition-colors", isActive && "bg-sidebar-primary text-sidebar-primary-foreground")}>
-              <Icon className="size-5" />
-            </span>
-            {tab.label}
-          </button>
-        )
-      })}
-      <button
-        onClick={openMore}
-        className={cn(
-          "flex flex-1 flex-col items-center justify-center gap-1 text-[11px]",
-          isMoreActive ? "font-semibold text-sidebar-foreground" : "text-sidebar-foreground/75",
-        )}
-      >
-        <span className={cn("flex h-7 w-12 items-center justify-center rounded-full transition-colors", isMoreActive && "bg-sidebar-primary text-sidebar-primary-foreground")}>
-          <Menu className="size-5" />
-        </span>
-        More
-      </button>
+    <nav className="fixed inset-x-0 bottom-0 z-50 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-stretch rounded-t-[28px] border-t border-sidebar-border bg-sidebar pb-[env(safe-area-inset-bottom)]">
+      {visibleTabs.map((tab) => (
+        <Tab
+          key={tab.label}
+          label={tab.label}
+          icon={tab.icon}
+          active={routeMatches(route, tab.route)}
+          onClick={() => navigate(tab.route)}
+        />
+      ))}
+      <Tab label="More" icon={Menu} active={isMoreActive} onClick={openMore} />
     </nav>
   )
 }
