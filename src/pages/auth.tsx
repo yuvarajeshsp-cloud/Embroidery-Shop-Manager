@@ -304,6 +304,12 @@ export function AuthScreen() {
             </Tabs>
           </CardContent>
         </Card>
+
+        <p className="mt-4 text-center text-xs text-muted-foreground">
+          <a href="https://paavaifashions.com/privacy.html" target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">Privacy Policy</a>
+          {" · "}
+          <a href="https://paavaifashions.com/delete-account.html" target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">Delete your account</a>
+        </p>
       </div>
     </div>
   )
