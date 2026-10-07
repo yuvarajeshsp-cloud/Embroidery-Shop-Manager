@@ -1,4 +1,5 @@
 import * as React from "react"
+import { FEATURES } from "@/lib/features"
 import { Download, Plus, Search, Pencil, Trash2, Phone, Mail, MapPin } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
@@ -416,13 +417,15 @@ function CustomerForm({
               />
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Switch
-              checked={form.whatsapp_opt_in}
-              onCheckedChange={(v) => setForm({ ...form, whatsapp_opt_in: v })}
-            />
-            <Label className="font-normal">Send WhatsApp updates to this customer</Label>
-          </div>
+          {FEATURES.whatsapp && (
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={form.whatsapp_opt_in}
+                onCheckedChange={(v) => setForm({ ...form, whatsapp_opt_in: v })}
+              />
+              <Label className="font-normal">Send WhatsApp updates to this customer</Label>
+            </div>
+          )}
           <div className="flex flex-col gap-2">
             <Label>Billing Address</Label>
             <Textarea

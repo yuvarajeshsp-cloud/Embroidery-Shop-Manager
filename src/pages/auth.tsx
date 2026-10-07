@@ -9,11 +9,46 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/lib/use-auth"
+import { authenticateWithBiometry, getBiometryAvailability, isBiometricUnlockEnabled, setBiometricUnlockEnabled } from "@/lib/biometric-unlock"
+import { getBiometricCredentials, hasBiometricCredentials, saveBiometricCredentials, clearBiometricCredentials } from "@/lib/biometric-credentials"
 
 // Passkeys (WebAuthn) are a desktop/mobile *browser* feature, not something
 // the app's embedded native WebView reliably supports — same split the
 // product owner asked for: biometrics for the app, passkeys for browsers.
 const supportsPasskey = !Capacitor.isNativePlatform() && typeof window !== "undefined" && !!window.PublicKeyCredential
+
+// After a manual sign-in, offer to remember the password (in the Keychain,
+// see biometric-credentials.ts) so the user can sign back in with Face ID/
+// Touch ID instead of retyping it — including after a full sign-out, which
+// otherwise has no other route back in except the password form. Silent
+// once already opted in, so a routine password change while signed in and
+// unlocked keeps the saved copy in sync automatically.
+async function fetchDisplayName(email: string): Promise<string | null> {
+  const { data } = await supabase
+    .from("user_profiles")
+    .select("display_name")
+    .eq("email", email)
+    .maybeSingle()
+  return data?.display_name || null
+}
+
+async function maybeSaveBiometricLogin(email: string, password: string): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return
+  const availability = await getBiometryAvailability()
+  if (!availability?.isAvailable) return
+
+  if (await isBiometricUnlockEnabled()) {
+    await saveBiometricCredentials(email, password, await fetchDisplayName(email))
+    return
+  }
+  if (await hasBiometricCredentials()) return
+
+  const label = availability.biometryTypes.includes(2) ? "Face ID" : availability.biometryTypes.includes(1) ? "Touch ID" : "Fingerprint"
+  if (window.confirm(`Sign in faster next time with ${label}? You can turn this off anytime in My Profile.`)) {
+    await saveBiometricCredentials(email, password, await fetchDisplayName(email))
+    await setBiometricUnlockEnabled(true)
+  }
+}
 
 export function AuthScreen() {
   const { signIn, signUp } = useAuth()
@@ -27,6 +62,57 @@ export function AuthScreen() {
     const { error } = await supabase.auth.signInWithPasskey()
     setPasskeyLoading(false)
     if (error) setError(error.message)
+  }
+
+  // Lets a user sign back in with Face ID/Touch ID after a full sign-out,
+  // instead of retyping their password. Only offered once credentials were
+  // saved (opt-in, right after a successful manual sign-in below) and the
+  // device actually has usable biometry.
+  const [savedLogin, setSavedLogin] = React.useState<{ email: string; name: string; label: string } | null>(null)
+  const [bioSignInLoading, setBioSignInLoading] = React.useState(false)
+
+  React.useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+    void (async () => {
+      const availability = await getBiometryAvailability()
+      if (!availability?.isAvailable) return
+      const creds = await getBiometricCredentials()
+      if (!creds) return
+      const label = availability.biometryTypes.includes(2) ? "Face ID" : availability.biometryTypes.includes(1) ? "Touch ID" : "Fingerprint"
+      setSavedLogin({ email: creds.email, name: creds.displayName || creds.email, label })
+    })()
+  }, [])
+
+  const handleBiometricSignIn = async () => {
+    if (!savedLogin) return
+    setError(null)
+    setBioSignInLoading(true)
+    const ok = await authenticateWithBiometry(`Sign in as ${savedLogin.name}`)
+    if (!ok) {
+      setBioSignInLoading(false)
+      setError("Verification failed or cancelled")
+      return
+    }
+    const creds = await getBiometricCredentials()
+    if (!creds) {
+      setBioSignInLoading(false)
+      setSavedLogin(null)
+      setError("Saved sign-in not found — please sign in with your password")
+      return
+    }
+    const { error } = await signIn(creds.email, creds.password)
+    setBioSignInLoading(false)
+    if (error) {
+      // Most likely the password was changed since it was saved.
+      await clearBiometricCredentials()
+      setSavedLogin(null)
+      setError("Your saved sign-in no longer works — please sign in with your password")
+    }
+  }
+
+  const handleForgetSavedLogin = async () => {
+    await clearBiometricCredentials()
+    setSavedLogin(null)
   }
 
   const [signInEmail, setSignInEmail] = React.useState("")
@@ -44,7 +130,11 @@ export function AuthScreen() {
     setLoading(true)
     const { error } = await signIn(signInEmail, signInPassword)
     setLoading(false)
-    if (error) setError(error)
+    if (error) {
+      setError(error)
+      return
+    }
+    void maybeSaveBiometricLogin(signInEmail, signInPassword)
   }
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -70,6 +160,26 @@ export function AuthScreen() {
             <CardDescription>Sign in to your account or create a new one</CardDescription>
           </CardHeader>
           <CardContent>
+            {savedLogin && (
+              <div className="mb-4 flex flex-col gap-3">
+                <Button type="button" className="w-full" onClick={handleBiometricSignIn} disabled={bioSignInLoading}>
+                  {bioSignInLoading ? <Loader2 className="size-4 animate-spin" /> : <Fingerprint className="size-4" />}
+                  Sign in as {savedLogin.name} with {savedLogin.label}
+                </Button>
+                <button
+                  type="button"
+                  className="text-center text-xs text-muted-foreground underline-offset-2 hover:underline"
+                  onClick={() => void handleForgetSavedLogin()}
+                >
+                  Not you? Forget this saved sign-in
+                </button>
+                <div className="flex items-center gap-3">
+                  <div className="h-px flex-1 bg-border" />
+                  <span className="text-xs text-muted-foreground">or sign in manually</span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+              </div>
+            )}
             <Tabs defaultValue="signin">
               <TabsList className="w-full">
                 <TabsTrigger value="signin" className="flex-1">Sign In</TabsTrigger>
@@ -169,7 +279,7 @@ export function AuthScreen() {
                       required
                     />
                     <p className="text-xs text-muted-foreground">
-                      We'll text a verification code to this number on WhatsApp before your account is active.
+                      We'll send a verification code to this number (or to your email if the SMS can't be delivered) before your account is active.
                     </p>
                   </div>
                   <div className="flex flex-col gap-2">

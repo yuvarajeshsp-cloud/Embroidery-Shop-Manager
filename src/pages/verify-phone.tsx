@@ -12,15 +12,34 @@ import { toast } from "sonner"
 
 const RESEND_COOLDOWN_SECONDS = 60
 
+type Channel = "sms" | "email"
+
+// Onboarding verification tries Twilio Verify SMS first, and falls back to
+// email OTP (Supabase's own signInWithOtp/verifyOtp) whenever the SMS send
+// fails — Twilio Verify not configured yet, an unreachable number, a
+// carrier or rate-limit failure, etc. Once a channel is picked for this
+// screen instance, resend keeps using it rather than re-attempting SMS each
+// time, to avoid flip-flopping on a flaky send.
+//
+// A completed onboarding is still tracked as user_profiles.phone_verified
+// (kept as-is rather than renamed, since the subscription trial-start
+// trigger already keys off that column — see
+// 20260917020000_subscriptions.sql). Each channel proves itself
+// differently: the SMS path is verified server-side against Twilio and the
+// edge function writes phone_verified directly with the service role key;
+// the email path is verified by Supabase Auth itself, and
+// mark_self_email_verified() checks the session's JWT for proof that
+// verifyOtp() genuinely succeeded before writing it. See
+// 20260918000000_email_otp_and_phone_lock.sql. Neither path is a plain
+// client-side profile update — that's blocked for non-admins.
 export function VerifyPhoneScreen() {
   const { profile, refreshProfile, signOut } = useAuth()
+  const [channel, setChannel] = React.useState<Channel | null>(null)
   const [code, setCode] = React.useState("")
   const [verifying, setVerifying] = React.useState(false)
   const [sending, setSending] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [cooldown, setCooldown] = React.useState(0)
-  const [editingPhone, setEditingPhone] = React.useState(false)
-  const [phone, setPhone] = React.useState(profile?.phone || "")
   const sentOnMount = React.useRef(false)
 
   React.useEffect(() => {
@@ -28,54 +47,91 @@ export function VerifyPhoneScreen() {
     return () => clearInterval(timer)
   }, [cooldown])
 
-  const sendCode = React.useCallback(async (phoneToUse: string) => {
+  const sendEmailCode = React.useCallback(async () => {
+    if (!profile?.email) return false
+    const { error } = await supabase.auth.signInWithOtp({
+      email: profile.email,
+      options: { shouldCreateUser: false },
+    })
+    if (error) {
+      setError(error.message)
+      return false
+    }
+    setChannel("email")
+    toast.success(`Code sent to ${profile.email}`)
+    return true
+  }, [profile?.email])
+
+  const sendCode = React.useCallback(async (preferredChannel: Channel | null) => {
     setSending(true)
     setError(null)
-    const { data, error } = await supabase.functions.invoke("send-signup-otp", { body: { phone: phoneToUse } })
-    if (error) {
-      setError(await edgeFunctionErrorMessage(error, "Failed to send code"))
-    } else if (!data?.success) {
-      setError(data?.error || "Failed to send code")
-    } else {
-      toast.success(`Code sent to ${phoneToUse}`)
-      setCooldown(RESEND_COOLDOWN_SECONDS)
+
+    if (preferredChannel !== "email" && profile?.phone) {
+      const { data, error } = await supabase.functions.invoke("send-phone-otp")
+      if (!error && data?.success) {
+        setChannel("sms")
+        toast.success(`Code sent to ${data.phone} via SMS`)
+        setCooldown(RESEND_COOLDOWN_SECONDS)
+        setSending(false)
+        return
+      }
     }
+
+    const ok = await sendEmailCode()
+    if (ok) setCooldown(RESEND_COOLDOWN_SECONDS)
     setSending(false)
-  }, [])
+  }, [profile?.phone, sendEmailCode])
 
   React.useEffect(() => {
-    if (sentOnMount.current || !profile?.phone) return
+    if (sentOnMount.current || !profile) return
     sentOnMount.current = true
-    void sendCode(profile.phone)
-  }, [profile?.phone, sendCode])
+    void sendCode(null)
+  }, [profile, sendCode])
 
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault()
+    if (!profile) return
     setError(null)
     setVerifying(true)
-    const { data, error } = await supabase.functions.invoke("verify-signup-otp", { body: { code: code.trim() } })
-    if (error) {
-      setError(await edgeFunctionErrorMessage(error, "Incorrect code"))
-    } else if (!data?.success) {
-      setError(data?.error || "Incorrect code")
+
+    if (channel === "sms") {
+      const { data, error } = await supabase.functions.invoke("verify-phone-otp", { body: { code: code.trim() } })
+      if (error) {
+        setError(await edgeFunctionErrorMessage(error, "Incorrect code"))
+        setVerifying(false)
+        return
+      }
+      if (!data?.success) {
+        setError(data?.error || "Incorrect code")
+        setVerifying(false)
+        return
+      }
     } else {
-      toast.success("Phone verified — welcome aboard!")
-      await refreshProfile()
+      if (!profile.email) return
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email: profile.email,
+        token: code.trim(),
+        type: "email",
+      })
+      if (verifyError) {
+        setError(verifyError.message || "Incorrect code")
+        setVerifying(false)
+        return
+      }
+      const { error: markError } = await supabase.rpc("mark_self_email_verified")
+      if (markError) {
+        setError("Verified, but finishing setup failed — please try again")
+        setVerifying(false)
+        return
+      }
     }
+
+    toast.success("Verified — welcome aboard!")
+    await refreshProfile()
     setVerifying(false)
   }
 
-  async function handleUpdatePhone() {
-    if (!phone.trim() || !profile) return
-    const { error } = await supabase.from("user_profiles").update({ phone: phone.trim() }).eq("id", profile.id)
-    if (error) {
-      toast.error("Failed to update phone number")
-      return
-    }
-    setEditingPhone(false)
-    await refreshProfile()
-    await sendCode(phone.trim())
-  }
+  const destination = channel === "sms" ? `${profile?.phone} via SMS` : profile?.email || "your email"
 
   return (
     <div className="flex min-h-svh items-center justify-center bg-gradient-to-br from-slate-50 to-slate-200 p-4 dark:from-slate-950 dark:to-slate-900">
@@ -83,71 +139,45 @@ export function VerifyPhoneScreen() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <ShieldCheck className="size-5" /> Verify your phone
+              <ShieldCheck className="size-5" /> Verify your account
             </CardTitle>
             <CardDescription>
-              {editingPhone
-                ? "Enter the correct number and we'll send a new code."
-                : `We sent a 6-digit code to ${profile?.phone || "your phone"} on WhatsApp. Enter it below to finish setting up your account.`}
+              {channel
+                ? `We sent a 6-digit code to ${destination}. Enter it below to finish setting up your account.`
+                : "Sending your verification code..."}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {editingPhone ? (
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="new-phone">Phone Number</Label>
-                  <Input id="new-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98765 43210" />
-                </div>
-                <div className="flex gap-2">
-                  <Button type="button" variant="outline" className="flex-1" onClick={() => setEditingPhone(false)} disabled={sending}>
-                    Cancel
-                  </Button>
-                  <Button type="button" className="flex-1" onClick={handleUpdatePhone} disabled={sending || !phone.trim()}>
-                    {sending && <Loader2 className="size-4 animate-spin" />}
-                    Save &amp; Send Code
-                  </Button>
-                </div>
+            <form onSubmit={handleVerify} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="otp-code">Verification Code</Label>
+                <Input
+                  id="otp-code"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  placeholder="123456"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                  required
+                  disabled={!channel}
+                  className="text-center text-lg tracking-[0.3em]"
+                />
               </div>
-            ) : (
-              <form onSubmit={handleVerify} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="otp-code">Verification Code</Label>
-                  <Input
-                    id="otp-code"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={6}
-                    placeholder="123456"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                    required
-                    className="text-center text-lg tracking-[0.3em]"
-                  />
-                </div>
-                {error && <p className="text-sm text-destructive">{error}</p>}
-                <Button type="submit" disabled={verifying || code.length !== 6}>
-                  {verifying && <Loader2 className="size-4 animate-spin" />}
-                  Verify &amp; Continue
-                </Button>
-                <div className="flex items-center justify-between text-sm">
-                  <button
-                    type="button"
-                    className="text-muted-foreground underline-offset-2 hover:underline disabled:opacity-50"
-                    onClick={() => profile?.phone && sendCode(profile.phone)}
-                    disabled={sending || cooldown > 0}
-                  >
-                    {cooldown > 0 ? `Resend code (${cooldown}s)` : "Resend code"}
-                  </button>
-                  <button
-                    type="button"
-                    className="text-muted-foreground underline-offset-2 hover:underline"
-                    onClick={() => setEditingPhone(true)}
-                  >
-                    Wrong number?
-                  </button>
-                </div>
-              </form>
-            )}
+              {error && <p className="text-sm text-destructive">{error}</p>}
+              <Button type="submit" disabled={verifying || !channel || code.length !== 6}>
+                {verifying && <Loader2 className="size-4 animate-spin" />}
+                Verify &amp; Continue
+              </Button>
+              <button
+                type="button"
+                className="text-center text-sm text-muted-foreground underline-offset-2 hover:underline disabled:opacity-50"
+                onClick={() => void sendCode(channel)}
+                disabled={sending || cooldown > 0}
+              >
+                {cooldown > 0 ? `Resend code (${cooldown}s)` : "Resend code"}
+              </button>
+            </form>
             <button
               type="button"
               className="mt-4 w-full text-center text-xs text-muted-foreground underline-offset-2 hover:underline"

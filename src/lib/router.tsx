@@ -16,6 +16,7 @@ export type Route =
   | { name: "users" }
   | { name: "audit" }
   | { name: "profile" }
+  | { name: "subscription" }
   | { name: "platform-admin" }
   | { name: "platform-admin-org"; id: string }
   | { name: "login" }

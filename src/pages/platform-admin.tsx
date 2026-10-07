@@ -1,16 +1,20 @@
 import * as React from "react"
-import { ShieldCheck, ArrowLeft } from "lucide-react"
+import { ShieldCheck, ArrowLeft, Loader2 } from "lucide-react"
+import { toast } from "sonner"
 
 import { supabase } from "@/lib/supabase"
 import { formatDateTime, formatDate, formatCurrency, orderTotal, orderAmountPaid } from "@/lib/helpers"
-import type { Organization, UserProfile, Order, OrderItem, Payment, ConfigItem } from "@/lib/types"
+import type { Organization, UserProfile, Order, OrderItem, Payment, ConfigItem, PlatformSettings, OrganizationAccessLevel } from "@/lib/types"
+import { fetchPlatformSettings, formatRupees } from "@/lib/subscription"
 import { useRouter } from "@/lib/router"
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/page-header"
 import { PageLoader } from "@/components/app-loader"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Table,
@@ -33,6 +37,89 @@ const statusColors: Record<string, string> = {
   past_due: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
   canceled: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
   expired: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+  comped: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
+}
+
+const accessLevelColors: Record<OrganizationAccessLevel, string> = {
+  full: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+  view_only: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  locked: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+}
+
+/**
+ * Client-side mirror of the organization_access_level() SQL function, for
+ * *display* only on this page. It can't just call that RPC per-org: the
+ * function short-circuits to 'full' for any org at all when the caller is a
+ * platform admin (that's the point — platform admins bypass the paywall
+ * everywhere), which would make every row here misleadingly show "full".
+ */
+function computeAccessLevel(org: Organization): OrganizationAccessLevel {
+  const fullAccessUntil = Math.max(
+    org.trial_ends_at ? new Date(org.trial_ends_at).getTime() : -Infinity,
+    org.subscription_current_period_end ? new Date(org.subscription_current_period_end).getTime() : -Infinity,
+    org.comp_access_until ? new Date(org.comp_access_until).getTime() : -Infinity,
+  )
+  const now = Date.now()
+  if (fullAccessUntil > now) return "full"
+  const threeMonthsMs = 3 * 30 * 24 * 60 * 60 * 1000
+  if (fullAccessUntil + threeMonthsMs > now) return "view_only"
+  return "locked"
+}
+
+function PricingCard() {
+  const [settings, setSettings] = React.useState<PlatformSettings | null>(null)
+  const [price, setPrice] = React.useState("")
+  const [saving, setSaving] = React.useState(false)
+
+  React.useEffect(() => {
+    void fetchPlatformSettings().then((s) => {
+      setSettings(s)
+      if (s) setPrice(String(s.monthly_price_paise / 100))
+    })
+  }, [])
+
+  async function handleSave() {
+    const rupees = Number(price)
+    if (!Number.isFinite(rupees) || rupees <= 0) {
+      toast.error("Enter a valid monthly price")
+      return
+    }
+    setSaving(true)
+    const { error } = await supabase
+      .from("platform_settings")
+      .update({ monthly_price_paise: Math.round(rupees * 100) })
+      .eq("id", true)
+    setSaving(false)
+    if (error) {
+      toast.error("Failed to save price")
+      return
+    }
+    toast.success("Monthly price updated")
+    void fetchPlatformSettings().then(setSettings)
+  }
+
+  if (!settings) return null
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Subscription Pricing</CardTitle>
+        <CardDescription>
+          Applies to new subscriptions going forward — {formatRupees(settings.monthly_price_paise * 10)}/year (2 months free)
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex items-end gap-3">
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="monthly-price">Monthly price (₹)</Label>
+          <Input id="monthly-price" type="number" min="1" value={price} onChange={(e) => setPrice(e.target.value)} className="w-32" />
+        </div>
+        <Button onClick={handleSave} disabled={saving}>
+          {saving && <Loader2 className="size-4 animate-spin" />}
+          Save
+        </Button>
+      </CardContent>
+    </Card>
+  )
 }
 
 export function PlatformAdminPage() {
@@ -73,6 +160,8 @@ export function PlatformAdminPage() {
         description="Every organization on the platform — visible only to you"
       />
 
+      <PricingCard />
+
       <Card>
         <CardContent className="p-0">
           {rows === null ? (
@@ -86,6 +175,7 @@ export function PlatformAdminPage() {
                   <TableHead>Organization</TableHead>
                   <TableHead>Plan</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Access</TableHead>
                   <TableHead>Trial Ends</TableHead>
                   <TableHead className="text-right">Members</TableHead>
                   <TableHead className="text-right">Customers</TableHead>
@@ -108,6 +198,11 @@ export function PlatformAdminPage() {
                     <TableCell>
                       <Badge variant="outline" className={statusColors[org.subscription_status] || ""}>
                         {org.subscription_status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={accessLevelColors[computeAccessLevel(org)]}>
+                        {computeAccessLevel(org).replace("_", " ")}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
@@ -230,6 +325,24 @@ export function PlatformAdminOrgPage({ id }: { id: string }) {
     return map
   }, [configItems])
 
+  async function handleComp(months: number | null) {
+    if (!org) return
+    const compAccessUntil = months === null ? null : new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000).toISOString()
+    const { error } = await supabase
+      .from("organizations")
+      .update({
+        subscription_status: months === null ? "expired" : "comped",
+        comp_access_until: compAccessUntil,
+      })
+      .eq("id", org.id)
+    if (error) {
+      toast.error("Failed to update access")
+      return
+    }
+    setOrg({ ...org, subscription_status: months === null ? "expired" : "comped", comp_access_until: compAccessUntil })
+    toast.success(months === null ? "Complimentary access revoked" : `Complimentary access granted for ${months} months`)
+  }
+
   if (loading) return <PageLoader />
   if (!org) return <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">Organization not found</div>
 
@@ -269,6 +382,23 @@ export function PlatformAdminOrgPage({ id }: { id: string }) {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Complimentary Access</CardTitle>
+          <CardDescription>
+            Overrides the trial/subscription for this organization only — useful for a demo, an early customer, or your own test shop.
+            {org.comp_access_until && (
+              <> Currently comped until {formatDateTime(org.comp_access_until)}.</>
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => handleComp(1)}>Comp 1 Month</Button>
+          <Button variant="outline" size="sm" onClick={() => handleComp(12)}>Comp 1 Year</Button>
+          <Button variant="outline" size="sm" onClick={() => handleComp(null)}>Revoke Comp</Button>
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="members">
         <TabsList>

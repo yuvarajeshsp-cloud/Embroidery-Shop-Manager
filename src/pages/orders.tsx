@@ -1,4 +1,5 @@
 import * as React from "react"
+import { FEATURES } from "@/lib/features"
 import {
   Download,
   Plus,
@@ -500,7 +501,7 @@ export function OrderDetailPage({ id }: { id: string }) {
       const updatedOrder = { ...order, ...updates } as Order
       setOrder(updatedOrder)
 
-      if (customer?.whatsapp_opt_in) {
+      if (FEATURES.whatsapp && customer?.whatsapp_opt_in) {
         sendOrderStatusUpdate(customer, updatedOrder, newStatus, profile?.id).then((result) => {
           if (!result.success) {
             toast.error(`WhatsApp update not sent: ${result.error}`)
@@ -739,29 +740,33 @@ export function OrderDetailPage({ id }: { id: string }) {
               <Printer className="size-4" />
               Print Order Tag
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowShareToCustomer(true)}
-            >
-              <Share2 className="size-4" />
-              Share to Customer
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                try {
-                  await shareThermalInvoiceViaWhatsApp({ order, customer, items, payments })
-                } catch (err) {
-                  console.error(err)
-                  toast.error(err instanceof Error ? err.message : "Failed to share")
-                }
-              }}
-            >
-              <MessageCircle className="size-4" />
-              WhatsApp
-            </Button>
+            {FEATURES.whatsapp && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowShareToCustomer(true)}
+                >
+                  <Share2 className="size-4" />
+                  Share to Customer
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      await shareThermalInvoiceViaWhatsApp({ order, customer, items, payments })
+                    } catch (err) {
+                      console.error(err)
+                      toast.error(err instanceof Error ? err.message : "Failed to share")
+                    }
+                  }}
+                >
+                  <MessageCircle className="size-4" />
+                  WhatsApp
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -1090,7 +1095,7 @@ export function OrderDetailPage({ id }: { id: string }) {
         </Dialog>
       )}
 
-      {showShareToCustomer && (
+      {FEATURES.whatsapp && showShareToCustomer && (
         <ShareToCustomerDialog
           order={order}
           customer={customer}

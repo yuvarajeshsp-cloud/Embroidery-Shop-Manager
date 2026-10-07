@@ -14,6 +14,7 @@ import {
   MessageCircle,
   CircleUser,
   ShieldCheck,
+  Crown,
 } from "lucide-react"
 
 import {
@@ -67,6 +68,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { label: "WhatsApp", icon: MessageCircle, route: { name: "whatsapp" } },
       { label: "Users & Roles", icon: UserCog, route: { name: "users" } },
       { label: "Audit Log", icon: ScrollText, route: { name: "audit" } },
+      { label: "Subscription", icon: Crown, route: { name: "subscription" } },
     ],
   },
   {

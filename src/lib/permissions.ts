@@ -1,5 +1,11 @@
 import type { UserRole } from "@/lib/types"
 import type { Route } from "@/lib/router"
+import { FEATURES } from "@/lib/features"
+
+const DISABLED_ROUTES: Set<Route["name"]> = new Set([
+  ...(FEATURES.subscription ? [] : (["subscription"] as const)),
+  ...(FEATURES.whatsapp ? [] : (["whatsapp"] as const)),
+])
 
 /**
  * Which pages each role may open. Administrator always has full access.
@@ -23,6 +29,7 @@ const ROLE_ROUTES: Record<Exclude<UserRole, "Administrator">, Route["name"][]> =
 }
 
 export function canAccessRoute(role: UserRole | undefined, routeName: Route["name"]): boolean {
+  if (DISABLED_ROUTES.has(routeName)) return false
   if (!role) return routeName === "profile"
   if (role === "Administrator") return true
   return ROLE_ROUTES[role]?.includes(routeName) ?? false
@@ -30,13 +37,17 @@ export function canAccessRoute(role: UserRole | undefined, routeName: Route["nam
 
 export function allowedRouteNames(role: UserRole | undefined): Set<Route["name"]> {
   if (!role || role === "Administrator") {
-    return new Set([
+    const all = new Set<Route["name"]>([
       "dashboard", "customers", "customer-detail", "orders", "order-detail",
       "order-new", "payments", "expenses", "production", "reports", "config", "whatsapp",
-      "users", "audit", "profile",
+      "users", "audit", "profile", "subscription",
     ])
+    for (const name of DISABLED_ROUTES) all.delete(name)
+    return all
   }
-  return new Set(ROLE_ROUTES[role] ?? ["profile"])
+  const allowed = new Set(ROLE_ROUTES[role] ?? ["profile"])
+  for (const name of DISABLED_ROUTES) allowed.delete(name)
+  return allowed
 }
 
 /** Roles orders may be assigned to. */

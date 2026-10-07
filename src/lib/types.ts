@@ -1,7 +1,8 @@
 export type UserRole = "Administrator" | "Manager" | "Operator" | "Accounts"
 
-export type SubscriptionStatus = "trialing" | "active" | "past_due" | "canceled" | "expired"
+export type SubscriptionStatus = "trialing" | "active" | "past_due" | "canceled" | "expired" | "comped"
 export type OrganizationPlan = "trial" | "monthly" | "yearly"
+export type OrganizationAccessLevel = "full" | "view_only" | "locked"
 
 export interface Organization {
   id: string
@@ -10,9 +11,21 @@ export interface Organization {
   plan: OrganizationPlan
   subscription_status: SubscriptionStatus
   trial_ends_at: string | null
-  stripe_customer_id: string | null
-  stripe_subscription_id: string | null
+  subscription_current_period_end: string | null
+  comp_access_until: string | null
+  razorpay_customer_id: string | null
+  razorpay_subscription_id: string | null
   created_at: string
+  updated_at: string
+}
+
+export interface PlatformSettings {
+  id: true
+  monthly_price_paise: number
+  razorpay_monthly_plan_id: string | null
+  razorpay_monthly_plan_price_paise: number | null
+  razorpay_yearly_plan_id: string | null
+  razorpay_yearly_plan_price_paise: number | null
   updated_at: string
 }
 

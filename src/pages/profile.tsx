@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
 import { formatDateTime } from "@/lib/helpers"
 import { isBiometricUnlockEnabled, setBiometricUnlockEnabled, getBiometryAvailability, authenticateWithBiometry } from "@/lib/biometric-unlock"
+import { clearBiometricCredentials, saveBiometricCredentials } from "@/lib/biometric-credentials"
 import { PageHeader } from "@/components/page-header"
 import { PageLoader } from "@/components/app-loader"
 import { Button } from "@/components/ui/button"
@@ -112,6 +113,12 @@ export function ProfilePage() {
       }
     }
     await setBiometricUnlockEnabled(enabled)
+    if (!enabled) {
+      // Keeping a saved password around once the user has opted out of
+      // biometrics serves no purpose and is a needless thing to leave in
+      // the Keychain.
+      await clearBiometricCredentials()
+    }
     setBiometricEnabled(enabled)
     setBiometricBusy(false)
     toast.success(enabled ? `${biometryLabel || "Biometric"} unlock enabled` : "Biometric unlock disabled")
@@ -167,6 +174,12 @@ export function ProfilePage() {
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword })
       if (error) throw error
+      // Otherwise the next Face ID sign-in attempt (after a future sign-out)
+      // would silently fail with the now-stale saved password.
+      const accountEmail = profile?.email || user?.email
+      if (biometricEnabled && accountEmail) {
+        await saveBiometricCredentials(accountEmail, newPassword, profile?.display_name)
+      }
       toast.success("Password changed")
       setNewPassword("")
       setConfirmPassword("")
@@ -206,7 +219,15 @@ export function ProfilePage() {
             </div>
             <div className="flex flex-col gap-2">
               <Label>Phone</Label>
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Optional" />
+              <Input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Optional"
+                disabled={profile.role !== "Administrator"}
+              />
+              {profile.role !== "Administrator" && (
+                <p className="text-xs text-muted-foreground">Contact your Administrator to change your phone number.</p>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">Role</span>

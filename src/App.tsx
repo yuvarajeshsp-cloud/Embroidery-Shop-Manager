@@ -11,7 +11,14 @@ import { AuthScreen } from "@/pages/auth"
 import { SetPasswordScreen } from "@/pages/set-password"
 import { VerifyPhoneScreen } from "@/pages/verify-phone"
 import { BiometricLockScreen } from "@/pages/biometric-lock"
-import { isBiometricUnlockEnabled, getBiometryAvailability, isBiometricAuthInFlight } from "@/lib/biometric-unlock"
+import {
+  isBiometricUnlockEnabled,
+  getBiometryAvailability,
+  isBiometricAuthInFlight,
+  consumeBiometricResumeSuppression,
+  clearStaleBiometricResumeSuppression,
+  isBiometricResumeSuppressionPending,
+} from "@/lib/biometric-unlock"
 import { ProfilePage } from "@/pages/profile"
 import { DashboardPage } from "@/pages/dashboard"
 import { CustomersPage, CustomerDetailPage } from "@/pages/customers"
@@ -25,11 +32,16 @@ import { ConfigPage } from "@/pages/config"
 import { WhatsAppPage } from "@/pages/whatsapp"
 import { UsersPage, AuditPage } from "@/pages/admin"
 import { PlatformAdminPage, PlatformAdminOrgPage } from "@/pages/platform-admin"
+import { SubscriptionPage } from "@/pages/subscription"
+import { AccessLockedScreen } from "@/pages/access-locked"
 import { AppLoader } from "@/components/app-loader"
 import { useBusinessProfile } from "@/lib/business-profile"
 import { usePlatformAdmin } from "@/lib/platform-admin"
+import { useOrganizationAccess } from "@/lib/subscription"
 import { setFavicon } from "@/lib/favicon"
 import { canAccessRoute } from "@/lib/permissions"
+import { FEATURES } from "@/lib/features"
+import { Button } from "@/components/ui/button"
 import * as React from "react"
 
 function RouteRenderer() {
@@ -98,6 +110,8 @@ function RouteRenderer() {
       return <AuditPage />
     case "profile":
       return <ProfilePage />
+    case "subscription":
+      return <SubscriptionPage />
     default:
       return <DashboardPage />
   }
@@ -105,7 +119,6 @@ function RouteRenderer() {
 
 function AppContent() {
   const { session, profile, loading } = useAuth()
-  const isMobile = useIsMobile()
   const businessProfile = useBusinessProfile()
   const [pendingAuthType, setPendingAuthType] = React.useState<string | null>(
     () => sessionStorage.getItem("pendingAuthType"),
@@ -143,12 +156,35 @@ function AppContent() {
       const label = availability.biometryTypes.includes(2) ? "Face ID" : availability.biometryTypes.includes(1) ? "Touch ID" : "Fingerprint"
       setBiometricLock({ locked: true, label })
     }
-    checkLock()
+    // Signing in with the "Sign in with Face ID" button on the auth screen
+    // (see auth.tsx) runs its own authenticateWithBiometry() call *before*
+    // this effect ever mounts — session goes from null to set only once
+    // that sign-in succeeds, which is what makes userId truthy here for the
+    // first time. Immediately re-locking and asking for Face ID a second
+    // time would be redundant, so skip this one check when that prompt's
+    // suppression is still pending. This only *peeks* — it must not consume
+    // the flag, since the prompt's real trailing isActive:true event hasn't
+    // been delivered yet (it's delayed by the OS's dismiss animation) and
+    // still needs the flag to be there when the listener below receives it;
+    // consuming it here instead just moves the redundant re-lock a moment
+    // later rather than removing it.
+    if (!isBiometricResumeSuppressionPending()) {
+      checkLock()
+    }
 
     const sub = CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+      if (!isActive) {
+        // A real backgrounding (not one caused by our own prompt) clears any
+        // stale resume suppression so it can't swallow a later, real lock
+        // check — see clearStaleBiometricResumeSuppression's doc comment.
+        if (!isBiometricAuthInFlight()) clearStaleBiometricResumeSuppression()
+        return
+      }
       // Skip transitions caused by our own Face ID/Touch ID sheet opening
       // and closing — see isBiometricAuthInFlight's doc comment.
-      if (isActive && !isBiometricAuthInFlight()) checkLock()
+      if (isBiometricAuthInFlight()) return
+      if (consumeBiometricResumeSuppression()) return
+      checkLock()
     })
     return () => {
       cancelled = true
@@ -176,9 +212,16 @@ function AppContent() {
     return <VerifyPhoneScreen />
   }
 
+  return FEATURES.subscription ? <SubscriptionGate profile={profile} /> : <AppShell />
+}
+
+function AppShell({ banner }: { banner?: React.ReactNode }) {
+  const isMobile = useIsMobile()
+
   if (isMobile) {
     return (
       <div className="flex min-h-svh flex-col pt-[env(safe-area-inset-top)]">
+        {banner}
         <div className="flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))]">
           <RouteRenderer />
         </div>
@@ -191,10 +234,39 @@ function AppContent() {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
+        {banner}
         <RouteRenderer />
       </SidebarInset>
     </SidebarProvider>
   )
+}
+
+// Held back from the current release — see FEATURES in lib/features.ts.
+// With the flag off the app never looks at the subscription at all (the
+// database side is switched off separately via
+// platform_settings.subscription_enforced).
+function SubscriptionGate({ profile }: { profile: ReturnType<typeof useAuth>["profile"] }) {
+  const { navigate } = useRouter()
+  const { accessLevel, loading, refresh } = useOrganizationAccess(profile?.organization_id ?? null)
+
+  if (loading) {
+    return <AppLoader />
+  }
+
+  if (accessLevel === "locked") {
+    return <AccessLockedScreen onSubscribed={refresh} />
+  }
+
+  const viewOnlyBanner = accessLevel === "view_only" && (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+      <span>Your subscription has ended — you can view existing data, but creating or editing needs an active plan.</span>
+      <Button size="sm" variant="outline" onClick={() => navigate({ name: "subscription" })}>
+        Subscribe
+      </Button>
+    </div>
+  )
+
+  return <AppShell banner={viewOnlyBanner} />
 }
 
 export function App() {

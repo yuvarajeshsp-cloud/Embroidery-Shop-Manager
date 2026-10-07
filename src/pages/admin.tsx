@@ -96,6 +96,22 @@ export function UsersPage() {
     }
   }
 
+  async function handlePhoneChange(user: UserProfile, phone: string) {
+    const trimmed = phone.trim() || null
+    if (trimmed === user.phone) return
+    const { error } = await supabase
+      .from("user_profiles")
+      .update({ phone: trimmed, updated_at: new Date().toISOString() })
+      .eq("id", user.id)
+    if (error) {
+      toast.error("Failed to update phone number")
+    } else {
+      await logAudit(currentUser, "user_profiles", user.id, "UPDATE", { phone: user.phone } as Record<string, unknown>, { phone: trimmed } as Record<string, unknown>)
+      toast.success("Phone number updated")
+      loadUsers()
+    }
+  }
+
   async function handleRoleChange(user: UserProfile, role: UserRole) {
     const { error } = await supabase
       .from("user_profiles")
@@ -218,7 +234,13 @@ export function UsersPage() {
                     </div>
                   </div>
                   <div className="text-sm text-muted-foreground">{u.email}</div>
-                  <div className="text-sm text-muted-foreground">{u.phone || "—"}</div>
+                  <Input
+                    key={u.id}
+                    defaultValue={u.phone || ""}
+                    onBlur={(e) => handlePhoneChange(u, e.target.value)}
+                    placeholder="Phone number"
+                    className="h-8 text-sm"
+                  />
                   <div className="flex items-center justify-between gap-2">
                     {u.id === currentUser?.id ? (
                       <Badge variant="outline" className={roleColors[u.role] || ""}>{u.role}</Badge>
@@ -257,7 +279,15 @@ export function UsersPage() {
                       {u.id === currentUser?.id && <span className="ml-2 text-xs text-muted-foreground">(You)</span>}
                     </TableCell>
                     <TableCell className="text-sm">{u.email}</TableCell>
-                    <TableCell className="text-sm">{u.phone || "—"}</TableCell>
+                    <TableCell>
+                      <Input
+                        key={u.id}
+                        defaultValue={u.phone || ""}
+                        onBlur={(e) => handlePhoneChange(u, e.target.value)}
+                        placeholder="Phone number"
+                        className="h-8 w-[160px] text-sm"
+                      />
+                    </TableCell>
                     <TableCell>
                       {u.id === currentUser?.id ? (
                         <Badge variant="outline" className={roleColors[u.role] || ""}>{u.role}</Badge>

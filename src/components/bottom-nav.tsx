@@ -16,6 +16,7 @@ import {
   Moon,
   Monitor,
   CircleUser,
+  Crown,
 } from "lucide-react"
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
@@ -45,6 +46,7 @@ const moreItems: NavItem[] = [
   { label: "WhatsApp", icon: MessageCircle, route: { name: "whatsapp" } },
   { label: "Users & Roles", icon: UserCog, route: { name: "users" } },
   { label: "Audit Log", icon: ScrollText, route: { name: "audit" } },
+  { label: "Subscription", icon: Crown, route: { name: "subscription" } },
   { label: "My Profile", icon: CircleUser, route: { name: "profile" } },
 ]
 
