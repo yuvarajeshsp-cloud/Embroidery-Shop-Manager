@@ -69,21 +69,58 @@ function readableForeground(hex: string): string {
  * selector-based rule, including `.dark`). Clears back to the theme's own
  * defaults when a color hasn't been customized.
  */
+function mixHex(hex: string, withHex: string, amount: number): string {
+  const parse = (h: string) => {
+    const c = h.replace("#", "")
+    return [0, 2, 4].map((i) => parseInt(c.slice(i, i + 2), 16))
+  }
+  const [r1, g1, b1] = parse(hex)
+  const [r2, g2, b2] = parse(withHex)
+  const channel = (a: number, b: number) =>
+    Math.round(a + (b - a) * amount).toString(16).padStart(2, "0")
+  return `#${channel(r1, r2)}${channel(g1, g2)}${channel(b1, b2)}`
+}
+
+const SIDEBAR_VARS = [
+  "--sidebar",
+  "--sidebar-foreground",
+  "--sidebar-accent",
+  "--sidebar-accent-foreground",
+  "--sidebar-border",
+]
+const BUTTON_VARS = [
+  "--primary",
+  "--primary-foreground",
+  "--ring",
+  "--sidebar-primary",
+  "--sidebar-primary-foreground",
+  "--sidebar-ring",
+]
+
 function applyBrandColors(profile: BusinessProfile) {
   const root = document.documentElement.style
-  if (profile.sidebarColor) {
+  if (profile.sidebarColor && /^#[0-9a-f]{6}$/i.test(profile.sidebarColor)) {
+    const fg = readableForeground(profile.sidebarColor)
     root.setProperty("--sidebar", profile.sidebarColor)
-    root.setProperty("--sidebar-foreground", readableForeground(profile.sidebarColor))
+    root.setProperty("--sidebar-foreground", fg)
+    // Hover/selected rows and dividers are shades of the chosen colour.
+    root.setProperty("--sidebar-accent", mixHex(profile.sidebarColor, fg, 0.12))
+    root.setProperty("--sidebar-accent-foreground", fg)
+    root.setProperty("--sidebar-border", mixHex(profile.sidebarColor, fg, 0.18))
   } else {
-    root.removeProperty("--sidebar")
-    root.removeProperty("--sidebar-foreground")
+    SIDEBAR_VARS.forEach((v) => root.removeProperty(v))
   }
-  if (profile.buttonColor) {
+  if (profile.buttonColor && /^#[0-9a-f]{6}$/i.test(profile.buttonColor)) {
+    const fg = readableForeground(profile.buttonColor)
     root.setProperty("--primary", profile.buttonColor)
-    root.setProperty("--primary-foreground", readableForeground(profile.buttonColor))
+    root.setProperty("--primary-foreground", fg)
+    root.setProperty("--ring", profile.buttonColor)
+    // The active menu item and the mobile bottom bar follow the button colour.
+    root.setProperty("--sidebar-primary", profile.buttonColor)
+    root.setProperty("--sidebar-primary-foreground", fg)
+    root.setProperty("--sidebar-ring", profile.buttonColor)
   } else {
-    root.removeProperty("--primary")
-    root.removeProperty("--primary-foreground")
+    BUTTON_VARS.forEach((v) => root.removeProperty(v))
   }
 }
 

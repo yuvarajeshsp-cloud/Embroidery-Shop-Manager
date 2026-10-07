@@ -48,7 +48,7 @@ export function BottomNav() {
   }
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-stretch border-t bg-background pb-[env(safe-area-inset-bottom)]">
+    <nav className="fixed inset-x-0 bottom-0 z-50 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-stretch border-t border-sidebar-border bg-sidebar pb-[env(safe-area-inset-bottom)]">
       {visibleTabs.map((tab) => {
         const Icon = tab.icon
         const isActive = routeMatches(route, tab.route)
@@ -58,10 +58,12 @@ export function BottomNav() {
             onClick={() => navigate(tab.route)}
             className={cn(
               "flex flex-1 flex-col items-center justify-center gap-1 text-[11px]",
-              isActive ? "text-primary" : "text-muted-foreground",
+              isActive ? "font-semibold text-sidebar-foreground" : "text-sidebar-foreground/75",
             )}
           >
-            <Icon className="size-5" />
+            <span className={cn("flex h-7 w-12 items-center justify-center rounded-full transition-colors", isActive && "bg-sidebar-primary text-sidebar-primary-foreground")}>
+              <Icon className="size-5" />
+            </span>
             {tab.label}
           </button>
         )
@@ -70,10 +72,12 @@ export function BottomNav() {
         onClick={openMore}
         className={cn(
           "flex flex-1 flex-col items-center justify-center gap-1 text-[11px]",
-          isMoreActive ? "text-primary" : "text-muted-foreground",
+          isMoreActive ? "font-semibold text-sidebar-foreground" : "text-sidebar-foreground/75",
         )}
       >
-        <Menu className="size-5" />
+        <span className={cn("flex h-7 w-12 items-center justify-center rounded-full transition-colors", isMoreActive && "bg-sidebar-primary text-sidebar-primary-foreground")}>
+          <Menu className="size-5" />
+        </span>
         More
       </button>
     </nav>
