@@ -7,6 +7,7 @@ import { RouterProvider, useRouter, canGoBackInApp, type Route } from "@/lib/rou
 import { AppSidebar } from "@/components/app-sidebar"
 import { BottomNav } from "@/components/bottom-nav"
 import { PageStack } from "@/components/page-stack"
+import { closeTopDialog } from "@/lib/dialog-stack"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { AuthScreen } from "@/pages/auth"
 import { SetPasswordScreen } from "@/pages/set-password"
@@ -300,6 +301,8 @@ function SubscriptionGate({ profile }: { profile: ReturnType<typeof useAuth>["pr
 export function App() {
   React.useEffect(() => {
     const sub = CapacitorApp.addListener("backButton", () => {
+      // An open full-page dialog is "on top" of the page — close it first.
+      if (closeTopDialog()) return
       if (canGoBackInApp()) {
         window.history.back()
       } else {

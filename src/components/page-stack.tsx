@@ -1,5 +1,6 @@
 import * as React from "react"
 
+import { hasOpenDialog } from "@/lib/dialog-stack"
 import { isMoreChild, isMoreStackRoute, routeKey } from "@/lib/more-nav"
 import { useRouter, type NavDirection, type Route } from "@/lib/router"
 import { cn } from "@/lib/utils"
@@ -92,7 +93,7 @@ export function PageStack({ renderRoute }: { renderRoute: (route: Route) => Reac
     function onStart(e: TouchEvent) {
       start = null
       active = false
-      if (!swipeRef.current.canSwipe || e.touches.length !== 1) return
+      if (!swipeRef.current.canSwipe || hasOpenDialog() || e.touches.length !== 1) return
       const t = e.touches[0]
       if (t.clientX > EDGE_PX) return
       start = { x: t.clientX, y: t.clientY, t: Date.now() }

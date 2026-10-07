@@ -1055,7 +1055,7 @@ export function OrderDetailPage({ id }: { id: string }) {
 
       {showStatusChange && (
         <Dialog open onOpenChange={() => setShowStatusChange(false)}>
-          <DialogContent>
+          <DialogContent fullPage={false}>
             <DialogHeader>
               <DialogTitle>Change Order Status</DialogTitle>
               <DialogDescription>Current: {order.order_status}</DialogDescription>

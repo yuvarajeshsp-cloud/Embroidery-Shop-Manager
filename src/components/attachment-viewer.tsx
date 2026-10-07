@@ -38,6 +38,7 @@ export function AttachmentViewerDialog({
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
+        fullPage={false}
         showCloseButton={false}
         className="flex h-[80vh] w-[80vw] max-w-none flex-col gap-0 p-0"
       >
