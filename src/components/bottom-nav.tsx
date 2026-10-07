@@ -34,7 +34,11 @@ function routeMatches(current: Route, item: Route): boolean {
 // edge, so the page appears to flow down into the bar.
 const FILLET = 14
 
-function ActiveNotch() {
+type Edge = "first" | "last" | undefined
+
+// On the outermost tabs the cut-out runs flush to the screen edge, with no
+// shoulder on that side, so nothing pokes out past the bar's own corner.
+function ActiveNotch({ edge }: { edge: Edge }) {
   const fillet = (side: "left" | "right") => (
     <span
       aria-hidden
@@ -42,16 +46,20 @@ function ActiveNotch() {
       style={{
         width: FILLET,
         height: FILLET,
-        [side === "left" ? "left" : "right"]: 6 - FILLET,
+        [side]: 6 - FILLET,
         background: `radial-gradient(circle at ${side === "left" ? "0" : "100%"} 100%, transparent ${FILLET}px, var(--background) ${FILLET + 0.5}px)`,
       }}
     />
   )
   return (
     <>
-      <span aria-hidden className="pointer-events-none absolute inset-x-1.5 top-0 bottom-2 rounded-b-[22px] bg-background" />
-      {fillet("left")}
-      {fillet("right")}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute top-0 bottom-2 rounded-b-[22px] bg-background"
+        style={{ left: edge === "first" ? 0 : 6, right: edge === "last" ? 0 : 6 }}
+      />
+      {edge !== "first" && fillet("left")}
+      {edge !== "last" && fillet("right")}
     </>
   )
 }
@@ -60,11 +68,13 @@ function Tab({
   label,
   icon: Icon,
   active,
+  edge,
   onClick,
 }: {
   label: string
   icon: React.ComponentType<{ className?: string }>
   active: boolean
+  edge?: Edge
   onClick: () => void
 }) {
   return (
@@ -75,7 +85,7 @@ function Tab({
         active ? "font-semibold text-foreground" : "text-sidebar-foreground/75",
       )}
     >
-      {active && <ActiveNotch />}
+      {active && <ActiveNotch edge={edge} />}
       <Icon className={cn("relative size-5", active && "text-primary")} />
       <span className="relative">{label}</span>
     </button>
@@ -102,16 +112,17 @@ export function BottomNav() {
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-stretch rounded-t-[28px] border-t border-sidebar-border bg-sidebar pb-[env(safe-area-inset-bottom)]">
-      {visibleTabs.map((tab) => (
+      {visibleTabs.map((tab, index) => (
         <Tab
           key={tab.label}
+          edge={index === 0 ? "first" : undefined}
           label={tab.label}
           icon={tab.icon}
           active={routeMatches(route, tab.route)}
           onClick={() => navigate(tab.route)}
         />
       ))}
-      <Tab label="More" icon={Menu} active={isMoreActive} onClick={openMore} />
+      <Tab label="More" icon={Menu} active={isMoreActive} edge="last" onClick={openMore} />
     </nav>
   )
 }
