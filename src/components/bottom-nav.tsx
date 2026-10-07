@@ -14,9 +14,9 @@ interface NavItem {
 }
 
 const tabs: NavItem[] = [
+  { label: "Customers", icon: Users, route: { name: "customers" } },
   { label: "Dashboard", icon: LayoutDashboard, route: { name: "dashboard" } },
   { label: "Orders", icon: ShoppingCart, route: { name: "orders" } },
-  { label: "Customers", icon: Users, route: { name: "customers" } },
   { label: "Payments", icon: CreditCard, route: { name: "payments" } },
 ]
 
