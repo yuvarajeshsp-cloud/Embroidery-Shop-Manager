@@ -37,7 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
+import { ExpenseCategoryBadge } from "@/components/status-badges"
 import { useRouter } from "@/lib/router"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { fetchConfigItems } from "@/lib/config"
@@ -205,7 +205,7 @@ export function ExpensesPage() {
                   {e.description && <div className="text-sm text-muted-foreground">{e.description}</div>}
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5">
-                      <Badge variant="outline">{e.category}</Badge>
+                      <ExpenseCategoryBadge category={e.category} />
                       {e.is_sensitive && <Lock className="size-3 text-muted-foreground" />}
                     </div>
                     {canManage && (
@@ -242,7 +242,7 @@ export function ExpensesPage() {
                     <TableCell className="text-sm">{formatDate(e.expense_date)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1.5">
-                        <Badge variant="outline">{e.category}</Badge>
+                        <ExpenseCategoryBadge category={e.category} />
                         {e.is_sensitive && <Lock className="size-3 text-muted-foreground" />}
                       </div>
                     </TableCell>

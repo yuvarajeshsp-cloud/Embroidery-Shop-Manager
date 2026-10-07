@@ -41,8 +41,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { PaymentMethodBadge } from "@/components/status-badges"
+import { PaymentMethodBadge, PaymentRecordStatusBadge } from "@/components/status-badges"
 import { useRouter } from "@/lib/router"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { fetchConfigItems } from "@/lib/config"
@@ -225,7 +224,7 @@ export function PaymentsPage() {
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex flex-wrap gap-1.5">
                       <PaymentMethodBadge method={p.payment_method} />
-                      <Badge variant="outline">{p.payment_status}</Badge>
+                      <PaymentRecordStatusBadge status={p.payment_status} />
                     </div>
                     <Button variant="ghost" size="icon-sm" onClick={() => { setEditing(p); setShowForm(true) }}>
                       <Pencil className="size-3.5" />
@@ -264,7 +263,7 @@ export function PaymentsPage() {
                     <TableCell className="text-sm">{p.customer?.customer_business_name || "—"}</TableCell>
                     <TableCell><PaymentMethodBadge method={p.payment_method} /></TableCell>
                     <TableCell className="text-right font-medium">{formatCurrency(p.amount)}</TableCell>
-                    <TableCell><Badge variant="outline">{p.payment_status}</Badge></TableCell>
+                    <TableCell><PaymentRecordStatusBadge status={p.payment_status} /></TableCell>
                     <TableCell>
                       <Button variant="ghost" size="icon-sm" onClick={() => { setEditing(p); setShowForm(true) }}>
                         <Pencil className="size-3.5" />

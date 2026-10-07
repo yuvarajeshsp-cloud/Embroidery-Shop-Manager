@@ -73,7 +73,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { OrderStatusBadge, PriorityBadge, PaymentStatusBadge, PaymentMethodBadge } from "@/components/status-badges"
+import { OrderStatusBadge, PriorityBadge, PaymentStatusBadge, PaymentMethodBadge, PaymentRecordStatusBadge, ExpenseCategoryBadge } from "@/components/status-badges"
 import { Spinner } from "@/components/ui/spinner"
 import { useRouter } from "@/lib/router"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -930,7 +930,7 @@ export function OrderDetailPage({ id }: { id: string }) {
                   </div>
                   <div className="flex items-center gap-1.5">
                     <PaymentMethodBadge method={p.payment_method} />
-                    <Badge variant="outline">{p.payment_status}</Badge>
+                    <PaymentRecordStatusBadge status={p.payment_status} />
                   </div>
                 </div>
               ))}
@@ -955,7 +955,7 @@ export function OrderDetailPage({ id }: { id: string }) {
                     <TableCell><PaymentMethodBadge method={p.payment_method} /></TableCell>
                     <TableCell className="text-sm">{p.transaction_reference || "—"}</TableCell>
                     <TableCell className="text-right font-medium">{formatCurrency(p.amount)}</TableCell>
-                    <TableCell><Badge variant="outline">{p.payment_status}</Badge></TableCell>
+                    <TableCell><PaymentRecordStatusBadge status={p.payment_status} /></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -983,7 +983,7 @@ export function OrderDetailPage({ id }: { id: string }) {
                       <span className="font-semibold">{formatCurrency(e.amount)}</span>
                     </div>
                     <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
-                      <Badge variant="outline">{e.category}</Badge>
+                      <ExpenseCategoryBadge category={e.category} />
                       <span>{formatDate(e.expense_date)}</span>
                     </div>
                   </div>
@@ -1004,7 +1004,7 @@ export function OrderDetailPage({ id }: { id: string }) {
                     <TableRow key={e.id}>
                       <TableCell className="font-mono text-xs">{e.expense_number}</TableCell>
                       <TableCell className="text-sm">{formatDate(e.expense_date)}</TableCell>
-                      <TableCell><Badge variant="outline">{e.category}</Badge></TableCell>
+                      <TableCell><ExpenseCategoryBadge category={e.category} /></TableCell>
                       <TableCell className="text-right font-medium">{formatCurrency(e.amount)}</TableCell>
                     </TableRow>
                   ))}
