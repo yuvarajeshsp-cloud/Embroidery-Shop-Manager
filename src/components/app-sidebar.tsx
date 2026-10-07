@@ -15,6 +15,8 @@ import {
   CircleUser,
   ShieldCheck,
   Crown,
+  LifeBuoy,
+  CircleHelp,
 } from "lucide-react"
 
 import {
@@ -75,6 +77,9 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     label: "Account",
     items: [
       { label: "My Profile", icon: CircleUser, route: { name: "profile" } },
+      { label: "Help", icon: LifeBuoy, route: { name: "help" } },
+      { label: "FAQ", icon: CircleHelp, route: { name: "faq" } },
+      { label: "Privacy Policy", icon: ShieldCheck, route: { name: "privacy" } },
     ],
   },
 ]

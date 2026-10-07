@@ -118,6 +118,27 @@ export function AuthScreen() {
   const [signInEmail, setSignInEmail] = React.useState("")
   const [signInPassword, setSignInPassword] = React.useState("")
 
+  const [forgotMode, setForgotMode] = React.useState(false)
+  const [resetSent, setResetSent] = React.useState(false)
+
+  // The reset link always opens the website (not the app's own capacitor://
+  // origin, which an email link can't reach): choose the new password there,
+  // then sign in anywhere with it.
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
+    const { error } = await supabase.auth.resetPasswordForEmail(signInEmail.trim(), {
+      redirectTo: "https://paavaifashions.com",
+    })
+    setLoading(false)
+    if (error) {
+      setError(error.message)
+      return
+    }
+    setResetSent(true)
+  }
+
   const [signUpShopName, setSignUpShopName] = React.useState("")
   const [signUpName, setSignUpName] = React.useState("")
   const [signUpEmail, setSignUpEmail] = React.useState("")
@@ -187,6 +208,46 @@ export function AuthScreen() {
               </TabsList>
 
               <TabsContent value="signin">
+                {forgotMode ? (
+                  <form onSubmit={handleForgotPassword} className="flex flex-col gap-4 pt-4">
+                    {resetSent ? (
+                      <p className="text-sm">
+                        If an account exists for <strong>{signInEmail.trim()}</strong>, we've emailed a link to choose a new password. Check your inbox (and spam folder).
+                      </p>
+                    ) : (
+                      <>
+                        <p className="text-sm text-muted-foreground">Enter your email and we'll send you a link to choose a new password.</p>
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="forgot-email">Email</Label>
+                          <Input
+                            id="forgot-email"
+                            type="email"
+                            placeholder="you@example.com"
+                            value={signInEmail}
+                            onChange={(e) => setSignInEmail(e.target.value)}
+                            required
+                          />
+                        </div>
+                        {error && <p className="text-sm text-destructive">{error}</p>}
+                        <Button type="submit" disabled={loading}>
+                          {loading && <Loader2 className="size-4 animate-spin" />}
+                          Send reset link
+                        </Button>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      className="text-center text-sm text-muted-foreground underline-offset-2 hover:underline"
+                      onClick={() => {
+                        setForgotMode(false)
+                        setResetSent(false)
+                        setError(null)
+                      }}
+                    >
+                      Back to sign in
+                    </button>
+                  </form>
+                ) : (
                 <form onSubmit={handleSignIn} className="flex flex-col gap-4 pt-4">
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="signin-email">Email</Label>
@@ -210,12 +271,23 @@ export function AuthScreen() {
                       required
                     />
                   </div>
+                  <button
+                    type="button"
+                    className="self-end text-xs text-muted-foreground underline-offset-2 hover:underline"
+                    onClick={() => {
+                      setForgotMode(true)
+                      setError(null)
+                    }}
+                  >
+                    Forgot password?
+                  </button>
                   {error && <p className="text-sm text-destructive">{error}</p>}
                   <Button type="submit" disabled={loading}>
                     {loading && <Loader2 className="size-4 animate-spin" />}
                     Sign In
                   </Button>
                 </form>
+                )}
 
                 {supportsPasskey && (
                   <>

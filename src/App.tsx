@@ -10,6 +10,7 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { AuthScreen } from "@/pages/auth"
 import { SetPasswordScreen } from "@/pages/set-password"
 import { VerifyPhoneScreen } from "@/pages/verify-phone"
+import { AccountDeactivatedScreen } from "@/pages/account-deactivated"
 import { BiometricLockScreen } from "@/pages/biometric-lock"
 import {
   isBiometricUnlockEnabled,
@@ -33,6 +34,7 @@ import { WhatsAppPage } from "@/pages/whatsapp"
 import { UsersPage, AuditPage } from "@/pages/admin"
 import { PlatformAdminPage, PlatformAdminOrgPage } from "@/pages/platform-admin"
 import { SubscriptionPage } from "@/pages/subscription"
+import { HelpPage, FaqPage, PrivacyPage } from "@/pages/help"
 import { AccessLockedScreen } from "@/pages/access-locked"
 import { AppLoader } from "@/components/app-loader"
 import { useBusinessProfile } from "@/lib/business-profile"
@@ -112,6 +114,12 @@ function RouteRenderer() {
       return <ProfilePage />
     case "subscription":
       return <SubscriptionPage />
+    case "help":
+      return <HelpPage />
+    case "faq":
+      return <FaqPage />
+    case "privacy":
+      return <PrivacyPage />
     default:
       return <DashboardPage />
   }
@@ -206,6 +214,10 @@ function AppContent() {
 
   if (biometricLock?.locked) {
     return <BiometricLockScreen label={biometricLock.label} onUnlocked={() => setBiometricLock(null)} />
+  }
+
+  if (profile && !profile.is_active) {
+    return <AccountDeactivatedScreen />
   }
 
   if (profile && !profile.phone_verified) {

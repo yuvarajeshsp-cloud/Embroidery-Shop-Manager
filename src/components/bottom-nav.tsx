@@ -18,6 +18,9 @@ import {
   CircleUser,
   Crown,
   Wallet,
+  LifeBuoy,
+  CircleHelp,
+  ShieldCheck,
 } from "lucide-react"
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
@@ -50,6 +53,9 @@ const moreItems: NavItem[] = [
   { label: "Audit Log", icon: ScrollText, route: { name: "audit" } },
   { label: "Subscription", icon: Crown, route: { name: "subscription" } },
   { label: "My Profile", icon: CircleUser, route: { name: "profile" } },
+  { label: "Help", icon: LifeBuoy, route: { name: "help" } },
+  { label: "FAQ", icon: CircleHelp, route: { name: "faq" } },
+  { label: "Privacy Policy", icon: ShieldCheck, route: { name: "privacy" } },
 ]
 
 function routeMatches(current: Route, item: Route): boolean {

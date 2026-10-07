@@ -7,6 +7,9 @@ const DISABLED_ROUTES: Set<Route["name"]> = new Set([
   ...(FEATURES.whatsapp ? [] : (["whatsapp"] as const)),
 ])
 
+// Reference pages every signed-in role can open.
+const INFO_ROUTES: Route["name"][] = ["help", "faq", "privacy"]
+
 /**
  * Which pages each role may open. Administrator always has full access.
  * Mirrors the role descriptions shown on the Users & Roles page:
@@ -30,6 +33,7 @@ const ROLE_ROUTES: Record<Exclude<UserRole, "Administrator">, Route["name"][]> =
 
 export function canAccessRoute(role: UserRole | undefined, routeName: Route["name"]): boolean {
   if (DISABLED_ROUTES.has(routeName)) return false
+  if (INFO_ROUTES.includes(routeName)) return true
   if (!role) return routeName === "profile"
   if (role === "Administrator") return true
   return ROLE_ROUTES[role]?.includes(routeName) ?? false
@@ -42,10 +46,12 @@ export function allowedRouteNames(role: UserRole | undefined): Set<Route["name"]
       "order-new", "payments", "expenses", "production", "reports", "config", "whatsapp",
       "users", "audit", "profile", "subscription",
     ])
+    for (const name of INFO_ROUTES) all.add(name)
     for (const name of DISABLED_ROUTES) all.delete(name)
     return all
   }
-  const allowed = new Set(ROLE_ROUTES[role] ?? ["profile"])
+  const allowed = new Set<Route["name"]>(ROLE_ROUTES[role] ?? ["profile"])
+  for (const name of INFO_ROUTES) allowed.add(name)
   for (const name of DISABLED_ROUTES) allowed.delete(name)
   return allowed
 }
