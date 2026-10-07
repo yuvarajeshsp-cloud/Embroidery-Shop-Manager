@@ -10,7 +10,6 @@ import {
   Settings,
   UserCog,
   ScrollText,
-  Scissors,
   MessageCircle,
   CircleUser,
   ShieldCheck,
@@ -127,7 +126,7 @@ export function AppSidebar() {
             {companyLogo ? (
               <img src={companyLogo} alt={companyName} className="h-full w-full object-cover" />
             ) : (
-              <Scissors className="size-5" />
+              <img src="/favicon.svg" alt={companyName} className="h-full w-full object-cover" />
             )}
           </div>
           <div className="flex flex-col">

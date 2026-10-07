@@ -1,5 +1,4 @@
 import * as React from "react"
-import { Scissors } from "lucide-react"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 import { ModeToggle } from "@/components/mode-toggle"
@@ -33,7 +32,7 @@ export function PageHeader({ title, description, children, className }: PageHead
               {companyLogo ? (
                 <img src={companyLogo} alt={companyName} className="h-full w-full object-cover" />
               ) : (
-                <Scissors className="size-4" />
+                <img src="/favicon.svg" alt={companyName} className="h-full w-full object-cover" />
               )}
             </div>
             <div className="flex min-w-0 flex-col gap-0.5">

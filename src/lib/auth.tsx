@@ -3,7 +3,7 @@ import type { Session, User } from "@supabase/supabase-js"
 import { supabase } from "./supabase"
 import type { UserProfile, UserRole } from "./types"
 import { clearConfigCache } from "./config"
-import { resetBusinessProfile, refreshBusinessProfile } from "./business-profile"
+import { claimBusinessProfile } from "./business-profile"
 
 function slugify(name: string): string {
   const slug = name
@@ -63,8 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (userId !== lastUserId.current) {
       lastUserId.current = userId
       clearConfigCache()
-      resetBusinessProfile()
-      if (userId) void refreshBusinessProfile()
+      claimBusinessProfile(userId)
     }
   }, [])
 

@@ -11,6 +11,7 @@ import { fetchBusinessSettings } from "./config"
  */
 
 const STORAGE_KEY = "business_profile_cache_v1"
+const OWNER_KEY = "business_profile_cache_owner_v1"
 const DEFAULT_NAME = "Business Management System"
 
 export interface BusinessProfile {
@@ -43,9 +44,13 @@ function readCache(): BusinessProfile {
   }
 }
 
+/** Which signed-in user the cached profile was fetched for. */
+let cacheOwner: string | null = null
+
 function writeCache(profile: BusinessProfile) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(profile))
+    if (cacheOwner) localStorage.setItem(OWNER_KEY, cacheOwner)
   } catch {
     // private browsing / storage full — fine to skip persisting
   }
@@ -135,6 +140,10 @@ function notify() {
 }
 
 export function refreshBusinessProfile(): Promise<void> {
+  // Nothing to fetch until a signed-in user has claimed the profile (see
+  // claimBusinessProfile) — a fetch made before the stored session is restored
+  // would come back empty and wipe the logo that is already showing.
+  if (!cacheOwner) return Promise.resolve()
   if (inFlight) return inFlight
   inFlight = fetchBusinessSettings()
     .then((settings) => {
@@ -153,6 +162,37 @@ export function refreshBusinessProfile(): Promise<void> {
   return inFlight
 }
 
+/**
+ * Called whenever the signed-in user is known or changes. The cached name and
+ * logo belong to one specific user: reopening the app as the same user keeps
+ * showing their shop's logo straight away (no flash of a placeholder) while it
+ * refreshes in the background; any other user, or nobody, starts clean so one
+ * shop's branding never shows for another account.
+ */
+export function claimBusinessProfile(userId: string | null) {
+  if (!userId) {
+    resetBusinessProfile()
+    return
+  }
+  let storedOwner: string | null = null
+  try {
+    storedOwner = localStorage.getItem(OWNER_KEY)
+  } catch {
+    // ignore
+  }
+  if (storedOwner !== userId) {
+    resetBusinessProfile()
+  }
+  cacheOwner = userId
+  try {
+    localStorage.setItem(OWNER_KEY, userId)
+  } catch {
+    // ignore
+  }
+  applyBrandColors(current)
+  void refreshBusinessProfile()
+}
+
 export function getCachedBusinessProfile(): BusinessProfile {
   return current
 }
@@ -166,8 +206,10 @@ export function getCachedBusinessProfile(): BusinessProfile {
 export function resetBusinessProfile() {
   current = DEFAULT_PROFILE
   inFlight = null
+  cacheOwner = null
   try {
     localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(OWNER_KEY)
   } catch {
     // ignore
   }

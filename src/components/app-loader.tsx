@@ -1,5 +1,3 @@
-import { Scissors } from "lucide-react"
-
 import { useBusinessProfile } from "@/lib/business-profile"
 import { cn } from "@/lib/utils"
 
@@ -14,12 +12,9 @@ function LogoSpinner({ size = "md" }: { size?: keyof typeof SIZE_CLASSES }) {
   return (
     <div className={cn("relative shrink-0", SIZE_CLASSES[size])}>
       <div className="absolute inset-0 animate-spin rounded-full border-2 border-muted border-t-primary" />
-      <div className="absolute inset-[3px] flex items-center justify-center overflow-hidden rounded-full bg-primary text-primary-foreground">
-        {logo ? (
-          <img src={logo} alt="" className="size-full object-cover" />
-        ) : (
-          <Scissors className="size-1/2" />
-        )}
+      <div className="absolute inset-[3px] flex items-center justify-center overflow-hidden rounded-full bg-background">
+        {/* The shop's own logo when it has one, otherwise the app's logo. */}
+        <img src={logo || "/favicon.svg"} alt="" className="size-full object-cover" />
       </div>
     </div>
   )
