@@ -1,12 +1,11 @@
 import { useBusinessProfile } from "@/lib/business-profile"
+import { DEFAULT_SHOP_TYPE, isShopType, type ShopType } from "@/lib/shop-type-core"
+
+export { DEFAULT_SHOP_TYPE, isShopType, type ShopType }
 
 // A shop's type decides the wording, the way items are priced by default and
 // which starter lists it gets. The lists themselves are seeded in the database
 // (apply_shop_type); everything else about the type lives here.
-
-export type ShopType = "embroidery" | "tailor" | "boutique" | "mixed"
-
-export const DEFAULT_SHOP_TYPE: ShopType = "embroidery"
 
 export const SHOP_TYPES: { value: ShopType; label: string; description: string }[] = [
   {
@@ -30,10 +29,6 @@ export const SHOP_TYPES: { value: ShopType; label: string; description: string }
     description: "A bit of everything: embroidery, stitching and alterations.",
   },
 ]
-
-export function isShopType(value: unknown): value is ShopType {
-  return value === "embroidery" || value === "tailor" || value === "boutique" || value === "mixed"
-}
 
 export type PricingMode = "stitch" | "piece" | "metre" | "fixed"
 

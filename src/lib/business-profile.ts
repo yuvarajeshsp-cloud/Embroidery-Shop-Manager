@@ -1,6 +1,6 @@
 import * as React from "react"
 import { fetchBusinessSettings } from "./config"
-import { DEFAULT_SHOP_TYPE, isShopType, type ShopType } from "./shop-type"
+import { DEFAULT_SHOP_TYPE, isShopType, type ShopType } from "./shop-type-core"
 
 /**
  * Company name/logo, shared across the sidebar, page header, document title

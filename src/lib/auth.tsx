@@ -2,7 +2,7 @@ import * as React from "react"
 import type { Session, User } from "@supabase/supabase-js"
 import { supabase } from "./supabase"
 import type { UserProfile, UserRole } from "./types"
-import { DEFAULT_SHOP_TYPE, type ShopType } from "./shop-type"
+import { DEFAULT_SHOP_TYPE, type ShopType } from "./shop-type-core"
 import { clearConfigCache } from "./config"
 import { claimBusinessProfile, refreshBusinessProfile } from "./business-profile"
 
@@ -42,17 +42,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const lastUserId = React.useRef<string | null>(null)
 
   const loadProfile = React.useCallback(async (userId: string) => {
-    const { data, error } = await supabase
-      .from("user_profiles")
-      .select("*")
-      .eq("id", userId)
-      .maybeSingle()
+    // Right after a sign-in the client can briefly send this request before
+    // the new session's token is attached, and it comes back 401 — which used
+    // to leave the app on its loading screen until the next launch. Retry a
+    // couple of times before giving up.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { data, error } = await supabase
+        .from("user_profiles")
+        .select("*")
+        .eq("id", userId)
+        .maybeSingle()
 
-    if (error) {
+      if (!error) {
+        setProfile(data as UserProfile | null)
+        return
+      }
       console.error("Failed to load profile:", error)
-      return
+      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1)))
     }
-    setProfile(data as UserProfile | null)
   }, [])
 
   // Business name/logo (and config dropdown values) are cached outside React
@@ -86,7 +93,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session)
       handleUserChange(session?.user?.id ?? null)
       if (session?.user) {
-        loadProfile(session.user.id)
+        // Not called inline: making Supabase requests from inside this
+        // callback can run before the session is fully applied.
+        const userId = session.user.id
+        setTimeout(() => void loadProfile(userId), 0)
       } else {
         setProfile(null)
       }
