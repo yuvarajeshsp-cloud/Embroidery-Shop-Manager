@@ -33,6 +33,8 @@ import {
 import { useRouter } from "@/lib/router"
 import { fetchConfigItems, getDefaultStitchRate } from "@/lib/config"
 import { toast } from "sonner"
+import { ItemPriceFields, formLineTotal, priceColumns, priceProblem, type ItemPriceValues } from "@/components/item-price-fields"
+import { defaultPricingMode, useShopType, useVocabulary, type PricingMode } from "@/lib/shop-type"
 
 interface DraftItem {
   tempId: string
@@ -40,6 +42,8 @@ interface DraftItem {
   product_description: string
   design_name_number: string
   size_placement: string
+  /** null = whatever is the default for this kind of shop. */
+  pricing_mode: PricingMode | null
   quantity: number
   stitches_per_unit: number
   rate_per_1000_stitches: number
@@ -53,6 +57,12 @@ interface DraftItem {
 export function NewOrderPage() {
   const { navigate } = useRouter()
   const { profile } = useAuth()
+  const shopType = useShopType()
+  const vocab = useVocabulary()
+  const shopTypeRef = React.useRef(shopType)
+  shopTypeRef.current = shopType
+  const modeOf = (item: DraftItem): PricingMode => item.pricing_mode ?? defaultPricingMode(shopType)
+  const priceValuesOf = (item: DraftItem): ItemPriceValues => ({ ...item, pricing_mode: modeOf(item) })
   const [step, setStep] = React.useState(1)
   const [saving, setSaving] = React.useState(false)
   const [customers, setCustomers] = React.useState<Customer[]>([])
@@ -69,6 +79,8 @@ export function NewOrderPage() {
     order_date: new Date().toISOString().split("T")[0],
     customer_id: "",
     required_date: "",
+    trial_date: "",
+    material_received: "",
     priority: "Normal",
     order_status: "Quotation",
     sales_channel: "",
@@ -107,7 +119,13 @@ export function NewOrderPage() {
       setProductTypes(typeItems.map((i) => i.name))
       setSalesChannels(channelItems.map((i) => i.name))
       setDefaultRate(rate)
-      setOrderForm((prev) => ({ ...prev, order_number: orderNumber }))
+      const statusNames = statusItems.map((i) => i.name)
+      const preferred = shopTypeRef.current === "embroidery" ? "Quotation" : statusNames[0]
+      setOrderForm((prev) => ({
+        ...prev,
+        order_number: orderNumber,
+        order_status: statusNames.includes(preferred) ? preferred : statusNames[0] || prev.order_status,
+      }))
       setItems([
         {
           tempId: crypto.randomUUID(),
@@ -115,6 +133,7 @@ export function NewOrderPage() {
           product_description: "",
           design_name_number: "",
           size_placement: "",
+          pricing_mode: null,
           quantity: 1,
           stitches_per_unit: 0,
           rate_per_1000_stitches: rate,
@@ -138,6 +157,7 @@ export function NewOrderPage() {
         product_description: "",
         design_name_number: "",
         size_placement: "",
+        pricing_mode: null,
         quantity: 1,
         stitches_per_unit: 0,
         rate_per_1000_stitches: defaultRate,
@@ -172,12 +192,7 @@ export function NewOrderPage() {
     )
   }
 
-  const subtotal = items.reduce((s, i) => {
-    const unit = i.manual_unit_price !== ""
-      ? parseFloat(i.manual_unit_price)
-      : ((i.stitches_per_unit || 0) / 1000) * (i.rate_per_1000_stitches || 0)
-    return s + unit * (i.quantity || 0)
-  }, 0)
+  const subtotal = items.reduce((s, i) => s + formLineTotal(priceValuesOf(i)), 0)
   const setup = items.reduce((s, i) => s + (i.setup_digitizing_charge || 0), 0)
   const grandTotal = subtotal + setup
 
@@ -192,6 +207,14 @@ export function NewOrderPage() {
       setStep(2)
       return
     }
+    for (const [idx, item] of items.entries()) {
+      const problem = priceProblem(priceValuesOf(item))
+      if (problem) {
+        toast.error(`Item ${idx + 1}: ${problem}`)
+        setStep(2)
+        return
+      }
+    }
     setSaving(true)
     try {
       let orderNumber = orderForm.order_number
@@ -204,6 +227,8 @@ export function NewOrderPage() {
             order_date: orderForm.order_date,
             customer_id: orderForm.customer_id,
             required_date: orderForm.required_date || null,
+            trial_date: orderForm.trial_date || null,
+            material_received: orderForm.material_received.trim() || null,
             priority: orderForm.priority,
             order_status: orderForm.order_status,
             sales_channel: orderForm.sales_channel || null,
@@ -235,11 +260,7 @@ export function NewOrderPage() {
         product_description: item.product_description || null,
         design_name_number: item.design_name_number || null,
         size_placement: item.size_placement || null,
-        quantity: item.quantity || 1,
-        stitches_per_unit: item.stitches_per_unit || 0,
-        rate_per_1000_stitches: item.rate_per_1000_stitches || 0,
-        manual_unit_price: item.manual_unit_price !== "" ? parseFloat(item.manual_unit_price) : null,
-        setup_digitizing_charge: item.setup_digitizing_charge || 0,
+        ...priceColumns(priceValuesOf(item)),
         notes: item.notes || null,
       }))
 
@@ -400,6 +421,27 @@ export function NewOrderPage() {
                 />
               </div>
             </div>
+            {vocab.usesTrialDate && (
+              <div className="flex min-w-0 flex-col gap-2">
+                <Label>Trial / Fitting Date</Label>
+                <Input
+                  type="date"
+                  className="min-w-0 px-2 text-sm"
+                  value={orderForm.trial_date}
+                  onChange={(e) => setOrderForm({ ...orderForm, trial_date: e.target.value })}
+                />
+              </div>
+            )}
+            {vocab.usesMaterialReceived && (
+              <div className="flex flex-col gap-2">
+                <Label>Material / Fabric Received</Label>
+                <Input
+                  placeholder="e.g. 2.5 m cotton, lining, buttons"
+                  value={orderForm.material_received}
+                  onChange={(e) => setOrderForm({ ...orderForm, material_received: e.target.value })}
+                />
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-2">
                 <Label>Order Status</Label>
@@ -470,15 +512,13 @@ export function NewOrderPage() {
           <CardContent className="flex flex-col gap-4">
             {items.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
-                No items added yet. Click "Add Item" to add embroidery items.
+                No items added yet. Click "Add Item" to add the first one.
               </p>
             ) : (
               <div className="flex flex-col gap-4">
                 {items.map((item, idx) => {
-                  const calcPrice = ((item.stitches_per_unit || 0) / 1000) * (item.rate_per_1000_stitches || 0)
-                  const useManual = item.manual_unit_price !== ""
-                  const unitPrice = useManual ? parseFloat(item.manual_unit_price) : calcPrice
-                  const lineTotal = unitPrice * (item.quantity || 0)
+                  const values = priceValuesOf(item)
+                  const lineTotal = formLineTotal(values)
                   return (
                     <div key={item.tempId} className="rounded-lg border p-4">
                       <div className="mb-3 flex items-center justify-between">
@@ -487,73 +527,26 @@ export function NewOrderPage() {
                           <Trash2 className="size-3.5" />
                         </Button>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-4">
                         <div className="flex flex-col gap-1">
-                          <Label className="text-xs">Product Type</Label>
+                          <Label className="text-xs">{vocab.productLabel}</Label>
                           <Select
                             value={item.product_type}
                             onValueChange={(v) => updateItem(item.tempId, { product_type: v })}
                           >
-                            <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                               {productTypes.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="flex flex-col gap-1">
-                          <Label className="text-xs">Quantity</Label>
-                          <Input
-                            type="number"
-                            min={1}
-                            className="h-8"
-                            value={Number.isNaN(item.quantity) ? "" : item.quantity}
-                            onChange={(e) => updateItem(item.tempId, { quantity: e.target.value === "" ? NaN : parseInt(e.target.value, 10) })}
-                          />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <Label className="text-xs">Stitches/Unit</Label>
-                          <Input
-                            type="number"
-                            min={0}
-                            className="h-8"
-                            value={Number.isNaN(item.stitches_per_unit) ? "" : item.stitches_per_unit}
-                            onChange={(e) => updateItem(item.tempId, { stitches_per_unit: e.target.value === "" ? NaN : parseInt(e.target.value, 10) })}
-                          />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <Label className="text-xs">Rate/1K Stitches</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            className="h-8"
-                            value={Number.isNaN(item.rate_per_1000_stitches) ? "" : item.rate_per_1000_stitches}
-                            onChange={(e) => updateItem(item.tempId, { rate_per_1000_stitches: e.target.value === "" ? NaN : parseFloat(e.target.value) })}
-                          />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <Label className="text-xs">Setup/Digitizing</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            className="h-8"
-                            value={Number.isNaN(item.setup_digitizing_charge) ? "" : item.setup_digitizing_charge}
-                            onChange={(e) => updateItem(item.tempId, { setup_digitizing_charge: e.target.value === "" ? NaN : parseFloat(e.target.value) })}
-                          />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <Label className="text-xs">Manual Unit Price</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            className="h-8"
-                            placeholder="Auto"
-                            value={item.manual_unit_price}
-                            onChange={(e) => updateItem(item.tempId, { manual_unit_price: e.target.value })}
-                          />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <Label className="text-xs">Line Total</Label>
-                          <div className="flex h-8 items-center font-medium">{formatCurrency(lineTotal)}</div>
+                        <ItemPriceFields
+                          values={values}
+                          onChange={(patch) => updateItem(item.tempId, patch)}
+                        />
+                        <div className="flex items-center justify-between border-t pt-3 text-sm">
+                          <span className="text-muted-foreground">Line Total</span>
+                          <span className="font-semibold">{formatCurrency(lineTotal)}</span>
                         </div>
                       </div>
                       <div className="mt-2 flex flex-col gap-1">
@@ -638,6 +631,12 @@ export function NewOrderPage() {
                 <span className="text-xs text-muted-foreground">Delivery Date</span>
                 <span className="text-sm">{orderForm.required_date || "—"}</span>
               </div>
+              {vocab.usesTrialDate && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground">Trial / Fitting Date</span>
+                  <span className="text-sm">{orderForm.trial_date || "—"}</span>
+                </div>
+              )}
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-muted-foreground">Priority</span>
                 <span className="text-sm">{orderForm.priority}</span>
@@ -652,10 +651,7 @@ export function NewOrderPage() {
               <div className="border-b p-3 text-sm font-medium">Items ({items.length})</div>
               <div className="flex flex-col gap-2 p-3">
                 {items.map((item, idx) => {
-                  const calcPrice = ((item.stitches_per_unit || 0) / 1000) * (item.rate_per_1000_stitches || 0)
-                  const useManual = item.manual_unit_price !== ""
-                  const unitPrice = useManual ? parseFloat(item.manual_unit_price) : calcPrice
-                  const lineTotal = unitPrice * (item.quantity || 0)
+                  const lineTotal = formLineTotal(priceValuesOf(item))
                   const label = item.product_description || item.design_name_number
                   return (
                     <div key={item.tempId} className="flex items-center justify-between text-sm">
@@ -672,7 +668,7 @@ export function NewOrderPage() {
                 <span>Subtotal</span><span>{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span>Setup/Digitizing</span><span>{formatCurrency(setup)}</span>
+                <span>{vocab.setupLabel}</span><span>{formatCurrency(setup)}</span>
               </div>
               <div className="flex justify-between border-t pt-1 text-sm font-bold">
                 <span>Total</span><span>{formatCurrency(grandTotal)}</span>

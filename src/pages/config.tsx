@@ -5,6 +5,7 @@ import { BUSINESS_PROFILE_FIELDS, PRODUCTION_BOARD_STAGE_CATEGORY, clearConfigCa
 import { refreshBusinessProfile } from "@/lib/business-profile"
 import type { ConfigItem } from "@/lib/types"
 import { PageHeader } from "@/components/page-header"
+import { ShopTypeCard } from "@/components/shop-type-card"
 import { PageLoader } from "@/components/app-loader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -240,6 +241,8 @@ export function ConfigPage() {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
       <PageHeader title="Configuration" description="Manage dropdown values and business settings" />
+
+      <ShopTypeCard onApplied={() => { void loadItems(); void loadBusinessProfile() }} />
 
       <Card>
         <CardHeader>

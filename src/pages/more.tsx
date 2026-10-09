@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useTheme } from "@/components/theme-provider"
 import { MORE_GROUPS } from "@/lib/more-nav"
 import { allowedRouteNames } from "@/lib/permissions"
+import { useVocabulary } from "@/lib/shop-type"
 import { useRouter } from "@/lib/router"
 import { useAuth } from "@/lib/use-auth"
 
@@ -21,6 +22,7 @@ export function MorePage() {
   const { theme, setTheme } = useTheme()
   const allowed = allowedRouteNames(profile?.role)
   const ThemeIcon = THEME_ICON[theme]
+  const vocab = useVocabulary()
 
   const groups = MORE_GROUPS.map((group) => ({
     ...group,
@@ -43,7 +45,7 @@ export function MorePage() {
                 return (
                   <button key={item.label} type="button" className={rowClass} onClick={() => navigate(item.route)}>
                     <Icon className="size-4 text-muted-foreground" />
-                    <span className="flex-1">{item.label}</span>
+                    <span className="flex-1">{item.route.name === "production" ? vocab.boardName : item.label}</span>
                     <ChevronRight className="size-4 text-muted-foreground" />
                   </button>
                 )
@@ -73,6 +75,8 @@ export function MorePage() {
           </CardContent>
         </Card>
       </section>
+
+      <p className="pb-2 text-center text-xs text-muted-foreground">Version {__APP_VERSION__}</p>
     </div>
   )
 }

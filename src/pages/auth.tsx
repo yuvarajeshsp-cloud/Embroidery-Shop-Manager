@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/lib/use-auth"
+import { SHOP_TYPES, DEFAULT_SHOP_TYPE, type ShopType } from "@/lib/shop-type"
+import { cn } from "@/lib/utils"
 import { authenticateWithBiometry, getBiometryAvailability, isBiometricUnlockEnabled, setBiometricUnlockEnabled } from "@/lib/biometric-unlock"
 import { getBiometricCredentials, hasBiometricCredentials, saveBiometricCredentials, clearBiometricCredentials } from "@/lib/biometric-credentials"
 
@@ -140,6 +142,7 @@ export function AuthScreen() {
   }
 
   const [signUpShopName, setSignUpShopName] = React.useState("")
+  const [signUpShopType, setSignUpShopType] = React.useState<ShopType>(DEFAULT_SHOP_TYPE)
   const [signUpName, setSignUpName] = React.useState("")
   const [signUpEmail, setSignUpEmail] = React.useState("")
   const [signUpPassword, setSignUpPassword] = React.useState("")
@@ -162,7 +165,7 @@ export function AuthScreen() {
     e.preventDefault()
     setError(null)
     setLoading(true)
-    const { error } = await signUp(signUpEmail, signUpPassword, signUpName, signUpShopName, signUpPhone)
+    const { error } = await signUp(signUpEmail, signUpPassword, signUpName, signUpShopName, signUpPhone, signUpShopType)
     setLoading(false)
     if (error) setError(error)
   }
@@ -317,6 +320,29 @@ export function AuthScreen() {
                     />
                     <p className="text-xs text-muted-foreground">
                       Creates your own private workspace — you'll be its Administrator.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label>What kind of shop is it?</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {SHOP_TYPES.map((t) => (
+                        <button
+                          key={t.value}
+                          type="button"
+                          onClick={() => setSignUpShopType(t.value)}
+                          aria-pressed={signUpShopType === t.value}
+                          className={cn(
+                            "flex flex-col gap-0.5 rounded-lg border p-2.5 text-left transition-colors",
+                            signUpShopType === t.value ? "border-primary bg-primary/10" : "hover:bg-accent",
+                          )}
+                        >
+                          <span className="text-sm font-medium">{t.label}</span>
+                          <span className="text-[11px] leading-snug text-muted-foreground">{t.description}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Sets up the right order stages, item types and wording. You can change it later in Configuration.
                     </p>
                   </div>
                   <div className="flex flex-col gap-2">

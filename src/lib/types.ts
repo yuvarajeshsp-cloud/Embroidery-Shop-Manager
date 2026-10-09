@@ -74,6 +74,8 @@ export interface Order {
   order_date: string
   customer_id: string
   required_date: string | null
+  trial_date: string | null
+  material_received: string | null
   priority: string
   order_status: string
   actual_delivery_date: string | null
@@ -99,6 +101,7 @@ export interface OrderItem {
   design_name_number: string | null
   size_placement: string | null
   quantity: number
+  pricing_mode: "stitch" | "piece" | "metre" | "fixed"
   stitches_per_unit: number
   rate_per_1000_stitches: number
   manual_unit_price: number | null

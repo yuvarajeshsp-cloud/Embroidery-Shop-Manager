@@ -14,9 +14,6 @@ import {
   Shirt,
   Palette,
   Ruler,
-  Hash,
-  Sparkles,
-  IndianRupee,
   StickyNote,
   ImageIcon,
 } from "lucide-react"
@@ -73,6 +70,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { ItemPriceFields, formLineTotal, formUnitPrice, priceColumns, priceProblem, type ItemPriceValues } from "@/components/item-price-fields"
+import { isTerminalStatus, defaultPricingMode, itemQuantityText, pricingModeOf, useShopType, useVocabulary } from "@/lib/shop-type"
 import { OrderStatusBadge, PriorityBadge, PaymentStatusBadge, PaymentMethodBadge, PaymentRecordStatusBadge, ExpenseCategoryBadge } from "@/components/status-badges"
 import { Spinner } from "@/components/ui/spinner"
 import { useRouter } from "@/lib/router"
@@ -218,6 +217,7 @@ export function OrdersPage() {
     { key: "order_status", label: "Status", value: (o) => o.order_status },
     { key: "priority", label: "Priority", value: (o) => o.priority },
     { key: "required_date", label: "Delivery Date", value: (o) => (o.required_date ? formatDate(o.required_date) : "") },
+    { key: "trial_date", label: "Trial Date", value: (o) => (o.trial_date ? formatDate(o.trial_date) : "") },
     { key: "sales_channel", label: "Sales Channel", value: (o) => o.sales_channel || "" },
     { key: "assigned_to", label: "Assigned To", value: (o) => (o.assigned_to && assigneeMap.get(o.assigned_to)) || "Unassigned" },
     { key: "customer_po_reference", label: "PO Reference", value: (o) => o.customer_po_reference || "" },
@@ -302,7 +302,7 @@ export function OrdersPage() {
               {filtered.map((o) => {
                 const total = orderTotal(o.order_items || [])
                 const payStatus = derivePaymentStatus(o.order_items || [], o.payments || [])
-                const overdue = isOverdue(o.required_date) && o.order_status !== "Delivered" && o.order_status !== "Cancelled"
+                const overdue = isOverdue(o.required_date) && !isTerminalStatus(o.order_status)
                 return (
                   <button
                     key={o.id}
@@ -370,7 +370,7 @@ export function OrdersPage() {
                 {filtered.map((o) => {
                   const total = orderTotal(o.order_items || [])
                   const payStatus = derivePaymentStatus(o.order_items || [], o.payments || [])
-                  const overdue = isOverdue(o.required_date) && o.order_status !== "Delivered" && o.order_status !== "Cancelled"
+                  const overdue = isOverdue(o.required_date) && !isTerminalStatus(o.order_status)
                   return (
                     <TableRow
                       key={o.id}
@@ -457,6 +457,22 @@ export function OrderDetailPage({ id }: { id: string }) {
   const [assignableUsers, setAssignableUsers] = React.useState<UserProfile[]>([])
 
   const canReassign = profile?.role === "Administrator" || profile?.role === "Manager"
+  const vocab = useVocabulary()
+  const [editingMaterial, setEditingMaterial] = React.useState(false)
+  const [materialDraft, setMaterialDraft] = React.useState("")
+
+  async function handleOrderField(patch: { trial_date?: string | null; material_received?: string | null }) {
+    if (!order) return
+    const { error } = await supabase
+      .from("orders")
+      .update({ ...patch, updated_at: new Date().toISOString(), updated_by: profile?.id })
+      .eq("id", order.id)
+    if (error) {
+      toast.error("Failed to save")
+      return
+    }
+    setOrder({ ...order, ...patch } as Order)
+  }
 
   React.useEffect(() => {
     fetchConfigItems("order_status").then((items) => setOrderStatuses(items.map((i) => i.name)))
@@ -547,6 +563,7 @@ export function OrderDetailPage({ id }: { id: string }) {
 
   const total = orderTotal(items)
   const setup = orderSetupCharges(items)
+  const anyStitchItem = items.some((i) => pricingModeOf(i) === "stitch")
   const subtotal = total - setup
   const paid = orderAmountPaid(payments)
   const balance = orderBalanceDue(items, payments)
@@ -579,12 +596,60 @@ export function OrderDetailPage({ id }: { id: string }) {
               <span className="text-sm">{formatDate(order.order_date)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-xs text-muted-foreground">Required Date</span>
+              <span className="text-xs text-muted-foreground">Delivery Date</span>
               <span className={cn("text-sm", isOverdue(order.required_date) && "font-medium text-red-600")}>
                 {formatDate(order.required_date)}
                 {isOverdue(order.required_date) && " (Overdue)"}
               </span>
             </div>
+            {(vocab.usesTrialDate || order.trial_date) && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-muted-foreground">Trial / Fitting</span>
+                {canReassign ? (
+                  <Input
+                    type="date"
+                    className="h-7 w-[150px] px-2 text-xs"
+                    value={order.trial_date || ""}
+                    onChange={(e) => handleOrderField({ trial_date: e.target.value || null })}
+                  />
+                ) : (
+                  <span className="text-sm">{formatDate(order.trial_date)}</span>
+                )}
+              </div>
+            )}
+            {(vocab.usesMaterialReceived || order.material_received) && (
+              <div className="flex items-start justify-between gap-3">
+                <span className="shrink-0 text-xs text-muted-foreground">Material Received</span>
+                {editingMaterial ? (
+                  <Input
+                    autoFocus
+                    className="h-7 text-xs"
+                    value={materialDraft}
+                    onChange={(e) => setMaterialDraft(e.target.value)}
+                    onBlur={() => {
+                      setEditingMaterial(false)
+                      const next = materialDraft.trim() || null
+                      if (next !== (order.material_received || null)) void handleOrderField({ material_received: next })
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") (e.target as HTMLInputElement).blur()
+                    }}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    disabled={!canReassign}
+                    className="text-right text-sm enabled:hover:underline"
+                    onClick={() => {
+                      setMaterialDraft(order.material_received || "")
+                      setEditingMaterial(true)
+                    }}
+                  >
+                    {order.material_received || (canReassign ? "Add…" : "—")}
+                  </button>
+                )}
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-xs text-muted-foreground">Priority</span>
               <PriorityBadge priority={order.priority} />
@@ -637,7 +702,7 @@ export function OrderDetailPage({ id }: { id: string }) {
               <span className="text-sm">{formatCurrency(subtotal)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-xs text-muted-foreground">Setup/Digitizing</span>
+              <span className="text-xs text-muted-foreground">{vocab.setupLabel}</span>
               <span className="text-sm">{formatCurrency(setup)}</span>
             </div>
             <div className="flex justify-between border-t pt-2">
@@ -804,12 +869,18 @@ export function OrderDetailPage({ id }: { id: string }) {
                     <div className="text-sm">{item.product_description}</div>
                   )}
                   {item.design_name_number && (
-                    <div className="text-xs text-muted-foreground">Design: {item.design_name_number}</div>
+                    <div className="text-xs text-muted-foreground">{vocab.designLabel.split("/")[0].trim()}: {item.design_name_number}</div>
                   )}
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                    <span>Qty {item.quantity}</span>
-                    <span>{formatNumber(item.stitches_per_unit)} stitches</span>
-                    <span>Rate {item.rate_per_1000_stitches.toFixed(2)}/1K</span>
+                    {pricingModeOf(item) === "stitch" ? (
+                      <>
+                        <span>Qty {item.quantity}</span>
+                        <span>{formatNumber(item.stitches_per_unit)} stitches</span>
+                        <span>Rate {item.rate_per_1000_stitches.toFixed(2)}/1K</span>
+                      </>
+                    ) : (
+                      <span>{itemQuantityText(item)}</span>
+                    )}
                   </div>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs text-muted-foreground">
@@ -827,10 +898,10 @@ export function OrderDetailPage({ id }: { id: string }) {
                   <TableHead>#</TableHead>
                   <TableHead>Product</TableHead>
                   <TableHead>Description</TableHead>
-                  <TableHead>Design</TableHead>
+                  <TableHead>{vocab.designLabel.split("/")[0].trim()}</TableHead>
                   <TableHead className="text-right">Qty</TableHead>
-                  <TableHead className="text-right">Stitches</TableHead>
-                  <TableHead className="text-right">Rate/1K</TableHead>
+                  {anyStitchItem && <TableHead className="text-right">Stitches</TableHead>}
+                  {anyStitchItem && <TableHead className="text-right">Rate/1K</TableHead>}
                   <TableHead className="text-right">Unit Price</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                   <TableHead></TableHead>
@@ -843,9 +914,17 @@ export function OrderDetailPage({ id }: { id: string }) {
                     <TableCell><Badge variant="outline">{item.product_type}</Badge></TableCell>
                     <TableCell className="max-w-[200px] text-sm">{item.product_description || "—"}</TableCell>
                     <TableCell className="text-sm">{item.design_name_number || "—"}</TableCell>
-                    <TableCell className="text-right">{item.quantity}</TableCell>
-                    <TableCell className="text-right">{formatNumber(item.stitches_per_unit)}</TableCell>
-                    <TableCell className="text-right">{item.rate_per_1000_stitches.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">{pricingModeOf(item) === "stitch" ? item.quantity : itemQuantityText(item)}</TableCell>
+                    {anyStitchItem && (
+                      <TableCell className="text-right">
+                        {pricingModeOf(item) === "stitch" ? formatNumber(item.stitches_per_unit) : "—"}
+                      </TableCell>
+                    )}
+                    {anyStitchItem && (
+                      <TableCell className="text-right">
+                        {pricingModeOf(item) === "stitch" ? item.rate_per_1000_stitches.toFixed(2) : "—"}
+                      </TableCell>
+                    )}
                     <TableCell className="text-right">{formatCurrency(orderItemUnitPrice(item))}</TableCell>
                     <TableCell className="text-right font-medium">{formatCurrency(orderItemTotal(item))}</TableCell>
                     <TableCell>
@@ -1252,15 +1331,18 @@ function OrderItemForm({
   const [savedItemId, setSavedItemId] = React.useState<string | null>(item?.id ?? null)
   const [productTypes, setProductTypes] = React.useState<string[]>([])
   const [defaultRate, setDefaultRate] = React.useState(10)
+  const shopType = useShopType()
+  const vocab = useVocabulary()
   const [form, setForm] = React.useState({
     product_type: item?.product_type || "Other",
     product_description: item?.product_description || "",
     design_name_number: item?.design_name_number || "",
     size_placement: item?.size_placement || "",
+    pricing_mode: item ? pricingModeOf(item) : defaultPricingMode(shopType),
     quantity: item?.quantity || 1,
     stitches_per_unit: item?.stitches_per_unit || 0,
     rate_per_1000_stitches: item?.rate_per_1000_stitches || 10,
-    manual_unit_price: item?.manual_unit_price ?? "",
+    manual_unit_price: item?.manual_unit_price != null ? String(item.manual_unit_price) : "",
     setup_digitizing_charge: item?.setup_digitizing_charge || 0,
     notes: item?.notes || "",
   })
@@ -1276,14 +1358,18 @@ function OrderItemForm({
     }
   }, [defaultRate, item])
 
-  const calculatedPrice = ((form.stitches_per_unit || 0) / 1000) * (form.rate_per_1000_stitches || 0)
-  const useManual = form.manual_unit_price !== "" && form.manual_unit_price !== null
-  const unitPrice = useManual ? parseFloat(form.manual_unit_price as string) : calculatedPrice
-  const lineTotal = unitPrice * (form.quantity || 0)
+  const priceValues: ItemPriceValues = form
+  const unitPrice = formUnitPrice(priceValues)
+  const lineTotal = formLineTotal(priceValues)
 
   async function handleSave() {
     if (!form.product_description.trim() && form.product_type === "Other") {
       toast.error("Description is required for 'Other' product type")
+      return
+    }
+    const problem = priceProblem(priceValues)
+    if (problem) {
+      toast.error(problem)
       return
     }
     setSaving(true)
@@ -1295,11 +1381,7 @@ function OrderItemForm({
         product_description: form.product_description || null,
         design_name_number: form.design_name_number || null,
         size_placement: form.size_placement || null,
-        quantity: form.quantity || 1,
-        stitches_per_unit: form.stitches_per_unit || 0,
-        rate_per_1000_stitches: form.rate_per_1000_stitches || 0,
-        manual_unit_price: useManual ? parseFloat(form.manual_unit_price as string) : null,
-        setup_digitizing_charge: form.setup_digitizing_charge || 0,
+        ...priceColumns(priceValues),
         notes: form.notes || null,
       }
       if (savedItemId) {
@@ -1338,7 +1420,7 @@ function OrderItemForm({
           <div className="grid grid-cols-2 items-end gap-5">
             <div className="flex flex-col gap-2">
               <Label className="flex items-center gap-1.5 font-normal text-muted-foreground">
-                <Shirt className="size-3.5" /> Product Type
+                <Shirt className="size-3.5" /> {vocab.productLabel}
               </Label>
               <Select value={form.product_type} onValueChange={(v) => setForm({ ...form, product_type: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -1349,7 +1431,7 @@ function OrderItemForm({
             </div>
             <div className="flex flex-col gap-2">
               <Label className="flex items-center gap-1.5 font-normal text-muted-foreground">
-                <Palette className="size-3.5" /> Design Name/Number
+                <Palette className="size-3.5" /> {vocab.designLabel}
               </Label>
               <Input
                 value={form.design_name_number}
@@ -1367,81 +1449,24 @@ function OrderItemForm({
           </div>
           <div className="flex flex-col gap-2">
             <Label className="flex items-center gap-1.5 font-normal text-muted-foreground">
-              <Ruler className="size-3.5" /> Size / Placement
+              <Ruler className="size-3.5" /> {vocab.sizeLabel}
             </Label>
             <Input
               value={form.size_placement}
               onChange={(e) => setForm({ ...form, size_placement: e.target.value })}
-              placeholder="e.g. Left Chest 4 inch"
+              placeholder={vocab.sizePlaceholder}
             />
           </div>
-          <div className="grid grid-cols-3 items-end gap-5">
-            <div className="flex flex-col gap-2">
-              <Label className="flex items-center gap-1.5 font-normal text-muted-foreground">
-                <Hash className="size-3.5" /> Quantity
-              </Label>
-              <Input
-                type="number"
-                min={1}
-                value={Number.isNaN(form.quantity) ? "" : form.quantity}
-                onChange={(e) => setForm({ ...form, quantity: e.target.value === "" ? NaN : parseInt(e.target.value, 10) })}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label className="flex items-center gap-1.5 font-normal text-muted-foreground">
-                <Sparkles className="size-3.5" /> Stitches/Unit
-              </Label>
-              <Input
-                type="number"
-                min={0}
-                value={Number.isNaN(form.stitches_per_unit) ? "" : form.stitches_per_unit}
-                onChange={(e) => setForm({ ...form, stitches_per_unit: e.target.value === "" ? NaN : parseInt(e.target.value, 10) })}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label className="flex items-center gap-1.5 font-normal text-muted-foreground">
-                <IndianRupee className="size-3.5" /> Rate/1K Stitches
-              </Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={Number.isNaN(form.rate_per_1000_stitches) ? "" : form.rate_per_1000_stitches}
-                onChange={(e) => setForm({ ...form, rate_per_1000_stitches: e.target.value === "" ? NaN : parseFloat(e.target.value) })}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 items-end gap-5">
-            <div className="flex flex-col gap-2">
-              <Label className="font-normal text-muted-foreground">Unit Price (Manual)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="Auto-calculate"
-                value={form.manual_unit_price}
-                onChange={(e) => setForm({ ...form, manual_unit_price: e.target.value })}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label className="font-normal text-muted-foreground">Setup/Digitizing Charge</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={Number.isNaN(form.setup_digitizing_charge) ? "" : form.setup_digitizing_charge}
-                onChange={(e) => setForm({ ...form, setup_digitizing_charge: e.target.value === "" ? NaN : parseFloat(e.target.value) })}
-              />
-            </div>
-          </div>
+          <ItemPriceFields values={priceValues} onChange={(patch) => setForm({ ...form, ...patch })} />
           <div className="flex flex-col gap-1 border-t pt-4 text-sm">
             <div className="flex justify-between text-muted-foreground">
-              <span>Calculated Price (stitch-based)</span>
-              <span>{formatCurrency(calculatedPrice)}</span>
-            </div>
-            <div className="flex justify-between text-muted-foreground">
-              <span>Unit Price ({useManual ? "Manual" : "Calculated"})</span>
+              <span>Price per {form.pricing_mode === "metre" ? "metre" : form.pricing_mode === "fixed" ? "item" : "unit"}</span>
               <span>{formatCurrency(unitPrice)}</span>
             </div>
             <div className="flex justify-between pt-1.5 text-base font-semibold">
-              <span>Line Total ({form.quantity || 0} × {formatCurrency(unitPrice)})</span>
+              <span>
+                Line Total ({form.pricing_mode === "fixed" ? "1" : form.quantity || 0} × {formatCurrency(unitPrice)})
+              </span>
               <span>{formatCurrency(lineTotal)}</span>
             </div>
           </div>

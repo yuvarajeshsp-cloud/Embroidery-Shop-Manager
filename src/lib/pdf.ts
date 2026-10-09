@@ -16,6 +16,7 @@ import {
   derivePaymentStatus,
 } from "./helpers"
 import { fetchBusinessSettings } from "./config"
+import { DEFAULT_SHOP_TYPE, isShopType, pricingModeOf, vocabularyFor } from "./shop-type"
 
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -243,7 +244,9 @@ export async function generateOrderPdf(data: OrderPdfData): Promise<Blob> {
   doc.setTextColor(255, 255, 255)
   doc.setFont("helvetica", "bold")
   doc.setFontSize(8)
-  const headers = ["#", "Product", "Description", "Qty", "Stitches", "Unit Price", "Total"]
+  const anyStitch = items.some((i) => pricingModeOf(i) === "stitch")
+  const extraChargesLabel = vocabularyFor(isShopType(settings.shop_type) ? settings.shop_type : DEFAULT_SHOP_TYPE).setupLabel.replace(/\s*\(.*\)$/, "")
+  const headers = ["#", "Product", "Description", "Qty", anyStitch ? "Stitches" : "Unit", "Unit Price", "Total"]
   for (let i = 0; i < headers.length; i++) {
     const align = i >= 3 ? "right" : "left"
     const x = align === "right" ? colX[i] + colWidths[i] - 6 : colX[i] + 6
@@ -279,7 +282,13 @@ export async function generateOrderPdf(data: OrderPdfData): Promise<Blob> {
     doc.text(desc[0] || "", colX[2] + 6, y + 15)
 
     doc.text(String(item.quantity), colX[3] + colWidths[3] - 6, y + 15, { align: "right" })
-    doc.text(formatNumber(item.stitches_per_unit), colX[4] + colWidths[4] - 6, y + 15, { align: "right" })
+    const mode = pricingModeOf(item)
+    doc.text(
+      mode === "stitch" ? formatNumber(item.stitches_per_unit) : anyStitch ? "-" : mode === "metre" ? "m" : mode === "fixed" ? "fixed" : "pcs",
+      colX[4] + colWidths[4] - 6,
+      y + 15,
+      { align: "right" },
+    )
     doc.text(formatPdfCurrency(orderItemUnitPrice(item)), colX[5] + colWidths[5] - 6, y + 15, { align: "right" })
     doc.text(formatPdfCurrency(orderItemTotal(item)), colX[6] + colWidths[6] - 6, y + 15, { align: "right" })
 
@@ -307,7 +316,7 @@ export async function generateOrderPdf(data: OrderPdfData): Promise<Blob> {
 
   const summaryRows: [string, string, boolean][] = [
     ["Subtotal", formatPdfCurrency(subtotal), false],
-    ["Setup / Digitizing", formatPdfCurrency(setup), false],
+    [extraChargesLabel, formatPdfCurrency(setup), false],
     ["Total", formatPdfCurrency(total), true],
     ["Paid", formatPdfCurrency(paid), false],
     ["Balance Due", formatPdfCurrency(balance), true],

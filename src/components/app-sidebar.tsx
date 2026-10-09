@@ -34,6 +34,7 @@ import { useRouter, type Route } from "@/lib/router"
 import { useBusinessProfile } from "@/lib/business-profile"
 import { useAuth } from "@/lib/use-auth"
 import { usePlatformAdmin } from "@/lib/platform-admin"
+import { useVocabulary } from "@/lib/shop-type"
 import { allowedRouteNames } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 
@@ -99,6 +100,7 @@ export function AppSidebar() {
   const { profile, user, signOut } = useAuth()
   const { companyName, companyLogo } = useBusinessProfile()
   const isPlatformAdmin = usePlatformAdmin()
+  const vocab = useVocabulary()
 
   const displayName =
     profile?.display_name ||
@@ -156,7 +158,7 @@ export function AppSidebar() {
                         )}
                       >
                         <Icon className="size-4" />
-                        <span>{item.label}</span>
+                        <span>{item.route.name === "production" ? vocab.boardName : item.label}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   )

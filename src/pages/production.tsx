@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
+import { useVocabulary } from "@/lib/shop-type"
 import { OrderStatusBadge, PriorityBadge } from "@/components/status-badges"
 import { Badge } from "@/components/ui/badge"
 import { useRouter } from "@/lib/router"
@@ -27,6 +28,7 @@ interface BoardColumn {
 }
 
 export function ProductionPage() {
+  const vocab = useVocabulary()
   const [columns, setColumns] = React.useState<BoardColumn[]>([])
   const [loading, setLoading] = React.useState(true)
   const [stages, setStages] = React.useState<string[]>([])
@@ -82,7 +84,7 @@ export function ProductionPage() {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
       <PageHeader
-        title="Production Board"
+        title={vocab.boardName}
         description="Kanban-style board tracking orders by status. Configure stages under Configuration → Production Stages."
       />
 

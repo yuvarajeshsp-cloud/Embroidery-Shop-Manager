@@ -17,8 +17,8 @@ export const HELP_SECTIONS: HelpSection[] = [
     title: "Getting started",
     intro: "Set your shop up once, then work from the Dashboard every day.",
     steps: [
-      "Sign up with your shop name, your name, email, phone number and a password. We send a 6-digit code by SMS (or by email if the SMS can't be delivered) — enter it to finish.",
-      "Open Configuration and fill in your company details, logo and brand colours. These appear on invoices and across the app.",
+      "Sign up with your shop name, what kind of shop it is (embroidery, tailor, boutique or mixed), your name, email, phone number and a password. We send a 6-digit code by SMS (or by email if the SMS can't be delivered) — enter it to finish.",
+      "Open Configuration and fill in your company details, logo and brand colours. These appear on invoices and across the app. The Shop Type card there changes the wording and adds the starter lists for another kind of shop; it never removes anything you already have.",
       "Still in Configuration, review the dropdown lists — order statuses, payment methods, product types, expense categories and so on — and add or rename values to match how your shop works.",
       "Add your team under Users & Roles (see “Team and roles” below).",
       "Add your customers, then create your first order.",
@@ -39,12 +39,13 @@ export const HELP_SECTIONS: HelpSection[] = [
     title: "Creating and managing orders",
     steps: [
       "Tap New Order. Step 1: choose the customer, dates, status, priority, who it is assigned to, and any special instructions.",
-      "Step 2: add items. For each item pick the product type and quantity, then enter the stitches per unit and the rate per 1,000 stitches. The unit price is worked out for you (stitches ÷ 1,000 × rate). If you prefer a fixed price, type it into Manual Unit Price instead.",
-      "Add a Setup/Digitizing charge if you bill one — it is added to the order total on top of the item totals. You can attach a photo or design to each item.",
+      "Step 2: add items. For each item pick the product type, then choose how it is priced. By stitch: enter the quantity, stitches per unit and rate per 1,000 stitches — the unit price is worked out for you (stitches ÷ 1,000 × rate), or type a Manual Unit Price instead. Per piece: quantity and the price of one piece. Per metre: the metres and the price per metre. Fixed price: one price for the whole item.",
+      "Add the extra charge if you bill one (setup/digitizing, lining, padding …) — it is added to the order total on top of the item totals. You can attach a photo or design to each item.",
       "Step 3: review the totals and tap Create Order.",
       "Open any order to change its status, assign it to a team member, add or edit items, record payments, and print or download documents.",
     ],
     tips: [
+      "For tailors and boutiques: set a Trial / Fitting date and note the material or fabric received. Trials due today and this week show on the Dashboard.",
       "Changing the status moves the order along the Production Board.",
       "Overdue orders (past their delivery date and not delivered) are highlighted in red and counted on the Dashboard.",
     ],
@@ -157,7 +158,11 @@ export const FAQ_GROUPS: FaqGroup[] = [
     items: [
       {
         q: "How is the price of an item calculated?",
-        a: "Unit price = stitches per unit ÷ 1,000 × rate per 1,000 stitches. Item total = unit price × quantity. If you enter a Manual Unit Price it is used instead. Any Setup/Digitizing charge is added once on top. The default rate comes from Configuration.",
+        a: "It depends on how the item is priced. By stitch: unit price = stitches per unit ÷ 1,000 × rate per 1,000 stitches (a Manual Unit Price replaces this). Per piece and per metre: unit price × quantity (or metres). Fixed price: the price you enter. Item total = unit price × quantity, and any extra charge (setup/digitizing, lining …) is added once on top. The default stitch rate comes from Configuration.",
+      },
+      {
+        q: "I'm a tailor or boutique — why do I still see embroidery fields?",
+        a: "Choose your kind of shop in Configuration → Shop Type. Items then default to per-piece pricing and the wording changes (Garment, Style, Trial date …). You can still price any individual item by stitch when you add embroidery work.",
       },
       {
         q: "Can I edit or delete an order after creating it?",

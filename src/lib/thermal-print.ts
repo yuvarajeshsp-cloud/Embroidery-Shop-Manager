@@ -2,6 +2,7 @@ import { jsPDF } from "jspdf"
 import { Capacitor } from "@capacitor/core"
 import { fetchBusinessSettings } from "./config"
 import { shareFile, formatPdfCurrency } from "./pdf"
+import { DEFAULT_SHOP_TYPE, isShopType, vocabularyFor } from "./shop-type"
 import {
   formatCurrency,
   formatDate,
@@ -179,6 +180,11 @@ function drawThermalHeader(doc: jsPDF, y: number, settings: BusinessSettings): n
 // page height up front. Instead we draw once on an oversized scratch page to
 // measure how far the content actually goes, then draw again on a page sized
 // to fit that content exactly.
+function extraLabel(settings: Record<string, string>): string {
+  const shop = isShopType(settings.shop_type) ? settings.shop_type : DEFAULT_SHOP_TYPE
+  return vocabularyFor(shop).setupLabel.replace(/\s*\(.*\)$/, "")
+}
+
 function drawThermalInvoiceContent(doc: jsPDF, data: ThermalInvoiceData, settings: BusinessSettings): number {
   const { order, customer, items, payments } = data
 
@@ -251,7 +257,7 @@ function drawThermalInvoiceContent(doc: jsPDF, data: ThermalInvoiceData, setting
   y = drawThermalDivider(doc, y)
   doc.setFontSize(8.5)
   y = drawThermalRow(doc, "Subtotal", formatPdfCurrency(subtotal), y, false)
-  if (setup > 0) y = drawThermalRow(doc, "Setup/Digitizing", formatPdfCurrency(setup), y, false)
+  if (setup > 0) y = drawThermalRow(doc, extraLabel(settings), formatPdfCurrency(setup), y, false)
   doc.setFontSize(10)
   y = drawThermalRow(doc, "TOTAL", formatPdfCurrency(total), y, true)
   doc.setFontSize(8.5)
@@ -375,6 +381,7 @@ async function businessHeaderHtml(): Promise<string> {
 async function buildInvoiceBody(data: ThermalInvoiceData): Promise<string> {
   const { order, customer, items, payments } = data
   const header = await businessHeaderHtml()
+  const settings = await fetchBusinessSettings()
 
   const subtotal = orderTotal(items) - orderSetupCharges(items)
   const setup = orderSetupCharges(items)
@@ -408,7 +415,7 @@ async function buildInvoiceBody(data: ThermalInvoiceData): Promise<string> {
     ${itemRows}
     <div class="divider"></div>
     <div class="row"><span>Subtotal</span><span>${formatCurrency(subtotal)}</span></div>
-    ${setup > 0 ? `<div class="row"><span>Setup/Digitizing</span><span>${formatCurrency(setup)}</span></div>` : ""}
+    ${setup > 0 ? `<div class="row"><span>${escapeHtml(extraLabel(settings))}</span><span>${formatCurrency(setup)}</span></div>` : ""}
     <div class="row bold big"><span>TOTAL</span><span>${formatCurrency(total)}</span></div>
     <div class="row"><span>Paid</span><span>${formatCurrency(paid)}</span></div>
     <div class="row bold"><span>Balance Due</span><span>${formatCurrency(balance)}</span></div>

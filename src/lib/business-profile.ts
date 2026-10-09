@@ -1,5 +1,6 @@
 import * as React from "react"
 import { fetchBusinessSettings } from "./config"
+import { DEFAULT_SHOP_TYPE, isShopType, type ShopType } from "./shop-type"
 
 /**
  * Company name/logo, shared across the sidebar, page header, document title
@@ -19,6 +20,7 @@ export interface BusinessProfile {
   companyLogo: string | null
   sidebarColor: string | null
   buttonColor: string | null
+  shopType: ShopType
 }
 
 const DEFAULT_PROFILE: BusinessProfile = {
@@ -26,6 +28,7 @@ const DEFAULT_PROFILE: BusinessProfile = {
   companyLogo: null,
   sidebarColor: null,
   buttonColor: null,
+  shopType: DEFAULT_SHOP_TYPE,
 }
 
 function readCache(): BusinessProfile {
@@ -38,6 +41,7 @@ function readCache(): BusinessProfile {
       companyLogo: parsed.companyLogo || null,
       sidebarColor: parsed.sidebarColor || null,
       buttonColor: parsed.buttonColor || null,
+      shopType: isShopType(parsed.shopType) ? parsed.shopType : DEFAULT_SHOP_TYPE,
     }
   } catch {
     return DEFAULT_PROFILE
@@ -152,6 +156,7 @@ export function refreshBusinessProfile(): Promise<void> {
         companyLogo: settings.company_logo_data_url || null,
         sidebarColor: settings.sidebar_color || null,
         buttonColor: settings.button_color || null,
+        shopType: isShopType(settings.shop_type) ? settings.shop_type : DEFAULT_SHOP_TYPE,
       }
       writeCache(current)
       notify()

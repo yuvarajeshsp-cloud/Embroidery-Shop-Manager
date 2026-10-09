@@ -1,7 +1,8 @@
 import * as React from "react"
-import { Link2, TrendingUp, AlertTriangle, Clock, Package, IndianRupee } from "lucide-react"
+import { Link2, TrendingUp, AlertTriangle, Clock, Package, IndianRupee, CalendarCheck, CalendarClock } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import { formatCurrency, formatDate, isOverdue, isDueSoon, orderAmountPaid, orderBalanceDue } from "@/lib/helpers"
+import { isInProgressStatus, isTerminalStatus, useVocabulary } from "@/lib/shop-type"
+import { daysFromNow, formatCurrency, formatDate, isOverdue, isDueSoon, orderAmountPaid, orderBalanceDue } from "@/lib/helpers"
 import type { Order, OrderItem, Payment, Customer } from "@/lib/types"
 import { PageHeader } from "@/components/page-header"
 import { PageLoader } from "@/components/app-loader"
@@ -115,6 +116,8 @@ interface DashboardData {
   overdueOrders: number
   dueSoonOrders: number
   inProduction: number
+  trialsToday: number
+  trialsThisWeek: number
   recentOrders: (Order & { customer?: Customer })[]
   urgentOrders: (Order & { customer?: Customer })[]
   trendData: { label: string; orders: number; revenue: number }[]
@@ -124,6 +127,7 @@ interface DashboardData {
 
 export function DashboardPage() {
   const { navigate } = useRouter()
+  const vocab = useVocabulary()
   const [loading, setLoading] = React.useState(true)
   const [rawOrders, setRawOrders] = React.useState<Order[]>([])
   const [rawCustomers, setRawCustomers] = React.useState<Customer[]>([])
@@ -180,8 +184,7 @@ export function DashboardPage() {
         paymentsByOrder.set(p.order_id, arr)
       }
 
-      const activeStatuses = ["Design", "Quotation", "Confirmed", "In Production", "Ready", "On Hold"]
-      const activeOrders = orders.filter((o) => activeStatuses.includes(o.order_status))
+      const activeOrders = orders.filter((o) => !isTerminalStatus(o.order_status))
 
       let totalRevenue = 0
       let pendingPayments = 0
@@ -191,14 +194,16 @@ export function DashboardPage() {
         const paid = orderAmountPaid(pays)
         const balance = orderBalanceDue(oi, pays)
         totalRevenue += paid
-        if (balance > 0 && !["Cancelled", "Delivered"].includes(order.order_status)) {
+        if (balance > 0 && !isTerminalStatus(order.order_status)) {
           pendingPayments += balance
         }
       }
 
       const overdueOrders = activeOrders.filter((o) => isOverdue(o.required_date))
       const dueSoonOrders = activeOrders.filter((o) => isDueSoon(o.required_date) && !isOverdue(o.required_date))
-      const inProduction = orders.filter((o) => o.order_status === "In Production")
+      const inProduction = orders.filter((o) => isInProgressStatus(o.order_status))
+      const trialsToday = activeOrders.filter((o) => o.trial_date && daysFromNow(o.trial_date) === 0)
+      const trialsThisWeek = activeOrders.filter((o) => o.trial_date && daysFromNow(o.trial_date) >= 0 && daysFromNow(o.trial_date) <= 7)
 
       const recentOrders = orders.slice(0, 5).map((o) => ({
         ...o,
@@ -275,6 +280,8 @@ export function DashboardPage() {
         overdueOrders: overdueOrders.length,
         dueSoonOrders: dueSoonOrders.length,
         inProduction: inProduction.length,
+        trialsToday: trialsToday.length,
+        trialsThisWeek: trialsThisWeek.length,
         recentOrders,
         urgentOrders,
         trendData,
@@ -293,7 +300,13 @@ export function DashboardPage() {
     { label: "Revenue (Collected)", value: formatCurrency(data.totalRevenue), icon: IndianRupee, color: "text-teal-600" },
     { label: "Pending Payments", value: formatCurrency(data.pendingPayments), icon: AlertTriangle, color: "text-amber-600" },
     { label: "Overdue Orders", value: data.overdueOrders.toString(), icon: Clock, color: "text-red-600" },
-    { label: "In Production", value: data.inProduction.toString(), icon: Link2, color: "text-purple-600" },
+    { label: vocab.inProgressLabel, value: data.inProduction.toString(), icon: Link2, color: "text-purple-600" },
+    ...(vocab.usesTrialDate
+      ? [
+          { label: "Trials Today", value: data.trialsToday.toString(), icon: CalendarCheck, color: "text-sky-600" },
+          { label: "Trials This Week", value: data.trialsThisWeek.toString(), icon: CalendarClock, color: "text-indigo-600" },
+        ]
+      : []),
   ]
 
   const chartConfig = {

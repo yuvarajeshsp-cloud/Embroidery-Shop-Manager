@@ -54,6 +54,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { OrderStatusBadge } from "@/components/status-badges"
+import { isTerminalStatus } from "@/lib/shop-type"
 import { Badge } from "@/components/ui/badge"
 import { useRouter } from "@/lib/router"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -174,7 +175,7 @@ export function ReportsPage() {
 
   // Outstanding balances (within filtered range)
   const outstanding = rangedOrders
-    .filter((o) => o.order_status !== "Cancelled" && o.order_status !== "Delivered")
+    .filter((o) => !isTerminalStatus(o.order_status))
     .map((o) => ({
       ...o,
       balance: orderBalanceDue(o.order_items || [], o.payments || []),

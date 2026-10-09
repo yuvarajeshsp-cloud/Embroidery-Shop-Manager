@@ -2,8 +2,9 @@ import * as React from "react"
 import type { Session, User } from "@supabase/supabase-js"
 import { supabase } from "./supabase"
 import type { UserProfile, UserRole } from "./types"
+import { DEFAULT_SHOP_TYPE, type ShopType } from "./shop-type"
 import { clearConfigCache } from "./config"
-import { claimBusinessProfile } from "./business-profile"
+import { claimBusinessProfile, refreshBusinessProfile } from "./business-profile"
 
 function slugify(name: string): string {
   const slug = name
@@ -26,6 +27,7 @@ export interface AuthContextValue {
     displayName: string,
     shopName: string,
     phone: string,
+    shopType?: ShopType,
   ) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
@@ -105,7 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 
   const signUp = React.useCallback(
-    async (email: string, password: string, displayName: string, shopName: string, phone: string) => {
+    async (email: string, password: string, displayName: string, shopName: string, phone: string, shopType: ShopType = DEFAULT_SHOP_TYPE) => {
       const { data, error } = await supabase.auth.signUp({ email, password })
       if (error) return { error: error.message }
 
@@ -143,6 +145,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (profileError) {
           return { error: profileError.message }
         }
+
+        // Seed the starter lists for the chosen kind of shop. A failure here
+        // must not block sign-up — the shop just keeps the default lists and
+        // the type can be set again from Configuration.
+        const { error: presetError } = await supabase.rpc("apply_shop_type", { p_shop_type: shopType, p_replace: true })
+        if (presetError) console.error("Failed to apply shop type:", presetError)
+        clearConfigCache()
+        void refreshBusinessProfile()
 
         // supabase.auth.signUp() activates the session (and this provider's
         // own auth-state listener fires) before the org/profile above ever
