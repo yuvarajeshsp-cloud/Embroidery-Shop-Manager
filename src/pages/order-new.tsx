@@ -453,7 +453,7 @@ export function NewOrderPage() {
               <Field label="Order Date">
                 <Input
                   type="date"
-                  className="h-9 min-w-0 px-2 text-sm"
+                  className="h-9 min-w-0 px-1.5 text-xs"
                   value={orderForm.order_date}
                   onChange={(e) => setOrderForm({ ...orderForm, order_date: e.target.value })}
                 />
@@ -461,7 +461,7 @@ export function NewOrderPage() {
               <Field label="Delivery Date">
                 <Input
                   type="date"
-                  className="h-9 min-w-0 px-2 text-sm"
+                  className="h-9 min-w-0 px-1.5 text-xs"
                   value={orderForm.required_date}
                   onChange={(e) => setOrderForm({ ...orderForm, required_date: e.target.value })}
                 />
@@ -470,7 +470,7 @@ export function NewOrderPage() {
                 <Field label="Trial / Fitting">
                   <Input
                     type="date"
-                    className="h-9 min-w-0 px-2 text-sm"
+                    className="h-9 min-w-0 px-1.5 text-xs"
                     value={orderForm.trial_date}
                     onChange={(e) => setOrderForm({ ...orderForm, trial_date: e.target.value })}
                   />
