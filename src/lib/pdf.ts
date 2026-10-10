@@ -323,7 +323,7 @@ export async function generateOrderPdf(data: OrderPdfData): Promise<Blob> {
     [extraChargesLabel, formatPdfCurrency(setup), false],
     ...additionalCosts.map((c): [string, string, boolean] => {
       const label = c.cost_type
-      return [label.length > 30 ? `${label.slice(0, 29)}…` : label, formatPdfCurrency(c.amount), false]
+      return [label.length > 30 ? `${label.slice(0, 27)}...` : label, formatPdfCurrency(c.amount), false]
     }),
     ["Total", formatPdfCurrency(total), true],
     ["Paid", formatPdfCurrency(paid), false],

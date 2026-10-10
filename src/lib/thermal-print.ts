@@ -263,7 +263,7 @@ function drawThermalInvoiceContent(doc: jsPDF, data: ThermalInvoiceData, setting
   if (setup > 0) y = drawThermalRow(doc, extraLabel(settings), formatPdfCurrency(setup), y, false)
   for (const cost of additionalCosts) {
     const label = cost.cost_type
-    y = drawThermalRow(doc, label.length > 22 ? `${label.slice(0, 21)}…` : label, formatPdfCurrency(cost.amount), y, false)
+    y = drawThermalRow(doc, label.length > 22 ? `${label.slice(0, 19)}...` : label, formatPdfCurrency(cost.amount), y, false)
   }
   doc.setFontSize(10)
   y = drawThermalRow(doc, "TOTAL", formatPdfCurrency(total), y, true)
