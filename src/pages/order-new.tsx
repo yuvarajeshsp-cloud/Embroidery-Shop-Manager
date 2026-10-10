@@ -376,7 +376,7 @@ export function NewOrderPage() {
             >
               {st.n}
             </div>
-            <span className={`text-sm ${step >= st.n ? "font-medium" : "text-muted-foreground"}`}>{st.label}</span>
+            <span className={`text-sm ${step >= st.n ? "font-medium" : "text-muted-foreground"} ${step === st.n ? "" : "hidden sm:inline"}`}>{st.label}</span>
             {st.n < 3 && <div className="h-px w-6 bg-border" />}
           </div>
         ))}
