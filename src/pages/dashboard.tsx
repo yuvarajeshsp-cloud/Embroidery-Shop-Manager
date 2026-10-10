@@ -3,7 +3,7 @@ import { Link2, TrendingUp, AlertTriangle, Clock, Package, IndianRupee, Calendar
 import { supabase } from "@/lib/supabase"
 import { isInProgressStatus, isTerminalStatus, useVocabulary } from "@/lib/shop-type"
 import { daysFromNow, formatCurrency, formatDate, isOverdue, isDueSoon, orderAmountPaid, orderBalanceDue } from "@/lib/helpers"
-import type { Order, OrderItem, Payment, Customer } from "@/lib/types"
+import type { Order, OrderItem, OrderAdditionalCost, Payment, Customer } from "@/lib/types"
 import { PageHeader } from "@/components/page-header"
 import { PageLoader } from "@/components/app-loader"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -133,6 +133,7 @@ export function DashboardPage() {
   const [rawCustomers, setRawCustomers] = React.useState<Customer[]>([])
   const [rawItems, setRawItems] = React.useState<OrderItem[]>([])
   const [rawPayments, setRawPayments] = React.useState<Payment[]>([])
+  const [rawCosts, setRawCosts] = React.useState<OrderAdditionalCost[]>([])
   const [datePreset, setDatePreset] = React.useState<DateRangePreset>("this_week")
   const [customFrom, setCustomFrom] = React.useState("")
   const [customTo, setCustomTo] = React.useState("")
@@ -144,11 +145,12 @@ export function DashboardPage() {
   async function loadDashboard() {
     setLoading(true)
     try {
-      const [ordersRes, customersRes, itemsRes, paymentsRes] = await Promise.all([
+      const [ordersRes, customersRes, itemsRes, paymentsRes, costsRes] = await Promise.all([
         supabase.from("orders").select("*").order("created_at", { ascending: false }),
         supabase.from("customers").select("*"),
         supabase.from("order_items").select("*"),
         supabase.from("payments").select("*").eq("payment_status", "Completed"),
+        supabase.from("order_additional_costs").select("*"),
       ])
 
       const firstError = ordersRes.error || customersRes.error || itemsRes.error || paymentsRes.error
@@ -158,6 +160,7 @@ export function DashboardPage() {
       setRawCustomers((customersRes.data || []) as Customer[])
       setRawItems((itemsRes.data || []) as OrderItem[])
       setRawPayments((paymentsRes.data || []) as Payment[])
+      setRawCosts((costsRes.data || []) as OrderAdditionalCost[])
     } catch (err) {
       console.error("Dashboard load error:", err)
       toast.error(err instanceof Error ? err.message : "Failed to load dashboard data")
@@ -177,6 +180,12 @@ export function DashboardPage() {
         arr.push(item)
         itemsByOrder.set(item.order_id, arr)
       }
+      const costsByOrder = new Map<string, OrderAdditionalCost[]>()
+      for (const c of rawCosts) {
+        const arr = costsByOrder.get(c.order_id) || []
+        arr.push(c)
+        costsByOrder.set(c.order_id, arr)
+      }
       const paymentsByOrder = new Map<string, Payment[]>()
       for (const p of rawPayments) {
         const arr = paymentsByOrder.get(p.order_id) || []
@@ -192,7 +201,7 @@ export function DashboardPage() {
         const oi = itemsByOrder.get(order.id) || []
         const pays = paymentsByOrder.get(order.id) || []
         const paid = orderAmountPaid(pays)
-        const balance = orderBalanceDue(oi, pays)
+        const balance = orderBalanceDue(oi, pays, costsByOrder.get(order.id) || [])
         totalRevenue += paid
         if (balance > 0 && !isTerminalStatus(order.order_status)) {
           pendingPayments += balance
@@ -288,7 +297,7 @@ export function DashboardPage() {
         trendDescription,
         statusBreakdown,
       }
-  }, [rawOrders, rawCustomers, rawItems, rawPayments, datePreset, customFrom, customTo])
+  }, [rawOrders, rawCustomers, rawItems, rawPayments, rawCosts, datePreset, customFrom, customTo])
 
   if (loading) {
     return <PageLoader label="Loading dashboard..." />

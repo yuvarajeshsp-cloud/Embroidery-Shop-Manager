@@ -30,12 +30,13 @@ import {
   orderItemTotal,
   orderTotal,
   orderSetupCharges,
+  orderAdditionalCostsTotal,
   orderAmountPaid,
   orderBalanceDue,
   derivePaymentStatus,
   isOverdue,
 } from "@/lib/helpers"
-import type { Order, OrderItem, Payment, Customer, UserProfile, Expense } from "@/lib/types"
+import type { Order, OrderItem, OrderAdditionalCost, Payment, Customer, UserProfile, Expense } from "@/lib/types"
 import { ASSIGNABLE_ROLES } from "@/lib/permissions"
 import type { ExportField } from "@/lib/export"
 import { computeDateRange, isWithinRange, type DateRangePreset } from "@/lib/date-range"
@@ -70,6 +71,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { AdditionalCostForm } from "@/components/additional-cost-form"
 import { ItemPriceFields, formLineTotal, formUnitPrice, priceColumns, priceProblem, type ItemPriceValues } from "@/components/item-price-fields"
 import { isTerminalStatus, defaultPricingMode, itemQuantityText, pricingModeOf, useShopType, useVocabulary } from "@/lib/shop-type"
 import { OrderStatusBadge, PriorityBadge, PaymentStatusBadge, PaymentMethodBadge, PaymentRecordStatusBadge, ExpenseCategoryBadge } from "@/components/status-badges"
@@ -101,6 +103,7 @@ import type { OrderItemAttachment } from "@/lib/types"
 type EnrichedOrder = Order & {
   customer?: Customer
   order_items?: OrderItem[]
+  order_additional_costs?: OrderAdditionalCost[]
   payments?: Payment[]
   thumbnailAttachment?: OrderItemAttachment
 }
@@ -141,11 +144,18 @@ export function OrdersPage() {
     if (!orderData) { setLoading(false); return }
 
     const customerIds = [...new Set(orderData.map((o: Order) => o.customer_id))]
-    const [customersRes, itemsRes, paymentsRes] = await Promise.all([
+    const [customersRes, itemsRes, paymentsRes, costsRes] = await Promise.all([
       supabase.from("customers").select("*").in("id", customerIds),
       supabase.from("order_items").select("*"),
       supabase.from("payments").select("*"),
+      supabase.from("order_additional_costs").select("*"),
     ])
+    const costsByOrder = new Map<string, OrderAdditionalCost[]>()
+    for (const c of (costsRes.data || []) as OrderAdditionalCost[]) {
+      const arr = costsByOrder.get(c.order_id) || []
+      arr.push(c)
+      costsByOrder.set(c.order_id, arr)
+    }
 
     const customerMap = new Map((customersRes.data || []).map((c: Customer) => [c.id, c]))
     const itemsByOrder = new Map<string, OrderItem[]>()
@@ -178,6 +188,7 @@ export function OrdersPage() {
         customer: customerMap.get(o.customer_id),
         order_items: itemsByOrder.get(o.id) || [],
         payments: paymentsByOrder.get(o.id) || [],
+        order_additional_costs: costsByOrder.get(o.id) || [],
         thumbnailAttachment: thumbnailByOrder.get(o.id),
       })),
     )
@@ -221,10 +232,10 @@ export function OrdersPage() {
     { key: "sales_channel", label: "Sales Channel", value: (o) => o.sales_channel || "" },
     { key: "assigned_to", label: "Assigned To", value: (o) => (o.assigned_to && assigneeMap.get(o.assigned_to)) || "Unassigned" },
     { key: "customer_po_reference", label: "PO Reference", value: (o) => o.customer_po_reference || "" },
-    { key: "order_total", label: "Order Total", value: (o) => orderTotal(o.order_items || []) },
+    { key: "order_total", label: "Order Total", value: (o) => orderTotal(o.order_items || [], o.order_additional_costs || []) },
     { key: "amount_paid", label: "Amount Paid", value: (o) => orderAmountPaid(o.payments || []) },
-    { key: "balance_due", label: "Balance Due", value: (o) => orderBalanceDue(o.order_items || [], o.payments || []) },
-    { key: "payment_status", label: "Payment Status", value: (o) => derivePaymentStatus(o.order_items || [], o.payments || []) },
+    { key: "balance_due", label: "Balance Due", value: (o) => orderBalanceDue(o.order_items || [], o.payments || [], o.order_additional_costs || []) },
+    { key: "payment_status", label: "Payment Status", value: (o) => derivePaymentStatus(o.order_items || [], o.payments || [], o.order_additional_costs || []) },
     { key: "item_count", label: "Item Count", value: (o) => (o.order_items || []).length },
   ]
 
@@ -300,8 +311,8 @@ export function OrdersPage() {
           ) : isMobile ? (
             <div className="flex flex-col divide-y">
               {filtered.map((o) => {
-                const total = orderTotal(o.order_items || [])
-                const payStatus = derivePaymentStatus(o.order_items || [], o.payments || [])
+                const total = orderTotal(o.order_items || [], o.order_additional_costs || [])
+                const payStatus = derivePaymentStatus(o.order_items || [], o.payments || [], o.order_additional_costs || [])
                 const overdue = isOverdue(o.required_date) && !isTerminalStatus(o.order_status)
                 return (
                   <button
@@ -368,8 +379,8 @@ export function OrdersPage() {
               </TableHeader>
               <TableBody>
                 {filtered.map((o) => {
-                  const total = orderTotal(o.order_items || [])
-                  const payStatus = derivePaymentStatus(o.order_items || [], o.payments || [])
+                  const total = orderTotal(o.order_items || [], o.order_additional_costs || [])
+                  const payStatus = derivePaymentStatus(o.order_items || [], o.payments || [], o.order_additional_costs || [])
                   const overdue = isOverdue(o.required_date) && !isTerminalStatus(o.order_status)
                   return (
                     <TableRow
@@ -445,6 +456,8 @@ export function OrderDetailPage({ id }: { id: string }) {
   const [viewingAttachment, setViewingAttachment] = React.useState<OrderItemAttachment | null>(null)
   const [payments, setPayments] = React.useState<Payment[]>([])
   const [expenses, setExpenses] = React.useState<Expense[]>([])
+  const [additionalCosts, setAdditionalCosts] = React.useState<OrderAdditionalCost[]>([])
+  const [costForm, setCostForm] = React.useState<{ cost: OrderAdditionalCost | null } | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [editingItem, setEditingItem] = React.useState<OrderItem | null>(null)
   const [showItemForm, setShowItemForm] = React.useState(false)
@@ -487,12 +500,14 @@ export function OrderDetailPage({ id }: { id: string }) {
     if (!orderData) { setLoading(false); return }
     setOrder(orderData as Order)
 
-    const [custRes, itemsRes, payRes, expRes] = await Promise.all([
+    const [custRes, itemsRes, payRes, expRes, costRes] = await Promise.all([
       supabase.from("customers").select("*").eq("id", orderData.customer_id).maybeSingle(),
       supabase.from("order_items").select("*").eq("order_id", id).order("item_number"),
       supabase.from("payments").select("*").eq("order_id", id).order("payment_date", { ascending: false }),
       supabase.from("expenses").select("*").eq("order_id", id).order("expense_date", { ascending: false }),
+      supabase.from("order_additional_costs").select("*").eq("order_id", id).order("created_at"),
     ])
+    setAdditionalCosts((costRes.data || []) as OrderAdditionalCost[])
     setCustomer(custRes.data as Customer | null)
     const orderItems = itemsRes.data || []
     setItems(orderItems)
@@ -543,6 +558,17 @@ export function OrderDetailPage({ id }: { id: string }) {
     }
   }
 
+  async function handleDeleteCost(cost: OrderAdditionalCost) {
+    if (!confirm(`Remove ${cost.cost_type}?`)) return
+    const { error } = await supabase.from("order_additional_costs").delete().eq("id", cost.id)
+    if (error) {
+      toast.error("Failed to remove the cost")
+    } else {
+      toast.success("Cost removed")
+      setAdditionalCosts((prev) => prev.filter((c) => c.id !== cost.id))
+    }
+  }
+
   async function handleDeleteItem(itemId: string) {
     if (!confirm("Delete this item?")) return
     const { error } = await supabase.from("order_items").delete().eq("id", itemId)
@@ -561,13 +587,14 @@ export function OrderDetailPage({ id }: { id: string }) {
     return <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">Order not found</div>
   }
 
-  const total = orderTotal(items)
+  const total = orderTotal(items, additionalCosts)
   const setup = orderSetupCharges(items)
+  const extrasTotal = orderAdditionalCostsTotal(additionalCosts)
   const anyStitchItem = items.some((i) => pricingModeOf(i) === "stitch")
-  const subtotal = total - setup
+  const subtotal = total - setup - extrasTotal
   const paid = orderAmountPaid(payments)
-  const balance = orderBalanceDue(items, payments)
-  const payStatus = derivePaymentStatus(items, payments)
+  const balance = orderBalanceDue(items, payments, additionalCosts)
+  const payStatus = derivePaymentStatus(items, payments, additionalCosts)
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
@@ -705,6 +732,12 @@ export function OrderDetailPage({ id }: { id: string }) {
               <span className="text-xs text-muted-foreground">{vocab.setupLabel}</span>
               <span className="text-sm">{formatCurrency(setup)}</span>
             </div>
+            {additionalCosts.map((c) => (
+              <div key={c.id} className="flex justify-between gap-3">
+                <span className="text-xs text-muted-foreground">{c.cost_type}</span>
+                <span className="text-sm">{formatCurrency(c.amount)}</span>
+              </div>
+            ))}
             <div className="flex justify-between border-t pt-2">
               <span className="text-sm font-medium">Total</span>
               <span className="text-sm font-bold">{formatCurrency(total)}</span>
@@ -741,7 +774,7 @@ export function OrderDetailPage({ id }: { id: string }) {
               onClick={async () => {
                 setDownloadingPdf(true)
                 try {
-                  await downloadOrderPdf({ order, customer, items, payments })
+                  await downloadOrderPdf({ order, customer, items, payments, additionalCosts })
                   toast.success("PDF downloaded")
                 } catch {
                   toast.error("Failed to generate PDF")
@@ -757,7 +790,7 @@ export function OrderDetailPage({ id }: { id: string }) {
               variant="outline"
               size="sm"
               onClick={async () => {
-                const html = await getThermalInvoiceHtml({ order, customer, items, payments })
+                const html = await getThermalInvoiceHtml({ order, customer, items, payments, additionalCosts })
                 setThermalPreview({ title: `Invoice ${order.order_number}`, html })
               }}
             >
@@ -769,7 +802,7 @@ export function OrderDetailPage({ id }: { id: string }) {
               size="sm"
               onClick={async () => {
                 try {
-                  await printThermalInvoice({ order, customer, items, payments })
+                  await printThermalInvoice({ order, customer, items, payments, additionalCosts })
                 } catch (err) {
                   console.error(err)
                   toast.error(err instanceof Error ? err.message : "Failed to print invoice")
@@ -820,7 +853,7 @@ export function OrderDetailPage({ id }: { id: string }) {
                   size="sm"
                   onClick={async () => {
                     try {
-                      await shareThermalInvoiceViaWhatsApp({ order, customer, items, payments })
+                      await shareThermalInvoiceViaWhatsApp({ order, customer, items, payments, additionalCosts })
                     } catch (err) {
                       console.error(err)
                       toast.error(err instanceof Error ? err.message : "Failed to share")
@@ -944,6 +977,59 @@ export function OrderDetailPage({ id }: { id: string }) {
           )}
         </CardContent>
       </Card>
+
+      {/* Additional costs */}
+      <Card>
+        <CardHeader className="flex-row items-center justify-between">
+          <CardTitle>Additional Costs</CardTitle>
+          <Button size="sm" variant="outline" onClick={() => setCostForm({ cost: null })}>
+            <Plus className="size-4" /> Add Cost
+          </Button>
+        </CardHeader>
+        <CardContent className="p-0">
+          {additionalCosts.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No additional costs — add delivery, packaging, a rush fee or anything else charged on top.
+            </p>
+          ) : (
+            <div className="flex flex-col divide-y">
+              {additionalCosts.map((c) => (
+                <div key={c.id} className="flex items-center justify-between gap-3 p-4">
+                  <div className="flex min-w-0 flex-col">
+                    <span className="text-sm font-medium">{c.cost_type}</span>
+                    {c.notes && <span className="truncate text-xs text-muted-foreground">{c.notes}</span>}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <span className="mr-2 text-sm font-semibold">{formatCurrency(c.amount)}</span>
+                    <Button variant="ghost" size="icon-sm" onClick={() => setCostForm({ cost: c })}>
+                      <Pencil className="size-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon-sm" onClick={() => handleDeleteCost(c)}>
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              <div className="flex items-center justify-between p-4 text-sm">
+                <span className="text-muted-foreground">Total additional costs</span>
+                <span className="font-semibold">{formatCurrency(extrasTotal)}</span>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {costForm && (
+        <AdditionalCostForm
+          orderId={order.id}
+          cost={costForm.cost}
+          onClose={() => setCostForm(null)}
+          onSaved={() => {
+            setCostForm(null)
+            void loadOrder()
+          }}
+        />
+      )}
 
       {/* Attachments across all items */}
       {attachments.length > 0 && (
@@ -1180,6 +1266,7 @@ export function OrderDetailPage({ id }: { id: string }) {
           customer={customer}
           items={items}
           payments={payments}
+          additionalCosts={additionalCosts}
           attachments={attachments}
           onClose={() => setShowShareToCustomer(false)}
         />
@@ -1197,6 +1284,7 @@ function ShareToCustomerDialog({
   customer,
   items,
   payments,
+  additionalCosts,
   attachments,
   onClose,
 }: {
@@ -1204,6 +1292,7 @@ function ShareToCustomerDialog({
   customer: Customer | null
   items: OrderItem[]
   payments: Payment[]
+  additionalCosts: OrderAdditionalCost[]
   attachments: OrderItemAttachment[]
   onClose: () => void
 }) {
@@ -1237,7 +1326,7 @@ function ShareToCustomerDialog({
     try {
       if (sendInvoice) {
         try {
-          const { url, fileName } = await uploadOrderInvoicePdf({ order, customer, items, payments })
+          const { url, fileName } = await uploadOrderInvoicePdf({ order, customer, items, payments, additionalCosts })
           const result = await sendWhatsAppFile(customer, order, "document", url, fileName, "invoice", profile?.id)
           if (result.success) successCount++
           else failCount++

@@ -1,6 +1,9 @@
 import { supabase } from "./supabase"
 import type { OrderItem, Payment } from "./types"
 
+/** Anything with an amount: an order's additional costs. */
+export type CostLine = { amount: number }
+
 export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -75,8 +78,15 @@ export function orderSetupCharges(items: OrderItem[]): number {
   return items.reduce((sum, item) => sum + (item.setup_digitizing_charge || 0), 0)
 }
 
-export function orderTotal(items: OrderItem[]): number {
-  return Math.round((orderSubtotal(items) + orderSetupCharges(items)) * 100) / 100
+export function orderAdditionalCostsTotal(extras: CostLine[] = []): number {
+  return Math.round(extras.reduce((sum, c) => sum + (Number(c.amount) || 0), 0) * 100) / 100
+}
+
+/** Items + the items' extra charges + the order's additional costs. */
+export function orderTotal(items: OrderItem[], extras: CostLine[] = []): number {
+  return (
+    Math.round((orderSubtotal(items) + orderSetupCharges(items) + orderAdditionalCostsTotal(extras)) * 100) / 100
+  )
 }
 
 export function orderAmountPaid(payments: Payment[]): number {
@@ -85,15 +95,16 @@ export function orderAmountPaid(payments: Payment[]): number {
     .reduce((sum, p) => sum + p.amount, 0)
 }
 
-export function orderBalanceDue(items: OrderItem[], payments: Payment[]): number {
-  return Math.round((orderTotal(items) - orderAmountPaid(payments)) * 100) / 100
+export function orderBalanceDue(items: OrderItem[], payments: Payment[], extras: CostLine[] = []): number {
+  return Math.round((orderTotal(items, extras) - orderAmountPaid(payments)) * 100) / 100
 }
 
 export function derivePaymentStatus(
   items: OrderItem[],
   payments: Payment[],
+  extras: CostLine[] = [],
 ): string {
-  const total = orderTotal(items)
+  const total = orderTotal(items, extras)
   const paid = orderAmountPaid(payments)
   if (paid <= 0) return "Unpaid"
   if (paid >= total) return "Paid"

@@ -111,6 +111,19 @@ export interface OrderItem {
   updated_at: string
 }
 
+export interface OrderAdditionalCost {
+  id: string
+  organization_id: string
+  order_id: string
+  /** A configured cost type, or free text typed in for this order. */
+  cost_type: string
+  notes: string | null
+  amount: number
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
 export type AttachmentCategory = "material" | "design_confirmation"
 
 export interface OrderItemAttachment {

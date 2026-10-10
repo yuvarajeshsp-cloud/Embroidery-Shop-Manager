@@ -10,17 +10,19 @@ import {
   orderItemTotal,
   orderTotal,
   orderSetupCharges,
+  orderAdditionalCostsTotal,
   orderAmountPaid,
   orderBalanceDue,
   derivePaymentStatus,
 } from "./helpers"
-import type { Order, OrderItem, Payment, Customer } from "./types"
+import type { Order, OrderItem, OrderAdditionalCost, Payment, Customer } from "./types"
 
 export interface ThermalInvoiceData {
   order: Order
   customer: Customer | null
   items: OrderItem[]
   payments: Payment[]
+  additionalCosts?: OrderAdditionalCost[]
 }
 
 function escapeHtml(value: string): string {
@@ -187,13 +189,14 @@ function extraLabel(settings: Record<string, string>): string {
 
 function drawThermalInvoiceContent(doc: jsPDF, data: ThermalInvoiceData, settings: BusinessSettings): number {
   const { order, customer, items, payments } = data
+  const additionalCosts = data.additionalCosts || []
 
-  const subtotal = orderTotal(items) - orderSetupCharges(items)
   const setup = orderSetupCharges(items)
-  const total = orderTotal(items)
+  const total = orderTotal(items, additionalCosts)
+  const subtotal = total - setup - orderAdditionalCostsTotal(additionalCosts)
   const paid = orderAmountPaid(payments)
-  const balance = orderBalanceDue(items, payments)
-  const payStatus = derivePaymentStatus(items, payments)
+  const balance = orderBalanceDue(items, payments, additionalCosts)
+  const payStatus = derivePaymentStatus(items, payments, additionalCosts)
 
   let y = 6
   y = drawThermalHeader(doc, y, settings)
@@ -258,6 +261,10 @@ function drawThermalInvoiceContent(doc: jsPDF, data: ThermalInvoiceData, setting
   doc.setFontSize(8.5)
   y = drawThermalRow(doc, "Subtotal", formatPdfCurrency(subtotal), y, false)
   if (setup > 0) y = drawThermalRow(doc, extraLabel(settings), formatPdfCurrency(setup), y, false)
+  for (const cost of additionalCosts) {
+    const label = cost.notes ? `${cost.cost_type} (${cost.notes})` : cost.cost_type
+    y = drawThermalRow(doc, label.length > 22 ? `${label.slice(0, 21)}…` : label, formatPdfCurrency(cost.amount), y, false)
+  }
   doc.setFontSize(10)
   y = drawThermalRow(doc, "TOTAL", formatPdfCurrency(total), y, true)
   doc.setFontSize(8.5)
@@ -383,12 +390,19 @@ async function buildInvoiceBody(data: ThermalInvoiceData): Promise<string> {
   const header = await businessHeaderHtml()
   const settings = await fetchBusinessSettings()
 
-  const subtotal = orderTotal(items) - orderSetupCharges(items)
+  const additionalCosts = data.additionalCosts || []
   const setup = orderSetupCharges(items)
-  const total = orderTotal(items)
+  const total = orderTotal(items, additionalCosts)
+  const subtotal = total - setup - orderAdditionalCostsTotal(additionalCosts)
   const paid = orderAmountPaid(payments)
-  const balance = orderBalanceDue(items, payments)
-  const payStatus = derivePaymentStatus(items, payments)
+  const balance = orderBalanceDue(items, payments, additionalCosts)
+  const payStatus = derivePaymentStatus(items, payments, additionalCosts)
+  const costRows = additionalCosts
+    .map(
+      (c) =>
+        `<div class="row"><span>${escapeHtml(c.notes ? `${c.cost_type} (${c.notes})` : c.cost_type)}</span><span>${formatCurrency(c.amount)}</span></div>`,
+    )
+    .join("")
 
   const itemRows = items
     .map((item, idx) => {
@@ -416,6 +430,7 @@ async function buildInvoiceBody(data: ThermalInvoiceData): Promise<string> {
     <div class="divider"></div>
     <div class="row"><span>Subtotal</span><span>${formatCurrency(subtotal)}</span></div>
     ${setup > 0 ? `<div class="row"><span>${escapeHtml(extraLabel(settings))}</span><span>${formatCurrency(setup)}</span></div>` : ""}
+    ${costRows}
     <div class="row bold big"><span>TOTAL</span><span>${formatCurrency(total)}</span></div>
     <div class="row"><span>Paid</span><span>${formatCurrency(paid)}</span></div>
     <div class="row bold"><span>Balance Due</span><span>${formatCurrency(balance)}</span></div>

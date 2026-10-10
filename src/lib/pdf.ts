@@ -3,7 +3,7 @@ import { Capacitor } from "@capacitor/core"
 import { Filesystem, Directory } from "@capacitor/filesystem"
 import { Share } from "@capacitor/share"
 import { supabase } from "./supabase"
-import type { Order, OrderItem, Payment, Customer } from "./types"
+import type { Order, OrderItem, OrderAdditionalCost, Payment, Customer } from "./types"
 import {
   formatDate,
   formatNumber,
@@ -11,6 +11,7 @@ import {
   orderItemTotal,
   orderTotal,
   orderSetupCharges,
+  orderAdditionalCostsTotal,
   orderAmountPaid,
   orderBalanceDue,
   derivePaymentStatus,
@@ -69,6 +70,7 @@ export interface OrderPdfData {
   customer: Customer | null
   items: OrderItem[]
   payments: Payment[]
+  additionalCosts?: OrderAdditionalCost[]
 }
 
 // jsPDF's built-in helvetica font cannot render the ₹ Unicode symbol,
@@ -84,6 +86,7 @@ export function formatPdfCurrency(amount: number): string {
 
 export async function generateOrderPdf(data: OrderPdfData): Promise<Blob> {
   const { order, customer, items, payments } = data
+  const additionalCosts = data.additionalCosts || []
   const settings = await fetchBusinessSettings()
 
   const companyName = (settings.company_name || "Business Management System").trim()
@@ -304,12 +307,13 @@ export async function generateOrderPdf(data: OrderPdfData): Promise<Blob> {
   const summaryW = 200
   const summaryX = margin + tableWidth - summaryW
 
-  const total = orderTotal(items)
+  const total = orderTotal(items, additionalCosts)
   const setup = orderSetupCharges(items)
-  const subtotal = total - setup
+  const extrasTotal = orderAdditionalCostsTotal(additionalCosts)
+  const subtotal = total - setup - extrasTotal
   const paid = orderAmountPaid(payments)
-  const balance = orderBalanceDue(items, payments)
-  const payStatus = derivePaymentStatus(items, payments)
+  const balance = orderBalanceDue(items, payments, additionalCosts)
+  const payStatus = derivePaymentStatus(items, payments, additionalCosts)
 
   doc.setFont("helvetica", "normal")
   doc.setFontSize(9)
@@ -317,6 +321,10 @@ export async function generateOrderPdf(data: OrderPdfData): Promise<Blob> {
   const summaryRows: [string, string, boolean][] = [
     ["Subtotal", formatPdfCurrency(subtotal), false],
     [extraChargesLabel, formatPdfCurrency(setup), false],
+    ...additionalCosts.map((c): [string, string, boolean] => {
+      const label = c.notes ? `${c.cost_type} (${c.notes})` : c.cost_type
+      return [label.length > 30 ? `${label.slice(0, 29)}…` : label, formatPdfCurrency(c.amount), false]
+    }),
     ["Total", formatPdfCurrency(total), true],
     ["Paid", formatPdfCurrency(paid), false],
     ["Balance Due", formatPdfCurrency(balance), true],

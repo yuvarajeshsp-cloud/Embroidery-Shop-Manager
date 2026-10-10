@@ -8,7 +8,7 @@ import {
   orderAmountPaid,
   orderBalanceDue,
 } from "@/lib/helpers"
-import type { Order, Customer, OrderItem, Payment } from "@/lib/types"
+import type { Order, Customer, OrderItem, OrderAdditionalCost, Payment } from "@/lib/types"
 import type { ExportField } from "@/lib/export"
 import {
   DATE_RANGE_PRESETS,
@@ -59,7 +59,7 @@ import { Badge } from "@/components/ui/badge"
 import { useRouter } from "@/lib/router"
 import { useIsMobile } from "@/hooks/use-mobile"
 
-type ReportOrder = Order & { customer?: Customer; order_items?: OrderItem[]; payments?: Payment[] }
+type ReportOrder = Order & { customer?: Customer; order_items?: OrderItem[]; order_additional_costs?: OrderAdditionalCost[]; payments?: Payment[] }
 
 export function ReportsPage() {
   const { navigate } = useRouter()
@@ -82,12 +82,19 @@ export function ReportsPage() {
 
   async function loadAll() {
     setLoading(true)
-    const [ordersRes, customersRes, itemsRes, paymentsRes] = await Promise.all([
+    const [ordersRes, customersRes, itemsRes, paymentsRes, costsRes] = await Promise.all([
       supabase.from("orders").select("*").order("order_date", { ascending: false }),
       supabase.from("customers").select("*"),
       supabase.from("order_items").select("*"),
       supabase.from("payments").select("*").eq("payment_status", "Completed"),
+      supabase.from("order_additional_costs").select("*"),
     ])
+    const costsByOrder = new Map<string, OrderAdditionalCost[]>()
+    for (const c of (costsRes.data || []) as OrderAdditionalCost[]) {
+      const arr = costsByOrder.get(c.order_id) || []
+      arr.push(c)
+      costsByOrder.set(c.order_id, arr)
+    }
 
     const allOrders = ordersRes.data || []
     const allCustomers = customersRes.data || []
@@ -113,6 +120,7 @@ export function ReportsPage() {
         ...o,
         customer: customerMap.get(o.customer_id),
         order_items: itemsByOrder.get(o.id) || [],
+        order_additional_costs: costsByOrder.get(o.id) || [],
         payments: paymentsByOrder.get(o.id) || [],
       })),
     )
@@ -166,7 +174,7 @@ export function ReportsPage() {
   for (const o of rangedOrders) {
     const key = o.customer_id
     if (!customerTotals[key]) customerTotals[key] = { customer: o.customer, total: 0, count: 0 }
-    customerTotals[key].total += orderTotal(o.order_items || [])
+    customerTotals[key].total += orderTotal(o.order_items || [], o.order_additional_costs || [])
     customerTotals[key].count += 1
   }
   const topCustomers = Object.values(customerTotals)
@@ -178,14 +186,14 @@ export function ReportsPage() {
     .filter((o) => !isTerminalStatus(o.order_status))
     .map((o) => ({
       ...o,
-      balance: orderBalanceDue(o.order_items || [], o.payments || []),
+      balance: orderBalanceDue(o.order_items || [], o.payments || [], o.order_additional_costs || []),
     }))
     .filter((o) => o.balance > 0)
     .sort((a, b) => b.balance - a.balance)
 
   const totalOutstanding = outstanding.reduce((s, o) => s + o.balance, 0)
   const totalRevenue = rangedOrders.reduce((s, o) => s + orderAmountPaid(o.payments || []), 0)
-  const totalOrderValue = rangedOrders.reduce((s, o) => s + orderTotal(o.order_items || []), 0)
+  const totalOrderValue = rangedOrders.reduce((s, o) => s + orderTotal(o.order_items || [], o.order_additional_costs || []), 0)
 
   const chartConfig = {
     revenue: { label: "Revenue", color: "var(--chart-1)" },
@@ -203,9 +211,9 @@ export function ReportsPage() {
     { key: "required_date", label: "Delivery Date", value: (o) => (o.required_date ? formatDate(o.required_date) : "") },
     { key: "sales_channel", label: "Sales Channel", value: (o) => o.sales_channel || "" },
     { key: "customer_po_reference", label: "PO Reference", value: (o) => o.customer_po_reference || "" },
-    { key: "order_total", label: "Order Total", value: (o) => orderTotal(o.order_items || []) },
+    { key: "order_total", label: "Order Total", value: (o) => orderTotal(o.order_items || [], o.order_additional_costs || []) },
     { key: "amount_paid", label: "Amount Paid", value: (o) => orderAmountPaid(o.payments || []) },
-    { key: "balance_due", label: "Balance Due", value: (o) => orderBalanceDue(o.order_items || [], o.payments || []) },
+    { key: "balance_due", label: "Balance Due", value: (o) => orderBalanceDue(o.order_items || [], o.payments || [], o.order_additional_costs || []) },
     { key: "item_count", label: "Item Count", value: (o) => (o.order_items || []).length },
   ]
 

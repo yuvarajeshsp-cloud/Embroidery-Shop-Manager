@@ -49,11 +49,14 @@ const CATEGORIES = [
   { key: "product_type", label: "Product Types" },
   { key: "sales_channel", label: "Sales Channels" },
   { key: "expense_category", label: "Expense Categories" },
+  { key: "additional_cost_type", label: "Additional Cost Types" },
 ]
 
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
   [PRODUCTION_BOARD_CATEGORY]:
     "Pick which order statuses show up as columns on the Production Board, and in what order. Manage the full status list itself under Order Statuses.",
+  additional_cost_type:
+    "The types offered when adding an additional cost to an order (delivery, packaging, rush charge …). A cost can also be typed in freely on the order.",
   expense_category:
     "Mark a category Restricted to limit it (and every expense recorded under it) to Administrators only — useful for Salary or anything else staff shouldn't see.",
 }

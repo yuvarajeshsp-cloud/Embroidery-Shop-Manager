@@ -33,8 +33,16 @@ import {
 import { useRouter } from "@/lib/router"
 import { fetchConfigItems, getDefaultStitchRate } from "@/lib/config"
 import { toast } from "sonner"
+import { CostTypeField, useCostTypes } from "@/components/additional-cost-form"
 import { ItemPriceFields, formLineTotal, priceColumns, priceProblem, type ItemPriceValues } from "@/components/item-price-fields"
 import { defaultPricingMode, useShopType, useVocabulary, type PricingMode } from "@/lib/shop-type"
+
+interface DraftCost {
+  tempId: string
+  cost_type: string
+  amount: string
+  notes: string
+}
 
 interface DraftItem {
   tempId: string
@@ -89,6 +97,8 @@ export function NewOrderPage() {
   })
 
   const [items, setItems] = React.useState<DraftItem[]>([])
+  const [costs, setCosts] = React.useState<DraftCost[]>([])
+  const costTypes = useCostTypes()
   const itemsRef = React.useRef<DraftItem[]>(items)
   itemsRef.current = items
 
@@ -194,7 +204,8 @@ export function NewOrderPage() {
 
   const subtotal = items.reduce((s, i) => s + formLineTotal(priceValuesOf(i)), 0)
   const setup = items.reduce((s, i) => s + (i.setup_digitizing_charge || 0), 0)
-  const grandTotal = subtotal + setup
+  const costsTotal = costs.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0)
+  const grandTotal = subtotal + setup + costsTotal
 
   async function handleSave() {
     if (!orderForm.customer_id) {
@@ -206,6 +217,13 @@ export function NewOrderPage() {
       toast.error("Please add at least one item")
       setStep(2)
       return
+    }
+    for (const [idx, c] of costs.entries()) {
+      if (!c.cost_type.trim() || Number.isNaN(parseFloat(c.amount)) || parseFloat(c.amount) < 0) {
+        toast.error(`Additional cost ${idx + 1}: choose a type and enter the amount`)
+        setStep(2)
+        return
+      }
     }
     for (const [idx, item] of items.entries()) {
       const problem = priceProblem(priceValuesOf(item))
@@ -269,6 +287,22 @@ export function NewOrderPage() {
         .insert(itemPayloads)
         .select()
       if (itemsError) throw itemsError
+
+      if (costs.length > 0) {
+        const { error: costsError } = await supabase.from("order_additional_costs").insert(
+          costs.map((c) => ({
+            order_id: orderData.id,
+            cost_type: c.cost_type.trim(),
+            notes: c.notes.trim() || null,
+            amount: parseFloat(c.amount),
+            created_by: profile?.id ?? null,
+          })),
+        )
+        if (costsError) {
+          console.error(costsError)
+          toast.error("Order created, but the additional costs could not be saved — add them on the order")
+        }
+      }
 
       const photosToUpload = items
         .map((item, idx) => ({ file: item.photoFile, orderItemId: insertedItems?.[idx]?.id }))
@@ -595,6 +629,59 @@ export function NewOrderPage() {
                 })}
               </div>
             )}
+            <div className="flex flex-col gap-3 rounded-lg border p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium">Additional Costs</span>
+                  <span className="text-xs text-muted-foreground">Delivery, packaging, rush fee … added to the total.</span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setCosts((prev) => [...prev, { tempId: crypto.randomUUID(), cost_type: "", amount: "", notes: "" }])
+                  }
+                >
+                  <Plus className="size-4" /> Add
+                </Button>
+              </div>
+              {costs.map((c) => (
+                <div key={c.tempId} className="flex flex-col gap-2 rounded-md bg-muted/40 p-3">
+                  <CostTypeField
+                    types={costTypes}
+                    value={c.cost_type}
+                    onChange={(v) => setCosts((prev) => prev.map((x) => (x.tempId === c.tempId ? { ...x, cost_type: v } : x)))}
+                  />
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      inputMode="decimal"
+                      placeholder="Amount"
+                      value={c.amount}
+                      onChange={(e) =>
+                        setCosts((prev) => prev.map((x) => (x.tempId === c.tempId ? { ...x, amount: e.target.value } : x)))
+                      }
+                    />
+                    <Input
+                      placeholder="Note (optional)"
+                      value={c.notes}
+                      onChange={(e) =>
+                        setCosts((prev) => prev.map((x) => (x.tempId === c.tempId ? { ...x, notes: e.target.value } : x)))
+                      }
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setCosts((prev) => prev.filter((x) => x.tempId !== c.tempId))}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep(1)}>
                 <ArrowLeft className="size-4" /> Back
@@ -670,6 +757,12 @@ export function NewOrderPage() {
               <div className="flex justify-between text-sm">
                 <span>{vocab.setupLabel}</span><span>{formatCurrency(setup)}</span>
               </div>
+              {costs.map((c) => (
+                <div key={c.tempId} className="flex justify-between text-sm">
+                  <span>{c.cost_type || "Additional cost"}</span>
+                  <span>{formatCurrency(parseFloat(c.amount) || 0)}</span>
+                </div>
+              ))}
               <div className="flex justify-between border-t pt-1 text-sm font-bold">
                 <span>Total</span><span>{formatCurrency(grandTotal)}</span>
               </div>

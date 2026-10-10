@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
 import { formatCurrency, formatDate, generateCustomerCode } from "@/lib/helpers"
-import type { Customer, Order, OrderItem, Payment } from "@/lib/types"
+import type { Customer, Order, OrderItem, OrderAdditionalCost, Payment } from "@/lib/types"
 import type { ExportField } from "@/lib/export"
 import { ExportDialog } from "@/components/export-dialog"
 import { MultiSelectFilter } from "@/components/multi-select-filter"
@@ -472,7 +472,7 @@ function CustomerForm({
 export function CustomerDetailPage({ id }: { id: string }) {
   const { navigate } = useRouter()
   const [customer, setCustomer] = React.useState<Customer | null>(null)
-  const [orders, setOrders] = React.useState<(Order & { order_items?: OrderItem[]; payments?: Payment[] })[]>([])
+  const [orders, setOrders] = React.useState<(Order & { order_items?: OrderItem[]; order_additional_costs?: OrderAdditionalCost[]; payments?: Payment[] })[]>([])
   const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
@@ -481,12 +481,14 @@ export function CustomerDetailPage({ id }: { id: string }) {
 
   async function loadCustomer() {
     setLoading(true)
-    const [custRes, ordersRes, itemsRes, paymentsRes] = await Promise.all([
+    const [custRes, ordersRes, itemsRes, paymentsRes, costsRes] = await Promise.all([
       supabase.from("customers").select("*").eq("id", id).maybeSingle(),
       supabase.from("orders").select("*").eq("customer_id", id).order("order_date", { ascending: false }),
       supabase.from("order_items").select("*"),
       supabase.from("payments").select("*").eq("customer_id", id),
+      supabase.from("order_additional_costs").select("*"),
     ])
+    const allCosts = (costsRes.data || []) as OrderAdditionalCost[]
 
     setCustomer(custRes.data as Customer | null)
     const allOrders = ordersRes.data || []
@@ -496,6 +498,7 @@ export function CustomerDetailPage({ id }: { id: string }) {
     const ordersWithDetails = allOrders.map((o: Order) => ({
       ...o,
       order_items: allItems.filter((i: OrderItem) => i.order_id === o.id),
+      order_additional_costs: allCosts.filter((c) => c.order_id === o.id),
       payments: allPayments.filter((p: Payment) => p.order_id === o.id),
     }))
     setOrders(ordersWithDetails)
@@ -510,8 +513,8 @@ export function CustomerDetailPage({ id }: { id: string }) {
     return <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">Customer not found</div>
   }
 
-  const totalOrderValue = orders.reduce((sum, o) => sum + orderTotal(o.order_items || []), 0)
-  const totalDue = orders.reduce((sum, o) => sum + orderBalanceDue(o.order_items || [], o.payments || []), 0)
+  const totalOrderValue = orders.reduce((sum, o) => sum + orderTotal(o.order_items || [], o.order_additional_costs || []), 0)
+  const totalDue = orders.reduce((sum, o) => sum + orderBalanceDue(o.order_items || [], o.payments || [], o.order_additional_costs || []), 0)
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
@@ -619,7 +622,7 @@ export function CustomerDetailPage({ id }: { id: string }) {
                         <span className="text-xs text-muted-foreground">{formatDate(o.order_date)}</span>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-sm font-medium">{formatCurrency(orderTotal(o.order_items || []))}</span>
+                        <span className="text-sm font-medium">{formatCurrency(orderTotal(o.order_items || [], o.order_additional_costs || []))}</span>
                         <OrderStatusBadge status={o.order_status} />
                       </div>
                     </button>

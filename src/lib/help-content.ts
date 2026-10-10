@@ -41,8 +41,9 @@ export const HELP_SECTIONS: HelpSection[] = [
       "Tap New Order. Step 1: choose the customer, dates, status, priority, who it is assigned to, and any special instructions.",
       "Step 2: add items. For each item pick the product type, then choose how it is priced. By stitch: enter the quantity, stitches per unit and rate per 1,000 stitches — the unit price is worked out for you (stitches ÷ 1,000 × rate), or type a Manual Unit Price instead. Per piece: quantity and the price of one piece. Per metre: the metres and the price per metre. Fixed price: one price for the whole item.",
       "Add the extra charge if you bill one (setup/digitizing, lining, padding …) — it is added to the order total on top of the item totals. You can attach a photo or design to each item.",
+      "Still on step 2, use Additional Costs for anything charged on top of the items — delivery, packaging, a rush fee. Pick a type from your list or choose Custom and type your own. Each one is added to the order total.",
       "Step 3: review the totals and tap Create Order.",
-      "Open any order to change its status, assign it to a team member, add or edit items, record payments, and print or download documents.",
+      "Open any order to change its status, assign it to a team member, add or edit items and additional costs, record payments, and print or download documents.",
     ],
     tips: [
       "For tailors and boutiques: set a Trial / Fitting date and note the material or fabric received. Trials due today and this week show on the Dashboard.",
@@ -159,6 +160,10 @@ export const FAQ_GROUPS: FaqGroup[] = [
       {
         q: "How is the price of an item calculated?",
         a: "It depends on how the item is priced. By stitch: unit price = stitches per unit ÷ 1,000 × rate per 1,000 stitches (a Manual Unit Price replaces this). Per piece and per metre: unit price × quantity (or metres). Fixed price: the price you enter. Item total = unit price × quantity, and any extra charge (setup/digitizing, lining …) is added once on top. The default stitch rate comes from Configuration.",
+      },
+      {
+        q: "How do I charge delivery or packaging on top of the items?",
+        a: "Open the order and use Additional Costs → Add Cost (or add them while creating the order). Choose a type from your list, or Custom to type your own, and enter the amount. Every additional cost is added to the order total, shown on the invoice, and counted in the balance. Administrators manage the list of types in Configuration → Additional Cost Types.",
       },
       {
         q: "I'm a tailor or boutique — why do I still see embroidery fields?",
