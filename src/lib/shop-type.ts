@@ -44,6 +44,25 @@ export function pricingModeOf(item: { pricing_mode?: string | null }): PricingMo
   return mode === "piece" || mode === "metre" || mode === "fixed" ? mode : "stitch"
 }
 
+/**
+ * The pricing modes a kind of shop normally uses, most common first. The
+ * others stay available (a boutique sometimes prices embroidery by stitch, a
+ * tailor sometimes sells a fixed-price job); the item form just lists these
+ * first and puts the rest under "Other pricing".
+ */
+export function usualPricingModes(shop: ShopType): PricingMode[] {
+  switch (shop) {
+    case "embroidery":
+      return ["stitch", "fixed"]
+    case "tailor":
+      return ["piece", "metre", "fixed"]
+    case "boutique":
+      return ["piece", "fixed", "stitch"]
+    default:
+      return ["stitch", "piece", "metre", "fixed"]
+  }
+}
+
 export function defaultPricingMode(shop: ShopType): PricingMode {
   return shop === "tailor" || shop === "boutique" ? "piece" : "stitch"
 }

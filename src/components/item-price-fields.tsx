@@ -1,7 +1,16 @@
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { PRICING_MODES, useVocabulary, type PricingMode } from "@/lib/shop-type"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { PRICING_MODES, useShopType, useVocabulary, usualPricingModes, type PricingMode } from "@/lib/shop-type"
 
 export interface ItemPriceValues {
   pricing_mode: PricingMode
@@ -58,6 +67,10 @@ export function ItemPriceFields({
   onChange: (patch: Partial<ItemPriceValues>) => void
 }) {
   const vocab = useVocabulary()
+  const shopType = useShopType()
+  const usual = usualPricingModes(shopType)
+  const usualModes = usual.map((v) => PRICING_MODES.find((m) => m.value === v)!)
+  const otherModes = PRICING_MODES.filter((m) => !usual.includes(m.value))
   const mode = values.pricing_mode
   const modeInfo = PRICING_MODES.find((m) => m.value === mode)!
 
@@ -77,9 +90,20 @@ export function ItemPriceFields({
         >
           <SelectTrigger className={`${inputClass} w-full`}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {PRICING_MODES.map((m) => (
+            {usualModes.map((m) => (
               <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
             ))}
+            {otherModes.length > 0 && (
+              <>
+                <SelectSeparator />
+                <SelectGroup>
+                  <SelectLabel className="text-xs text-muted-foreground">Other pricing</SelectLabel>
+                  {otherModes.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
+                </SelectGroup>
+              </>
+            )}
           </SelectContent>
         </Select>
       </Field>
