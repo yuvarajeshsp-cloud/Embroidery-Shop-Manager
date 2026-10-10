@@ -56,6 +56,7 @@ function sanitizePhone(raw: string): string {
 async function logMessage(
   supabaseUrl: string,
   anonKey: string,
+  callerToken: string,
   recipientPhone: string,
   templateName: string | null,
   log: LogInfo,
@@ -69,7 +70,7 @@ async function logMessage(
       headers: {
         "Content-Type": "application/json",
         apikey: anonKey,
-        Authorization: `Bearer ${anonKey}`,
+        Authorization: `Bearer ${callerToken}`,
         Prefer: "return=minimal",
       },
       body: JSON.stringify({
@@ -112,6 +113,41 @@ Deno.serve(async (req) => {
     })
   }
 
+  const fail = (status: number, error: string) =>
+    new Response(JSON.stringify({ success: false, error }), {
+      status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    })
+
+  // Kill switch: this function sends through a shared WhatsApp account, so it
+  // stays off unless it is deliberately switched on.
+  if (Deno.env.get("WHATSAPP_ENABLED") !== "true") {
+    return fail(403, "WhatsApp messaging is not enabled")
+  }
+
+  // Only a signed-in, active Administrator or Manager may send. The caller's own
+  // token is used for every lookup, so row-level security applies.
+  const callerToken = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "")
+  if (!callerToken) return fail(401, "Missing Authorization header")
+  const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: { Authorization: `Bearer ${callerToken}`, apikey: anonKey },
+  })
+  if (!userRes.ok) return fail(401, "Invalid or expired session")
+  const callerUser = await userRes.json()
+  const profileRes = await fetch(
+    `${supabaseUrl}/rest/v1/user_profiles?id=eq.${callerUser.id}&select=role,is_active`,
+    { headers: { Authorization: `Bearer ${callerToken}`, apikey: anonKey } },
+  )
+  const profileRows = await profileRes.json()
+  const callerProfile = Array.isArray(profileRows) ? profileRows[0] : null
+  if (
+    !callerProfile ||
+    !callerProfile.is_active ||
+    !["Administrator", "Manager"].includes(callerProfile.role)
+  ) {
+    return fail(403, "Only an active Administrator or Manager can send WhatsApp messages")
+  }
+
   let payload: SendRequest
   try {
     payload = await req.json()
@@ -120,6 +156,17 @@ Deno.serve(async (req) => {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     })
+  }
+
+  // Keep caller-supplied values from steering the request somewhere else.
+  if (!/^\d{5,20}$/.test(String(payload.phone_number_id || ""))) {
+    return fail(400, "Invalid phone_number_id")
+  }
+  if (
+    (payload.kind === "media" || payload.kind === "template_media") &&
+    !/^https:\/\//i.test(payload.link || "")
+  ) {
+    return fail(400, "Media link must be an https URL")
   }
 
   if (!payload.to || !payload.phone_number_id) {
@@ -209,7 +256,7 @@ Deno.serve(async (req) => {
 
     if (!metaRes.ok) {
       const errorMessage = metaJson?.error?.message || `WhatsApp API returned ${metaRes.status}`
-      await logMessage(supabaseUrl, anonKey, to, templateNameForLog, payload.log, "failed", null, errorMessage)
+      await logMessage(supabaseUrl, anonKey, callerToken, to, templateNameForLog, payload.log, "failed", null, errorMessage)
       return new Response(JSON.stringify({ success: false, error: errorMessage }), {
         status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -217,14 +264,14 @@ Deno.serve(async (req) => {
     }
 
     const whatsappMessageId = metaJson?.messages?.[0]?.id || null
-    await logMessage(supabaseUrl, anonKey, to, templateNameForLog, payload.log, "sent", whatsappMessageId, null)
+    await logMessage(supabaseUrl, anonKey, callerToken, to, templateNameForLog, payload.log, "sent", whatsappMessageId, null)
 
     return new Response(JSON.stringify({ success: true, whatsapp_message_id: whatsappMessageId }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     })
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : "Unknown error calling WhatsApp API"
-    await logMessage(supabaseUrl, anonKey, to, templateNameForLog, payload.log, "failed", null, errorMessage)
+    await logMessage(supabaseUrl, anonKey, callerToken, to, templateNameForLog, payload.log, "failed", null, errorMessage)
     return new Response(JSON.stringify({ success: false, error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
