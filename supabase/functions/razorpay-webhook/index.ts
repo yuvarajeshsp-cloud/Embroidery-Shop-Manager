@@ -21,6 +21,14 @@ function jsonResponse(body: unknown, status = 200) {
   })
 }
 
+// Compares without bailing at the first differing character.
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  let diff = 0
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return diff === 0
+}
+
 async function hmacSha256Hex(secret: string, message: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
@@ -57,7 +65,7 @@ Deno.serve(async (req) => {
   const rawBody = await req.text()
   const signature = req.headers.get("X-Razorpay-Signature") || ""
   const expectedSignature = await hmacSha256Hex(webhookSecret, rawBody)
-  if (!signature || expectedSignature !== signature) {
+  if (!signature || !timingSafeEqual(expectedSignature, signature)) {
     return jsonResponse({ success: false, error: "Invalid webhook signature" }, 400)
   }
 
