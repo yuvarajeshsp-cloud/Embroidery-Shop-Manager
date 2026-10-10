@@ -3,6 +3,7 @@ import { Store } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { supabase } from "@/lib/supabase"
 import { clearConfigCache } from "@/lib/config"
@@ -20,19 +21,26 @@ export function ShopTypeCard({ onApplied }: { onApplied: () => void }) {
   const current = useShopType()
   const [selected, setSelected] = React.useState<ShopType>(current)
   const [saving, setSaving] = React.useState(false)
+  // On by default: choosing a type should mean the order form offers that
+  // type's lists, not those plus everything the shop had before.
+  const [hideOthers, setHideOthers] = React.useState(true)
 
   React.useEffect(() => setSelected(current), [current])
 
   async function apply() {
     setSaving(true)
     try {
-      const { data, error } = await supabase.rpc("apply_shop_type", { p_shop_type: selected, p_replace: false })
+      const { data, error } = await supabase.rpc("apply_shop_type", {
+        p_shop_type: selected,
+        p_replace: false,
+        p_hide_others: hideOthers,
+      })
       if (error) throw error
       clearConfigCache()
       await refreshBusinessProfile()
       onApplied()
       const added = typeof data === "number" ? data : 0
-      toast.success(added > 0 ? `Shop type saved — ${added} new entries added to your lists` : "Shop type saved")
+      toast.success(added > 0 ? `Shop type saved — ${added} list entries updated` : "Shop type saved")
     } catch (err) {
       console.error(err)
       toast.error("Could not change the shop type")
@@ -49,7 +57,7 @@ export function ShopTypeCard({ onApplied }: { onApplied: () => void }) {
         </CardTitle>
         <CardDescription>
           Sets the wording, how new items are priced by default, and adds the matching starter lists. Nothing you
-          already have is removed or changed.
+          already have is deleted.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -73,9 +81,26 @@ export function ShopTypeCard({ onApplied }: { onApplied: () => void }) {
             </button>
           ))}
         </div>
+        <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
+          <Switch checked={hideOthers} onCheckedChange={setHideOthers} className="mt-0.5" />
+          <span className="flex flex-col gap-0.5">
+            <span className="text-sm font-medium">Show only this type's lists</span>
+            <span className="text-xs text-muted-foreground">
+              Hides statuses, board stages, item types, customer types and expense categories that don't belong to
+              this type. Nothing is deleted, anything an order, item, customer or expense already uses stays
+              visible, and you can switch hidden entries back on under their list.
+            </span>
+          </span>
+        </label>
         <div>
           <Button onClick={apply} disabled={saving}>
-            {saving ? "Saving..." : selected === current ? "Add this type's starter lists again" : "Apply shop type"}
+            {saving
+              ? "Saving..."
+              : selected === current
+                ? hideOthers
+                  ? "Apply again and hide the others"
+                  : "Add this type's starter lists again"
+                : "Apply shop type"}
           </Button>
         </div>
       </CardContent>

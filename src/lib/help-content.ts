@@ -18,7 +18,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     intro: "Set your shop up once, then work from the Dashboard every day.",
     steps: [
       "Sign up with your shop name, what kind of shop it is (embroidery, tailor, boutique or mixed), your name, email, phone number and a password. We send a 6-digit code by SMS (or by email if the SMS can't be delivered) — enter it to finish.",
-      "Open Configuration and fill in your company details, logo and brand colours. These appear on invoices and across the app. The Shop Type card there changes the wording and adds the starter lists for another kind of shop; it never removes anything you already have.",
+      "Open Configuration and fill in your company details, logo and brand colours. These appear on invoices and across the app. The Shop Type card there changes the wording and adds the starter lists for another kind of shop. Leave ‘Show only this type’s lists’ on to hide the statuses and item types that don't belong; nothing is deleted, and anything already in use stays visible.",
       "Still in Configuration, review the dropdown lists — order statuses, payment methods, product types, expense categories and so on — and add or rename values to match how your shop works.",
       "Add your team under Users & Roles (see “Team and roles” below).",
       "Add your customers, then create your first order.",
