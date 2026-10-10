@@ -996,8 +996,7 @@ export function OrderDetailPage({ id }: { id: string }) {
               {additionalCosts.map((c) => (
                 <div key={c.id} className="flex items-center justify-between gap-3 p-4">
                   <div className="flex min-w-0 flex-col">
-                    <span className="text-sm font-medium">{c.cost_type}</span>
-                    {c.notes && <span className="truncate text-xs text-muted-foreground">{c.notes}</span>}
+                    <span className="truncate text-sm font-medium">{c.cost_type}</span>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
                     <span className="mr-2 text-sm font-semibold">{formatCurrency(c.amount)}</span>

@@ -41,7 +41,6 @@ interface DraftCost {
   tempId: string
   cost_type: string
   amount: string
-  notes: string
 }
 
 interface DraftItem {
@@ -293,7 +292,6 @@ export function NewOrderPage() {
           costs.map((c) => ({
             order_id: orderData.id,
             cost_type: c.cost_type.trim(),
-            notes: c.notes.trim() || null,
             amount: parseFloat(c.amount),
             created_by: profile?.id ?? null,
           })),
@@ -639,46 +637,39 @@ export function NewOrderPage() {
                   size="sm"
                   variant="outline"
                   onClick={() =>
-                    setCosts((prev) => [...prev, { tempId: crypto.randomUUID(), cost_type: "", amount: "", notes: "" }])
+                    setCosts((prev) => [...prev, { tempId: crypto.randomUUID(), cost_type: "", amount: "" }])
                   }
                 >
                   <Plus className="size-4" /> Add
                 </Button>
               </div>
               {costs.map((c) => (
-                <div key={c.tempId} className="flex flex-col gap-2 rounded-md bg-muted/40 p-3">
+                <div key={c.tempId} className="flex items-center gap-2">
                   <CostTypeField
                     types={costTypes}
                     value={c.cost_type}
                     onChange={(v) => setCosts((prev) => prev.map((x) => (x.tempId === c.tempId ? { ...x, cost_type: v } : x)))}
                   />
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      inputMode="decimal"
-                      placeholder="Amount"
-                      value={c.amount}
-                      onChange={(e) =>
-                        setCosts((prev) => prev.map((x) => (x.tempId === c.tempId ? { ...x, amount: e.target.value } : x)))
-                      }
-                    />
-                    <Input
-                      placeholder="Note (optional)"
-                      value={c.notes}
-                      onChange={(e) =>
-                        setCosts((prev) => prev.map((x) => (x.tempId === c.tempId ? { ...x, notes: e.target.value } : x)))
-                      }
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => setCosts((prev) => prev.filter((x) => x.tempId !== c.tempId))}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  </div>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    inputMode="decimal"
+                    placeholder="Amount"
+                    className="w-28 shrink-0"
+                    value={c.amount}
+                    onChange={(e) =>
+                      setCosts((prev) => prev.map((x) => (x.tempId === c.tempId ? { ...x, amount: e.target.value } : x)))
+                    }
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="shrink-0"
+                    onClick={() => setCosts((prev) => prev.filter((x) => x.tempId !== c.tempId))}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
                 </div>
               ))}
             </div>

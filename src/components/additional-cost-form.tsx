@@ -1,10 +1,10 @@
 import * as React from "react"
+import { ChevronDown } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { fetchConfigItems } from "@/lib/config"
 import { supabase } from "@/lib/supabase"
@@ -42,22 +42,47 @@ export function CostTypeField({
     if (value !== "" && types.length > 0 && !types.includes(value)) setCustom(true)
   }, [types, value])
 
+  if (custom) {
+    return (
+      <div className="flex min-w-0 flex-1 items-center gap-1">
+        <Input
+          autoFocus={value === ""}
+          placeholder="Type the cost"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          title="Choose from the list"
+          className="shrink-0"
+          onClick={() => {
+            setCustom(false)
+            onChange("")
+          }}
+        >
+          <ChevronDown className="size-4" />
+        </Button>
+      </div>
+    )
+  }
+
   return (
-    <div className="flex flex-col gap-2">
+    <div className="min-w-0 flex-1">
       <Select
-        value={custom ? CUSTOM : value || undefined}
+        value={value || undefined}
         onValueChange={(v) => {
           if (v === CUSTOM) {
             setCustom(true)
-            if (types.includes(value)) onChange("")
+            onChange("")
           } else {
-            setCustom(false)
             onChange(v)
           }
         }}
       >
-        <SelectTrigger>
-          <SelectValue placeholder="Select a cost type…" />
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder="Cost type…" />
         </SelectTrigger>
         <SelectContent>
           {types.map((t) => (
@@ -68,14 +93,6 @@ export function CostTypeField({
           <SelectItem value={CUSTOM}>Custom…</SelectItem>
         </SelectContent>
       </Select>
-      {custom && (
-        <Input
-          autoFocus={value === ""}
-          placeholder="Type the cost, e.g. Tempo charges"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      )}
     </div>
   )
 }
@@ -96,7 +113,6 @@ export function AdditionalCostForm({
   const [saving, setSaving] = React.useState(false)
   const [form, setForm] = React.useState({
     cost_type: cost?.cost_type || "",
-    notes: cost?.notes || "",
     amount: cost ? String(cost.amount) : "",
   })
 
@@ -115,7 +131,6 @@ export function AdditionalCostForm({
     try {
       const payload = {
         cost_type: costType,
-        notes: form.notes.trim() || null,
         amount,
       }
       const { error } = cost
@@ -144,30 +159,18 @@ export function AdditionalCostForm({
           <DialogTitle>{cost ? "Edit Additional Cost" : "Add Additional Cost"}</DialogTitle>
           <DialogDescription>Added to the order total.</DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <Label>Cost Type</Label>
-            <CostTypeField types={types} value={form.cost_type} onChange={(v) => setForm({ ...form, cost_type: v })} />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label>Amount</Label>
-            <Input
-              type="number"
-              min={0}
-              step="0.01"
-              inputMode="decimal"
-              value={form.amount}
-              onChange={(e) => setForm({ ...form, amount: e.target.value })}
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label>Note (optional)</Label>
-            <Input
-              placeholder="e.g. courier to Chennai"
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-            />
-          </div>
+        <div className="flex items-center gap-2">
+          <CostTypeField types={types} value={form.cost_type} onChange={(v) => setForm({ ...form, cost_type: v })} />
+          <Input
+            type="number"
+            min={0}
+            step="0.01"
+            inputMode="decimal"
+            placeholder="Amount"
+            className="w-28 shrink-0"
+            value={form.amount}
+            onChange={(e) => setForm({ ...form, amount: e.target.value })}
+          />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>

@@ -262,7 +262,7 @@ function drawThermalInvoiceContent(doc: jsPDF, data: ThermalInvoiceData, setting
   y = drawThermalRow(doc, "Subtotal", formatPdfCurrency(subtotal), y, false)
   if (setup > 0) y = drawThermalRow(doc, extraLabel(settings), formatPdfCurrency(setup), y, false)
   for (const cost of additionalCosts) {
-    const label = cost.notes ? `${cost.cost_type} (${cost.notes})` : cost.cost_type
+    const label = cost.cost_type
     y = drawThermalRow(doc, label.length > 22 ? `${label.slice(0, 21)}…` : label, formatPdfCurrency(cost.amount), y, false)
   }
   doc.setFontSize(10)
@@ -400,7 +400,7 @@ async function buildInvoiceBody(data: ThermalInvoiceData): Promise<string> {
   const costRows = additionalCosts
     .map(
       (c) =>
-        `<div class="row"><span>${escapeHtml(c.notes ? `${c.cost_type} (${c.notes})` : c.cost_type)}</span><span>${formatCurrency(c.amount)}</span></div>`,
+        `<div class="row"><span>${escapeHtml(c.cost_type)}</span><span>${formatCurrency(c.amount)}</span></div>`,
     )
     .join("")
 
