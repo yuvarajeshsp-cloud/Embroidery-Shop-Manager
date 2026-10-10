@@ -115,6 +115,8 @@ export interface OrderAdditionalCost {
   id: string
   organization_id: string
   order_id: string
+  /** The item this cost belongs to. */
+  order_item_id: string
   /** A configured cost type, or free text typed in for this order. */
   cost_type: string
   notes: string | null

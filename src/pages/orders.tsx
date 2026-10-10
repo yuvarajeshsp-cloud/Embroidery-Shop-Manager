@@ -457,7 +457,7 @@ export function OrderDetailPage({ id }: { id: string }) {
   const [payments, setPayments] = React.useState<Payment[]>([])
   const [expenses, setExpenses] = React.useState<Expense[]>([])
   const [additionalCosts, setAdditionalCosts] = React.useState<OrderAdditionalCost[]>([])
-  const [costForm, setCostForm] = React.useState<{ cost: OrderAdditionalCost | null } | null>(null)
+  const [costForm, setCostForm] = React.useState<{ itemId: string; cost: OrderAdditionalCost | null } | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [editingItem, setEditingItem] = React.useState<OrderItem | null>(null)
   const [showItemForm, setShowItemForm] = React.useState(false)
@@ -921,6 +921,12 @@ export function OrderDetailPage({ id }: { id: string }) {
                     </span>
                     <span className="font-semibold">{formatCurrency(orderItemTotal(item))}</span>
                   </div>
+                  <ItemCosts
+                    costs={additionalCosts.filter((c) => c.order_item_id === item.id)}
+                    onAdd={() => setCostForm({ itemId: item.id, cost: null })}
+                    onEdit={(c) => setCostForm({ itemId: item.id, cost: c })}
+                    onDelete={handleDeleteCost}
+                  />
                 </div>
               ))}
             </div>
@@ -942,7 +948,8 @@ export function OrderDetailPage({ id }: { id: string }) {
               </TableHeader>
               <TableBody>
                 {items.map((item, idx) => (
-                  <TableRow key={item.id}>
+                  <React.Fragment key={item.id}>
+                  <TableRow>
                     <TableCell className="text-xs">{idx + 1}</TableCell>
                     <TableCell><Badge variant="outline">{item.product_type}</Badge></TableCell>
                     <TableCell className="max-w-[200px] text-sm">{item.product_description || "—"}</TableCell>
@@ -971,6 +978,18 @@ export function OrderDetailPage({ id }: { id: string }) {
                       </div>
                     </TableCell>
                   </TableRow>
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell />
+                    <TableCell colSpan={anyStitchItem ? 9 : 7} className="pb-3 pt-0">
+                      <ItemCosts
+                        costs={additionalCosts.filter((c) => c.order_item_id === item.id)}
+                        onAdd={() => setCostForm({ itemId: item.id, cost: null })}
+                        onEdit={(c) => setCostForm({ itemId: item.id, cost: c })}
+                        onDelete={handleDeleteCost}
+                      />
+                    </TableCell>
+                  </TableRow>
+                  </React.Fragment>
                 ))}
               </TableBody>
             </Table>
@@ -978,49 +997,10 @@ export function OrderDetailPage({ id }: { id: string }) {
         </CardContent>
       </Card>
 
-      {/* Additional costs */}
-      <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Additional Costs</CardTitle>
-          <Button size="sm" variant="outline" onClick={() => setCostForm({ cost: null })}>
-            <Plus className="size-4" /> Add Cost
-          </Button>
-        </CardHeader>
-        <CardContent className="p-0">
-          {additionalCosts.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              No additional costs — add delivery, packaging, a rush fee or anything else charged on top.
-            </p>
-          ) : (
-            <div className="flex flex-col divide-y">
-              {additionalCosts.map((c) => (
-                <div key={c.id} className="flex items-center justify-between gap-3 p-4">
-                  <div className="flex min-w-0 flex-col">
-                    <span className="truncate text-sm font-medium">{c.cost_type}</span>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <span className="mr-2 text-sm font-semibold">{formatCurrency(c.amount)}</span>
-                    <Button variant="ghost" size="icon-sm" onClick={() => setCostForm({ cost: c })}>
-                      <Pencil className="size-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon-sm" onClick={() => handleDeleteCost(c)}>
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-              <div className="flex items-center justify-between p-4 text-sm">
-                <span className="text-muted-foreground">Total additional costs</span>
-                <span className="font-semibold">{formatCurrency(extrasTotal)}</span>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
       {costForm && (
         <AdditionalCostForm
           orderId={order.id}
+          orderItemId={costForm.itemId}
           cost={costForm.cost}
           onClose={() => setCostForm(null)}
           onSaved={() => {
@@ -1400,6 +1380,45 @@ function ShareToCustomerDialog({
 // ============================================================
 // ORDER ITEM FORM
 // ============================================================
+
+/** An item's additional costs: one line each, with a way to add more. */
+function ItemCosts({
+  costs,
+  onAdd,
+  onEdit,
+  onDelete,
+}: {
+  costs: OrderAdditionalCost[]
+  onAdd: () => void
+  onEdit: (cost: OrderAdditionalCost) => void
+  onDelete: (cost: OrderAdditionalCost) => void
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      {costs.map((c) => (
+        <div key={c.id} className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1 text-xs">
+          <span className="min-w-0 truncate text-muted-foreground">{c.cost_type}</span>
+          <span className="flex shrink-0 items-center gap-1">
+            <span className="font-medium">{formatCurrency(c.amount)}</span>
+            <Button variant="ghost" size="icon-xs" onClick={() => onEdit(c)}>
+              <Pencil className="size-3" />
+            </Button>
+            <Button variant="ghost" size="icon-xs" onClick={() => onDelete(c)}>
+              <Trash2 className="size-3" />
+            </Button>
+          </span>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={onAdd}
+        className="flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+      >
+        <Plus className="size-3" /> Add cost
+      </button>
+    </div>
+  )
+}
 
 function OrderItemForm({
   orderId,

@@ -1,5 +1,5 @@
 import * as React from "react"
-import { ArrowLeft, ArrowRight, Camera, Check, ChevronsUpDown, Plus, Trash2, X } from "lucide-react"
+import { ArrowLeft, ArrowRight, Camera, Check, ChevronDown, ChevronsUpDown, Plus, Trash2, X } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
@@ -45,6 +45,7 @@ interface DraftCost {
 
 interface DraftItem {
   tempId: string
+  costs: DraftCost[]
   product_type: string
   product_description: string
   design_name_number: string
@@ -96,7 +97,7 @@ export function NewOrderPage() {
   })
 
   const [items, setItems] = React.useState<DraftItem[]>([])
-  const [costs, setCosts] = React.useState<DraftCost[]>([])
+  const [expanded, setExpanded] = React.useState<Set<string>>(new Set())
   const costTypes = useCostTypes()
   const itemsRef = React.useRef<DraftItem[]>(items)
   itemsRef.current = items
@@ -135,9 +136,12 @@ export function NewOrderPage() {
         order_number: orderNumber,
         order_status: statusNames.includes(preferred) ? preferred : statusNames[0] || prev.order_status,
       }))
+      const firstItemId = crypto.randomUUID()
+      setExpanded(new Set([firstItemId]))
       setItems([
         {
-          tempId: crypto.randomUUID(),
+          tempId: firstItemId,
+          costs: [],
           product_type: typeItems[0]?.name || "Other",
           product_description: "",
           design_name_number: "",
@@ -158,10 +162,14 @@ export function NewOrderPage() {
   }, [])
 
   function addBlankItem() {
+    const id = crypto.randomUUID()
+    // A new item opens; the others fold away so the page stays short.
+    setExpanded(new Set([id]))
     setItems((prev) => [
       ...prev,
       {
-        tempId: crypto.randomUUID(),
+        tempId: id,
+        costs: [],
         product_type: productTypes[0] || "Other",
         product_description: "",
         design_name_number: "",
@@ -177,6 +185,21 @@ export function NewOrderPage() {
         photoPreviewUrl: "",
       },
     ])
+  }
+
+  const itemCostsTotal = (item: DraftItem) => item.costs.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0)
+  const itemTotal = (item: DraftItem) =>
+    formLineTotal(priceValuesOf(item)) + (item.setup_digitizing_charge || 0) + itemCostsTotal(item)
+  function toggleExpanded(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  function setItemCosts(id: string, update: (costs: DraftCost[]) => DraftCost[]) {
+    setItems((prev) => prev.map((i) => (i.tempId === id ? { ...i, costs: update(i.costs) } : i)))
   }
 
   function updateItem(tempId: string, patch: Partial<DraftItem>) {
@@ -203,7 +226,7 @@ export function NewOrderPage() {
 
   const subtotal = items.reduce((s, i) => s + formLineTotal(priceValuesOf(i)), 0)
   const setup = items.reduce((s, i) => s + (i.setup_digitizing_charge || 0), 0)
-  const costsTotal = costs.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0)
+  const costsTotal = items.reduce((s, i) => s + itemCostsTotal(i), 0)
   const grandTotal = subtotal + setup + costsTotal
 
   async function handleSave() {
@@ -217,11 +240,14 @@ export function NewOrderPage() {
       setStep(2)
       return
     }
-    for (const [idx, c] of costs.entries()) {
-      if (!c.cost_type.trim() || Number.isNaN(parseFloat(c.amount)) || parseFloat(c.amount) < 0) {
-        toast.error(`Additional cost ${idx + 1}: choose a type and enter the amount`)
-        setStep(2)
-        return
+    for (const [idx, item] of items.entries()) {
+      for (const c of item.costs) {
+        if (!c.cost_type.trim() || Number.isNaN(parseFloat(c.amount)) || parseFloat(c.amount) < 0) {
+          toast.error(`Item ${idx + 1}: choose a type and enter the amount for each additional cost`)
+          setStep(2)
+          setExpanded((prev) => new Set(prev).add(item.tempId))
+          return
+        }
       }
     }
     for (const [idx, item] of items.entries()) {
@@ -287,15 +313,17 @@ export function NewOrderPage() {
         .select()
       if (itemsError) throw itemsError
 
-      if (costs.length > 0) {
-        const { error: costsError } = await supabase.from("order_additional_costs").insert(
-          costs.map((c) => ({
-            order_id: orderData.id,
-            cost_type: c.cost_type.trim(),
-            amount: parseFloat(c.amount),
-            created_by: profile?.id ?? null,
-          })),
-        )
+      const costRows = items.flatMap((item, idx) =>
+        item.costs.map((c) => ({
+          order_id: orderData.id,
+          order_item_id: insertedItems?.[idx]?.id,
+          cost_type: c.cost_type.trim(),
+          amount: parseFloat(c.amount),
+          created_by: profile?.id ?? null,
+        })),
+      )
+      if (costRows.length > 0) {
+        const { error: costsError } = await supabase.from("order_additional_costs").insert(costRows)
         if (costsError) {
           console.error(costsError)
           toast.error("Order created, but the additional costs could not be saved — add them on the order")
@@ -326,7 +354,7 @@ export function NewOrderPage() {
   }
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
+    <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-x-hidden p-4 md:p-6">
       <PageHeader title="New Order" description="Create a new embroidery order">
         <Button variant="outline" size="sm" onClick={() => navigate({ name: "orders" })}>
           Cancel
@@ -334,346 +362,375 @@ export function NewOrderPage() {
       </PageHeader>
 
       {/* Stepper */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 overflow-x-auto">
         {[
-          { n: 1, label: "Order Details" },
+          { n: 1, label: "Details" },
           { n: 2, label: "Items & Pricing" },
-          { n: 3, label: "Review & Save" },
-        ].map((s) => (
-          <div key={s.n} className="flex items-center gap-2">
+          { n: 3, label: "Review" },
+        ].map((st) => (
+          <div key={st.n} className="flex shrink-0 items-center gap-2">
             <div
-              className={`flex size-8 items-center justify-center rounded-full text-sm font-medium ${
-                step >= s.n ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+              className={`flex size-7 items-center justify-center rounded-full text-xs font-medium ${
+                step >= st.n ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
               }`}
             >
-              {s.n}
+              {st.n}
             </div>
-            <span className={`text-sm ${step >= s.n ? "font-medium" : "text-muted-foreground"}`}>
-              {s.label}
-            </span>
-            {s.n < 3 && <div className="h-px w-8 bg-border" />}
+            <span className={`text-sm ${step >= st.n ? "font-medium" : "text-muted-foreground"}`}>{st.label}</span>
+            {st.n < 3 && <div className="h-px w-6 bg-border" />}
           </div>
         ))}
       </div>
 
       {/* Step 1: Order Details */}
       {step === 1 && (
-        <Card>
-          <CardHeader><CardTitle>Order Details</CardTitle></CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex min-w-0 flex-col gap-2">
-                <Label>Order Number</Label>
+        <Card className="gap-3 py-4">
+          <CardContent className="flex flex-col gap-3 px-4">
+            {/* Order number + customer share a row */}
+            <div className="grid grid-cols-[6.5rem_1fr] gap-3">
+              <Field label="Order No.">
                 <Input
+                  className="h-9"
                   value={orderForm.order_number}
-                  placeholder={orderForm.order_number ? undefined : "Generating..."}
+                  placeholder={orderForm.order_number ? undefined : "…"}
                   disabled
                   readOnly
                 />
-              </div>
-              <div className="flex min-w-0 flex-col gap-2">
-                <Label>Sales Channel</Label>
-                <Select
-                  value={orderForm.sales_channel}
-                  onValueChange={(v) => setOrderForm({ ...orderForm, sales_channel: v })}
-                >
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Select..." /></SelectTrigger>
-                  <SelectContent>
-                    {salesChannels.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              </Field>
+              <Field label="Customer *">
+                <Popover open={customerPickerOpen} onOpenChange={setCustomerPickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={customerPickerOpen}
+                      className="h-9 w-full justify-between font-normal"
+                    >
+                      <span className="truncate">
+                        {orderForm.customer_id ? (
+                          (() => {
+                            const c = customers.find((c) => c.id === orderForm.customer_id)
+                            return c ? `${c.customer_business_name} (${c.customer_code})` : "Select customer..."
+                          })()
+                        ) : (
+                          <span className="text-muted-foreground">Select customer...</span>
+                        )}
+                      </span>
+                      <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search customers..." />
+                      <CommandList>
+                        <CommandEmpty>No customer found.</CommandEmpty>
+                        <CommandGroup>
+                          {customers.map((c) => (
+                            <CommandItem
+                              key={c.id}
+                              value={`${c.customer_business_name} ${c.customer_code}`}
+                              onSelect={() => {
+                                setOrderForm({ ...orderForm, customer_id: c.id })
+                                setCustomerPickerOpen(false)
+                              }}
+                            >
+                              <Check
+                                className={cn("mr-2 size-4", orderForm.customer_id === c.id ? "opacity-100" : "opacity-0")}
+                              />
+                              {c.customer_business_name} ({c.customer_code})
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </Field>
             </div>
-            <div className="flex flex-col gap-2">
-              <Label>Customer *</Label>
-              <Popover open={customerPickerOpen} onOpenChange={setCustomerPickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={customerPickerOpen}
-                    className="w-full justify-between font-normal"
-                  >
-                    {orderForm.customer_id
-                      ? (() => {
-                          const c = customers.find((c) => c.id === orderForm.customer_id)
-                          return c ? `${c.customer_business_name} (${c.customer_code})` : "Select customer..."
-                        })()
-                      : <span className="text-muted-foreground">Select customer...</span>}
-                    <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search customers..." />
-                    <CommandList>
-                      <CommandEmpty>No customer found.</CommandEmpty>
-                      <CommandGroup>
-                        {customers.map((c) => (
-                          <CommandItem
-                            key={c.id}
-                            value={`${c.customer_business_name} ${c.customer_code}`}
-                            onSelect={() => {
-                              setOrderForm({ ...orderForm, customer_id: c.id })
-                              setCustomerPickerOpen(false)
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 size-4",
-                                orderForm.customer_id === c.id ? "opacity-100" : "opacity-0",
-                              )}
-                            />
-                            {c.customer_business_name} ({c.customer_code})
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex min-w-0 flex-col gap-2">
-                <Label>Order Date</Label>
+
+            {/* Dates */}
+            <div className={cn("grid gap-3", vocab.usesTrialDate ? "grid-cols-3" : "grid-cols-2")}>
+              <Field label="Order Date">
                 <Input
                   type="date"
-                  className="min-w-0 px-2 text-sm"
+                  className="h-9 min-w-0 px-2 text-sm"
                   value={orderForm.order_date}
                   onChange={(e) => setOrderForm({ ...orderForm, order_date: e.target.value })}
                 />
-              </div>
-              <div className="flex min-w-0 flex-col gap-2">
-                <Label>Delivery Date</Label>
+              </Field>
+              <Field label="Delivery Date">
                 <Input
                   type="date"
-                  className="min-w-0 px-2 text-sm"
+                  className="h-9 min-w-0 px-2 text-sm"
                   value={orderForm.required_date}
                   onChange={(e) => setOrderForm({ ...orderForm, required_date: e.target.value })}
                 />
-              </div>
+              </Field>
+              {vocab.usesTrialDate && (
+                <Field label="Trial / Fitting">
+                  <Input
+                    type="date"
+                    className="h-9 min-w-0 px-2 text-sm"
+                    value={orderForm.trial_date}
+                    onChange={(e) => setOrderForm({ ...orderForm, trial_date: e.target.value })}
+                  />
+                </Field>
+              )}
             </div>
-            {vocab.usesTrialDate && (
-              <div className="flex min-w-0 flex-col gap-2">
-                <Label>Trial / Fitting Date</Label>
-                <Input
-                  type="date"
-                  className="min-w-0 px-2 text-sm"
-                  value={orderForm.trial_date}
-                  onChange={(e) => setOrderForm({ ...orderForm, trial_date: e.target.value })}
-                />
-              </div>
-            )}
-            {vocab.usesMaterialReceived && (
-              <div className="flex flex-col gap-2">
-                <Label>Material / Fabric Received</Label>
-                <Input
-                  placeholder="e.g. 2.5 m cotton, lining, buttons"
-                  value={orderForm.material_received}
-                  onChange={(e) => setOrderForm({ ...orderForm, material_received: e.target.value })}
-                />
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-2">
-                <Label>Order Status</Label>
-                <Select
-                  value={orderForm.order_status}
-                  onValueChange={(v) => setOrderForm({ ...orderForm, order_status: v })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+
+            {/* Status, priority, assignee, channel — two to a row */}
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Status">
+                <Select value={orderForm.order_status} onValueChange={(v) => setOrderForm({ ...orderForm, order_status: v })}>
+                  <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {orderStatuses.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    {orderStatuses.map((st) => <SelectItem key={st} value={st}>{st}</SelectItem>)}
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Priority</Label>
-                <Select
-                  value={orderForm.priority}
-                  onValueChange={(v) => setOrderForm({ ...orderForm, priority: v })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+              </Field>
+              <Field label="Priority">
+                <Select value={orderForm.priority} onValueChange={(v) => setOrderForm({ ...orderForm, priority: v })}>
+                  <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {priorities.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                   </SelectContent>
                 </Select>
-              </div>
+              </Field>
+              <Field label="Assign To">
+                <Select
+                  value={orderForm.assigned_to || "unassigned"}
+                  onValueChange={(v) => setOrderForm({ ...orderForm, assigned_to: v === "unassigned" ? "" : v })}
+                >
+                  <SelectTrigger className="h-9 w-full"><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    {assignableUsers.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>{u.display_name} ({u.role})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Sales Channel">
+                <Select value={orderForm.sales_channel} onValueChange={(v) => setOrderForm({ ...orderForm, sales_channel: v })}>
+                  <SelectTrigger className="h-9 w-full"><SelectValue placeholder="Select..." /></SelectTrigger>
+                  <SelectContent>
+                    {salesChannels.map((ch) => <SelectItem key={ch} value={ch}>{ch}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Field>
             </div>
-            <div className="flex flex-col gap-2">
-              <Label>Assign To</Label>
-              <Select
-                value={orderForm.assigned_to || "unassigned"}
-                onValueChange={(v) => setOrderForm({ ...orderForm, assigned_to: v === "unassigned" ? "" : v })}
-              >
-                <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="unassigned">Unassigned</SelectItem>
-                  {assignableUsers.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>{u.display_name} ({u.role})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label>Special Instructions</Label>
+
+            {vocab.usesMaterialReceived && (
+              <Field label="Material / Fabric Received">
+                <Input
+                  className="h-9"
+                  placeholder="e.g. 2.5 m cotton, lining, buttons"
+                  value={orderForm.material_received}
+                  onChange={(e) => setOrderForm({ ...orderForm, material_received: e.target.value })}
+                />
+              </Field>
+            )}
+
+            <Field label="Special Instructions">
               <Textarea
+                className="min-h-0"
                 value={orderForm.special_instructions}
                 onChange={(e) => setOrderForm({ ...orderForm, special_instructions: e.target.value })}
                 rows={2}
               />
-            </div>
+            </Field>
+
             <div className="flex justify-end">
               <Button onClick={() => setStep(2)}>
-                Next: Add Items <ArrowRight className="size-4" />
+                Next: Items <ArrowRight className="size-4" />
               </Button>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Step 2: Items */}
+      {/* Step 2: Items — each one folds open and shut */}
       {step === 2 && (
-        <Card>
-          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
+        <Card className="gap-3 py-4">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 px-4">
             <CardTitle>Items & Pricing</CardTitle>
-            <Button size="sm" onClick={addBlankItem}>
-              <Plus className="size-4" /> Add Item
-            </Button>
+            <div className="flex items-center gap-2">
+              {items.length > 1 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    setExpanded(expanded.size > 0 ? new Set() : new Set(items.map((i) => i.tempId)))
+                  }
+                >
+                  {expanded.size > 0 ? "Collapse all" : "Expand all"}
+                </Button>
+              )}
+              <Button size="sm" onClick={addBlankItem}>
+                <Plus className="size-4" /> Add Item
+              </Button>
+            </div>
           </CardHeader>
-          <CardContent className="flex flex-col gap-4">
+          <CardContent className="flex flex-col gap-2 px-4">
             {items.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
+              <p className="py-6 text-center text-sm text-muted-foreground">
                 No items added yet. Click "Add Item" to add the first one.
               </p>
             ) : (
-              <div className="flex flex-col gap-4">
-                {items.map((item, idx) => {
-                  const values = priceValuesOf(item)
-                  const lineTotal = formLineTotal(values)
-                  return (
-                    <div key={item.tempId} className="rounded-lg border p-4">
-                      <div className="mb-3 flex items-center justify-between">
-                        <span className="text-sm font-medium">Item {idx + 1}</span>
-                        <Button variant="ghost" size="icon-sm" onClick={() => removeItem(item.tempId)}>
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </div>
-                      <div className="flex flex-col gap-4">
-                        <div className="flex flex-col gap-1">
-                          <Label className="text-xs">{vocab.productLabel}</Label>
-                          <Select
-                            value={item.product_type}
-                            onValueChange={(v) => updateItem(item.tempId, { product_type: v })}
-                          >
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              {productTypes.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <ItemPriceFields
-                          values={values}
-                          onChange={(patch) => updateItem(item.tempId, patch)}
-                        />
-                        <div className="flex items-center justify-between border-t pt-3 text-sm">
-                          <span className="text-muted-foreground">Line Total</span>
-                          <span className="font-semibold">{formatCurrency(lineTotal)}</span>
-                        </div>
-                      </div>
-                      <div className="mt-2 flex flex-col gap-1">
-                        <Label className="text-xs">Description</Label>
-                        <Textarea
-                          className="min-h-0"
-                          rows={1}
-                          value={item.product_description}
-                          onChange={(e) => updateItem(item.tempId, { product_description: e.target.value })}
-                        />
-                      </div>
-                      <div className="mt-2 flex flex-col gap-1">
-                        <Label className="text-xs">Photo</Label>
-                        <div className="flex items-center gap-2">
-                          {item.photoPreviewUrl ? (
-                            <div className="relative size-16 shrink-0 overflow-hidden rounded-md border">
-                              <img src={item.photoPreviewUrl} alt="" className="size-full object-cover" />
-                              <button
-                                type="button"
-                                onClick={() => setItemPhoto(item.tempId, null)}
-                                className="absolute right-0.5 top-0.5 flex size-4 items-center justify-center rounded-full bg-background/90 text-muted-foreground hover:text-destructive"
-                                title="Remove photo"
-                              >
-                                <X className="size-2.5" />
-                              </button>
-                            </div>
-                          ) : (
-                            <label className="flex size-16 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed text-muted-foreground hover:bg-muted/50">
-                              <Camera className="size-4" />
-                              <span className="text-[10px]">Add photo</span>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={(e) => setItemPhoto(item.tempId, e.target.files?.[0] || null)}
-                              />
-                            </label>
+              items.map((item, idx) => {
+                const values = priceValuesOf(item)
+                const isOpen = expanded.has(item.tempId)
+                const qty = values.pricing_mode === "fixed" ? "Fixed" : `${item.quantity || 0}${values.pricing_mode === "metre" ? " m" : ""}`
+                return (
+                  <div key={item.tempId} className="rounded-lg border">
+                    {/* Header: always visible; tap to fold */}
+                    <div className="flex items-center gap-1 pr-1">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(item.tempId)}
+                        aria-expanded={isOpen}
+                        className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5 text-left"
+                      >
+                        <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", !isOpen && "-rotate-90")} />
+                        <span className="shrink-0 text-xs text-muted-foreground">#{idx + 1}</span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                          {item.product_type}
+                          {item.product_description && (
+                            <span className="font-normal text-muted-foreground"> — {item.product_description}</span>
                           )}
-                          {item.photoFile && (
-                            <span className="max-w-[160px] truncate text-xs text-muted-foreground">{item.photoFile.name}</span>
-                          )}
-                        </div>
-                      </div>
+                        </span>
+                        <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
+                          {qty}
+                          {item.costs.length > 0 && ` · +${item.costs.length} cost${item.costs.length > 1 ? "s" : ""}`}
+                        </span>
+                        <span className="shrink-0 text-sm font-semibold">{formatCurrency(itemTotal(item))}</span>
+                      </button>
+                      <Button variant="ghost" size="icon-sm" onClick={() => removeItem(item.tempId)}>
+                        <Trash2 className="size-3.5" />
+                      </Button>
                     </div>
-                  )
-                })}
-              </div>
+
+                    {isOpen && (
+                      <div className="flex flex-col gap-3 border-t p-3">
+                        {/* Type + description on one row, photo beside them */}
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-[12rem_1fr]">
+                          <Field label={vocab.productLabel}>
+                            <Select value={item.product_type} onValueChange={(v) => updateItem(item.tempId, { product_type: v })}>
+                              <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {productTypes.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </Field>
+                          <Field label="Description">
+                            <div className="flex items-center gap-2">
+                              <Input
+                                className="h-9"
+                                value={item.product_description}
+                                onChange={(e) => updateItem(item.tempId, { product_description: e.target.value })}
+                              />
+                              {item.photoPreviewUrl ? (
+                                <div className="relative size-9 shrink-0 overflow-hidden rounded-md border">
+                                  <img src={item.photoPreviewUrl} alt="" className="size-full object-cover" />
+                                  <button
+                                    type="button"
+                                    onClick={() => setItemPhoto(item.tempId, null)}
+                                    className="absolute right-0 top-0 flex size-4 items-center justify-center rounded-bl bg-background/90 text-muted-foreground hover:text-destructive"
+                                    title="Remove photo"
+                                  >
+                                    <X className="size-2.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <label
+                                  title="Add photo"
+                                  className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed text-muted-foreground hover:bg-muted/50"
+                                >
+                                  <Camera className="size-4" />
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => setItemPhoto(item.tempId, e.target.files?.[0] || null)}
+                                  />
+                                </label>
+                              )}
+                            </div>
+                          </Field>
+                        </div>
+
+                        <ItemPriceFields values={values} onChange={(patch) => updateItem(item.tempId, patch)} />
+
+                        {/* Additional costs for this item: one row each */}
+                        <div className="flex flex-col gap-2 rounded-md bg-muted/40 p-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-muted-foreground">Additional costs</span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2"
+                              onClick={() =>
+                                setItemCosts(item.tempId, (cs) => [
+                                  ...cs,
+                                  { tempId: crypto.randomUUID(), cost_type: "", amount: "" },
+                                ])
+                              }
+                            >
+                              <Plus className="size-3.5" /> Add
+                            </Button>
+                          </div>
+                          {item.costs.map((c) => (
+                            <div key={c.tempId} className="flex items-center gap-2">
+                              <CostTypeField
+                                types={costTypes}
+                                value={c.cost_type}
+                                onChange={(v) =>
+                                  setItemCosts(item.tempId, (cs) => cs.map((x) => (x.tempId === c.tempId ? { ...x, cost_type: v } : x)))
+                                }
+                              />
+                              <Input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                inputMode="decimal"
+                                placeholder="Amount"
+                                className="h-9 w-28 shrink-0"
+                                value={c.amount}
+                                onChange={(e) =>
+                                  setItemCosts(item.tempId, (cs) => cs.map((x) => (x.tempId === c.tempId ? { ...x, amount: e.target.value } : x)))
+                                }
+                              />
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className="shrink-0"
+                                onClick={() => setItemCosts(item.tempId, (cs) => cs.filter((x) => x.tempId !== c.tempId))}
+                              >
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Item total</span>
+                          <span className="font-semibold">{formatCurrency(itemTotal(item))}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })
             )}
-            <div className="flex flex-col gap-3 rounded-lg border p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">Additional Costs</span>
-                  <span className="text-xs text-muted-foreground">Delivery, packaging, rush fee … added to the total.</span>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    setCosts((prev) => [...prev, { tempId: crypto.randomUUID(), cost_type: "", amount: "" }])
-                  }
-                >
-                  <Plus className="size-4" /> Add
-                </Button>
-              </div>
-              {costs.map((c) => (
-                <div key={c.tempId} className="flex items-center gap-2">
-                  <CostTypeField
-                    types={costTypes}
-                    value={c.cost_type}
-                    onChange={(v) => setCosts((prev) => prev.map((x) => (x.tempId === c.tempId ? { ...x, cost_type: v } : x)))}
-                  />
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    inputMode="decimal"
-                    placeholder="Amount"
-                    className="w-28 shrink-0"
-                    value={c.amount}
-                    onChange={(e) =>
-                      setCosts((prev) => prev.map((x) => (x.tempId === c.tempId ? { ...x, amount: e.target.value } : x)))
-                    }
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="shrink-0"
-                    onClick={() => setCosts((prev) => prev.filter((x) => x.tempId !== c.tempId))}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                </div>
-              ))}
+
+            <div className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-2 text-sm">
+              <span className="text-muted-foreground">
+                {items.length} item{items.length === 1 ? "" : "s"}
+              </span>
+              <span className="font-semibold">Total {formatCurrency(grandTotal)}</span>
             </div>
-            <div className="flex justify-between">
+
+            <div className="flex justify-between pt-1">
               <Button variant="outline" onClick={() => setStep(1)}>
                 <ArrowLeft className="size-4" /> Back
               </Button>
@@ -687,75 +744,78 @@ export function NewOrderPage() {
 
       {/* Step 3: Review */}
       {step === 3 && (
-        <Card>
-          <CardHeader><CardTitle>Review & Save</CardTitle></CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground">Order Number</span>
-                <span className="font-mono text-sm">{orderForm.order_number}</span>
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground">Customer</span>
-                <span className="text-sm font-medium">
-                  {customers.find((c) => c.id === orderForm.customer_id)?.customer_business_name || "—"}
-                </span>
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground">Order Date</span>
-                <span className="text-sm">{orderForm.order_date}</span>
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground">Delivery Date</span>
-                <span className="text-sm">{orderForm.required_date || "—"}</span>
-              </div>
-              {vocab.usesTrialDate && (
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs text-muted-foreground">Trial / Fitting Date</span>
-                  <span className="text-sm">{orderForm.trial_date || "—"}</span>
-                </div>
+        <Card className="gap-3 py-4">
+          <CardContent className="flex flex-col gap-3 px-4">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+              <Summary label="Order No." value={orderForm.order_number} mono />
+              <Summary
+                label="Customer"
+                value={customers.find((c) => c.id === orderForm.customer_id)?.customer_business_name || "—"}
+              />
+              <Summary label="Status" value={orderForm.order_status} />
+              <Summary label="Order Date" value={orderForm.order_date} />
+              <Summary label="Delivery" value={orderForm.required_date || "—"} />
+              {vocab.usesTrialDate && <Summary label="Trial / Fitting" value={orderForm.trial_date || "—"} />}
+              <Summary label="Priority" value={orderForm.priority} />
+              {orderForm.assigned_to && (
+                <Summary
+                  label="Assigned"
+                  value={assignableUsers.find((u) => u.id === orderForm.assigned_to)?.display_name || "—"}
+                />
               )}
-              <div className="flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground">Priority</span>
-                <span className="text-sm">{orderForm.priority}</span>
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground">Status</span>
-                <span className="text-sm">{orderForm.order_status}</span>
-              </div>
+              {orderForm.material_received && <Summary label="Material" value={orderForm.material_received} />}
             </div>
 
             <div className="rounded-lg border">
-              <div className="border-b p-3 text-sm font-medium">Items ({items.length})</div>
-              <div className="flex flex-col gap-2 p-3">
+              <div className="flex flex-col divide-y">
                 {items.map((item, idx) => {
-                  const lineTotal = formLineTotal(priceValuesOf(item))
                   const label = item.product_description || item.design_name_number
                   return (
-                    <div key={item.tempId} className="flex items-center justify-between text-sm">
-                      <span>{idx + 1}. {item.product_type}{label ? ` — ${label}` : ""}</span>
-                      <span className="font-medium">{formatCurrency(lineTotal)}</span>
+                    <div key={item.tempId} className="flex flex-col gap-0.5 px-3 py-2 text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate">
+                          {idx + 1}. {item.product_type}
+                          {label ? ` — ${label}` : ""}
+                        </span>
+                        <span className="shrink-0 font-medium">{formatCurrency(formLineTotal(priceValuesOf(item)))}</span>
+                      </div>
+                      {(item.setup_digitizing_charge || 0) > 0 && (
+                        <div className="flex justify-between pl-4 text-xs text-muted-foreground">
+                          <span>{vocab.setupLabel.replace(/\s*\(.*\)$/, "")}</span>
+                          <span>{formatCurrency(item.setup_digitizing_charge || 0)}</span>
+                        </div>
+                      )}
+                      {item.costs.map((c) => (
+                        <div key={c.tempId} className="flex justify-between pl-4 text-xs text-muted-foreground">
+                          <span>{c.cost_type || "Additional cost"}</span>
+                          <span>{formatCurrency(parseFloat(c.amount) || 0)}</span>
+                        </div>
+                      ))}
                     </div>
                   )
                 })}
               </div>
-            </div>
-
-            <div className="flex flex-col gap-1 rounded-lg border bg-muted/50 p-3">
-              <div className="flex justify-between text-sm">
-                <span>Subtotal</span><span>{formatCurrency(subtotal)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>{vocab.setupLabel}</span><span>{formatCurrency(setup)}</span>
-              </div>
-              {costs.map((c) => (
-                <div key={c.tempId} className="flex justify-between text-sm">
-                  <span>{c.cost_type || "Additional cost"}</span>
-                  <span>{formatCurrency(parseFloat(c.amount) || 0)}</span>
+              <div className="flex flex-col gap-0.5 border-t bg-muted/50 px-3 py-2 text-sm">
+                <div className="flex justify-between">
+                  <span>Subtotal</span>
+                  <span>{formatCurrency(subtotal)}</span>
                 </div>
-              ))}
-              <div className="flex justify-between border-t pt-1 text-sm font-bold">
-                <span>Total</span><span>{formatCurrency(grandTotal)}</span>
+                {setup > 0 && (
+                  <div className="flex justify-between">
+                    <span>{vocab.setupLabel.replace(/\s*\(.*\)$/, "")}</span>
+                    <span>{formatCurrency(setup)}</span>
+                  </div>
+                )}
+                {costsTotal > 0 && (
+                  <div className="flex justify-between">
+                    <span>Additional costs</span>
+                    <span>{formatCurrency(costsTotal)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t pt-1 font-bold">
+                  <span>Total</span>
+                  <span>{formatCurrency(grandTotal)}</span>
+                </div>
               </div>
             </div>
 
@@ -770,6 +830,25 @@ export function NewOrderPage() {
           </CardContent>
         </Card>
       )}
+    </div>
+  )
+}
+
+/** A label above a control; the unit of the compact order form. */
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <Label className="truncate text-xs font-normal text-muted-foreground">{label}</Label>
+      {children}
+    </div>
+  )
+}
+
+function Summary({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex min-w-0 flex-col">
+      <span className="text-[11px] text-muted-foreground">{label}</span>
+      <span className={cn("truncate text-sm", mono && "font-mono")}>{value}</span>
     </div>
   )
 }

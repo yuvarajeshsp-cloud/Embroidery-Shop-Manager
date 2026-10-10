@@ -99,11 +99,13 @@ export function CostTypeField({
 
 export function AdditionalCostForm({
   orderId,
+  orderItemId,
   cost,
   onClose,
   onSaved,
 }: {
   orderId: string
+  orderItemId: string
   cost: OrderAdditionalCost | null
   onClose: () => void
   onSaved: () => void
@@ -140,7 +142,7 @@ export function AdditionalCostForm({
             .eq("id", cost.id)
         : await supabase
             .from("order_additional_costs")
-            .insert({ ...payload, order_id: orderId, created_by: profile?.id ?? null })
+            .insert({ ...payload, order_id: orderId, order_item_id: orderItemId, created_by: profile?.id ?? null })
       if (error) throw error
       toast.success(cost ? "Cost updated" : "Cost added")
       onSaved()
@@ -157,7 +159,7 @@ export function AdditionalCostForm({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{cost ? "Edit Additional Cost" : "Add Additional Cost"}</DialogTitle>
-          <DialogDescription>Added to the order total.</DialogDescription>
+          <DialogDescription>Added to this item and to the order total.</DialogDescription>
         </DialogHeader>
         <div className="flex items-center gap-2">
           <CostTypeField types={types} value={form.cost_type} onChange={(v) => setForm({ ...form, cost_type: v })} />

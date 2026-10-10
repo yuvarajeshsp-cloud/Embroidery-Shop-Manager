@@ -1,5 +1,3 @@
-import { Hash, IndianRupee, Sparkles } from "lucide-react"
-
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -63,12 +61,13 @@ export function ItemPriceFields({
   const mode = values.pricing_mode
   const modeInfo = PRICING_MODES.find((m) => m.value === mode)!
 
-  const priceLabel = mode === "metre" ? "Price per metre" : mode === "fixed" ? "Price" : "Price per piece"
+  const priceLabel = mode === "metre" ? "Price / metre" : mode === "fixed" ? "Price" : "Price / piece"
+  const inputClass = "h-9"
 
+  // One compact grid: three fields to a row on wider screens, two on a phone.
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-2">
-        <Label className="font-normal text-muted-foreground">Priced</Label>
+    <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3">
+      <Field label="Priced" hint={modeInfo.hint}>
         <Select
           value={mode}
           onValueChange={(v) => {
@@ -76,123 +75,93 @@ export function ItemPriceFields({
             onChange({ pricing_mode: next, ...(next === "fixed" ? { quantity: 1 } : {}) })
           }}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger className={`${inputClass} w-full`}><SelectValue /></SelectTrigger>
           <SelectContent>
             {PRICING_MODES.map((m) => (
               <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">{modeInfo.hint}</p>
-      </div>
+      </Field>
+
+      {mode !== "fixed" && (
+        <Field label={mode === "metre" ? "Metres" : "Quantity"}>
+          <Input
+            type="number"
+            className={inputClass}
+            min={mode === "metre" ? 0.1 : 1}
+            step={mode === "metre" ? "0.1" : "1"}
+            value={num(values.quantity)}
+            onChange={(e) =>
+              onChange({
+                quantity: e.target.value === "" ? NaN : mode === "metre" ? parseFloat(e.target.value) : parseInt(e.target.value, 10),
+              })
+            }
+          />
+        </Field>
+      )}
 
       {mode === "stitch" ? (
         <>
-          <div className="grid grid-cols-3 items-end gap-5">
-            <div className="flex flex-col gap-2">
-              <Label className="flex items-center gap-1.5 font-normal text-muted-foreground">
-                <Hash className="size-3.5" /> Quantity
-              </Label>
-              <Input
-                type="number"
-                min={1}
-                value={num(values.quantity)}
-                onChange={(e) => onChange({ quantity: e.target.value === "" ? NaN : parseInt(e.target.value, 10) })}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label className="flex items-center gap-1.5 font-normal text-muted-foreground">
-                <Sparkles className="size-3.5" /> Stitches/Unit
-              </Label>
-              <Input
-                type="number"
-                min={0}
-                value={num(values.stitches_per_unit)}
-                onChange={(e) => onChange({ stitches_per_unit: e.target.value === "" ? NaN : parseInt(e.target.value, 10) })}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label className="flex items-center gap-1.5 font-normal text-muted-foreground">
-                <IndianRupee className="size-3.5" /> Rate/1K Stitches
-              </Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={num(values.rate_per_1000_stitches)}
-                onChange={(e) => onChange({ rate_per_1000_stitches: e.target.value === "" ? NaN : parseFloat(e.target.value) })}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 items-end gap-5">
-            <div className="flex flex-col gap-2">
-              <Label className="font-normal text-muted-foreground">Unit Price (Manual)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="Auto-calculate"
-                value={values.manual_unit_price}
-                onChange={(e) => onChange({ manual_unit_price: e.target.value })}
-              />
-            </div>
-            <ExtraCharge label={vocab.setupLabel} values={values} onChange={onChange} />
-          </div>
-        </>
-      ) : (
-        <div className="grid grid-cols-2 items-end gap-5">
-          {mode !== "fixed" && (
-            <div className="flex flex-col gap-2">
-              <Label className="flex items-center gap-1.5 font-normal text-muted-foreground">
-                <Hash className="size-3.5" /> {mode === "metre" ? "Metres" : "Quantity"}
-              </Label>
-              <Input
-                type="number"
-                min={mode === "metre" ? 0.1 : 1}
-                step={mode === "metre" ? "0.1" : "1"}
-                value={num(values.quantity)}
-                onChange={(e) =>
-                  onChange({
-                    quantity: e.target.value === "" ? NaN : mode === "metre" ? parseFloat(e.target.value) : parseInt(e.target.value, 10),
-                  })
-                }
-              />
-            </div>
-          )}
-          <div className="flex flex-col gap-2">
-            <Label className="flex items-center gap-1.5 font-normal text-muted-foreground">
-              <IndianRupee className="size-3.5" /> {priceLabel}
-            </Label>
+          <Field label="Stitches / unit">
             <Input
               type="number"
+              className={inputClass}
+              min={0}
+              value={num(values.stitches_per_unit)}
+              onChange={(e) => onChange({ stitches_per_unit: e.target.value === "" ? NaN : parseInt(e.target.value, 10) })}
+            />
+          </Field>
+          <Field label="Rate / 1K stitches">
+            <Input
+              type="number"
+              className={inputClass}
               step="0.01"
+              value={num(values.rate_per_1000_stitches)}
+              onChange={(e) => onChange({ rate_per_1000_stitches: e.target.value === "" ? NaN : parseFloat(e.target.value) })}
+            />
+          </Field>
+          <Field label="Manual unit price">
+            <Input
+              type="number"
+              className={inputClass}
+              step="0.01"
+              placeholder="Auto"
               value={values.manual_unit_price}
               onChange={(e) => onChange({ manual_unit_price: e.target.value })}
             />
-          </div>
-          <ExtraCharge label={vocab.setupLabel} values={values} onChange={onChange} />
-        </div>
+          </Field>
+        </>
+      ) : (
+        <Field label={priceLabel}>
+          <Input
+            type="number"
+            className={inputClass}
+            step="0.01"
+            value={values.manual_unit_price}
+            onChange={(e) => onChange({ manual_unit_price: e.target.value })}
+          />
+        </Field>
       )}
+
+      <Field label={vocab.setupLabel.replace(/\s*\(.*\)$/, "")}>
+        <Input
+          type="number"
+          className={inputClass}
+          step="0.01"
+          value={num(values.setup_digitizing_charge)}
+          onChange={(e) => onChange({ setup_digitizing_charge: e.target.value === "" ? NaN : parseFloat(e.target.value) })}
+        />
+      </Field>
     </div>
   )
 }
 
-function ExtraCharge({
-  label,
-  values,
-  onChange,
-}: {
-  label: string
-  values: ItemPriceValues
-  onChange: (patch: Partial<ItemPriceValues>) => void
-}) {
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-2">
-      <Label className="font-normal text-muted-foreground">{label}</Label>
-      <Input
-        type="number"
-        step="0.01"
-        value={num(values.setup_digitizing_charge)}
-        onChange={(e) => onChange({ setup_digitizing_charge: e.target.value === "" ? NaN : parseFloat(e.target.value) })}
-      />
+    <div className="flex min-w-0 flex-col gap-1" title={hint}>
+      <Label className="truncate text-xs font-normal text-muted-foreground">{label}</Label>
+      {children}
     </div>
   )
 }
