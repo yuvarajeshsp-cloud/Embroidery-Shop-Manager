@@ -86,7 +86,18 @@ export function ProfilePage() {
       await loadPasskeys()
     } catch (err) {
       console.error(err)
-      toast.error(err instanceof Error ? err.message : "Failed to add passkey")
+      const message = err instanceof Error ? err.message : ""
+      if (/cancel|abort|not allowed|timed out/i.test(message)) {
+        toast.error("Passkey setup was cancelled")
+      } else if (/verification failed|relying party|rp ?id|origin|securityerror|invalid domain/i.test(message)) {
+        // The server checks the passkey against the web address it was
+        // configured for; a different address (or a preview) is rejected.
+        toast.error(
+          `Passkeys aren't set up for ${window.location.hostname}. Open the app at its normal web address and try again, or ask the Administrator to finish passkey setup.`,
+        )
+      } else {
+        toast.error(message || "Failed to add passkey")
+      }
     } finally {
       setPasskeyBusy(false)
     }
