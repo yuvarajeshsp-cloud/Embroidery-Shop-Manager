@@ -318,7 +318,14 @@ export function App() {
     <AuthProvider>
       <RouterProvider>
         <AppContent />
-        <Toaster richColors position="top-right" />
+        {/* On iPhones with a notch/Dynamic Island the top of the screen is covered, so
+            toasts start below the safe area instead of underneath it. */}
+        <Toaster
+          richColors
+          position="top-right"
+          offset={{ top: "calc(env(safe-area-inset-top) + 16px)", right: 16 }}
+          mobileOffset={{ top: "calc(env(safe-area-inset-top) + 12px)", left: 12, right: 12 }}
+        />
       </RouterProvider>
     </AuthProvider>
   )
