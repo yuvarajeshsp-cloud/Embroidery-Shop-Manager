@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
   // own Origin is right for the website, but the Android and iPhone apps
   // report https://localhost / capacitor://localhost, which no email link can
   // reach — send those to the website instead.
-  const PRODUCTION_URL = "https://paavaifashions.com"
+  const PRODUCTION_URL = "https://app.paavaifashions.com"
   const requestOrigin = req.headers.get("origin") || ""
   const isNativeApp = requestOrigin === "https://localhost" || requestOrigin.startsWith("capacitor://")
   const origin = isNativeApp || !requestOrigin ? PRODUCTION_URL : requestOrigin

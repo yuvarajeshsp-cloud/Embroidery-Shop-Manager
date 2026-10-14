@@ -131,7 +131,7 @@ export function AuthScreen() {
     setError(null)
     setLoading(true)
     const { error } = await supabase.auth.resetPasswordForEmail(signInEmail.trim(), {
-      redirectTo: "https://paavaifashions.com",
+      redirectTo: "https://app.paavaifashions.com",
     })
     setLoading(false)
     if (error) {
@@ -404,9 +404,9 @@ export function AuthScreen() {
         </Card>
 
         <p className="mt-4 text-center text-xs text-muted-foreground">
-          <a href="https://paavaifashions.com/privacy.html" target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">Privacy Policy</a>
+          <a href="https://app.paavaifashions.com/privacy.html" target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">Privacy Policy</a>
           {" · "}
-          <a href="https://paavaifashions.com/delete-account.html" target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">Delete your account</a>
+          <a href="https://app.paavaifashions.com/delete-account.html" target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">Delete your account</a>
         </p>
       </div>
     </div>

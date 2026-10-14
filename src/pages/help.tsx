@@ -182,8 +182,8 @@ export function PrivacyPage() {
         <Card>
           <CardContent className="p-6 text-sm">
             The policy couldn't be loaded right now. You can read it online at{" "}
-            <a href="https://paavaifashions.com/privacy.html" target="_blank" rel="noreferrer" className="underline">
-              paavaifashions.com/privacy.html
+            <a href="https://app.paavaifashions.com/privacy.html" target="_blank" rel="noreferrer" className="underline">
+              app.paavaifashions.com/privacy.html
             </a>
             .
           </CardContent>
