@@ -10,6 +10,7 @@ import { isBiometricUnlockEnabled, setBiometricUnlockEnabled, getBiometryAvailab
 import { clearBiometricCredentials, saveBiometricCredentials } from "@/lib/biometric-credentials"
 import { PageHeader } from "@/components/page-header"
 import { PageLoader } from "@/components/app-loader"
+import { PrinterCard } from "@/components/printer-card"
 import { DeleteAccountCard } from "@/components/delete-account-card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -357,6 +358,7 @@ export function ProfilePage() {
           </Card>
         )}
 
+        <PrinterCard />
         <DeleteAccountCard />
       </div>
     </div>

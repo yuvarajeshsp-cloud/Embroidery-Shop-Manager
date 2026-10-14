@@ -416,6 +416,29 @@ export async function downloadOrderPdf(data: OrderPdfData) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
+/**
+ * Opens the invoice PDF for viewing and printing: in a new tab on the web
+ * (the browser's PDF viewer has Print), and through the share sheet in the
+ * phone apps (which has Print and Save). Receipt-printer printing is separate.
+ */
+export async function printOrderPdf(data: OrderPdfData) {
+  const blob = await generateOrderPdf(data)
+  if (Capacitor.isNativePlatform()) {
+    await shareFile(blob, getPdfFileName(data.order), `Invoice ${data.order.order_number}`)
+    return
+  }
+  const url = URL.createObjectURL(blob)
+  const tab = window.open(url, "_blank")
+  if (!tab) {
+    // Pop-up blocked: fall back to a normal download.
+    const link = document.createElement("a")
+    link.href = url
+    link.download = getPdfFileName(data.order)
+    link.click()
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60000)
+}
+
 const INVOICE_BUCKET = "order-attachments"
 
 export async function uploadOrderInvoicePdf(data: OrderPdfData): Promise<{ url: string; fileName: string }> {

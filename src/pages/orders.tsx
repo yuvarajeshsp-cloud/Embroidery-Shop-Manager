@@ -20,7 +20,8 @@ import {
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
-import { downloadOrderPdf } from "@/lib/pdf"
+import { downloadOrderPdf, printOrderPdf } from "@/lib/pdf"
+import { printInvoiceThermal, printOrderTagThermal, PrinterError } from "@/lib/printer"
 import {
   formatCurrency,
   formatDate,
@@ -445,6 +446,17 @@ export function OrdersPage() {
 // ORDER DETAIL PAGE
 // ============================================================
 
+/** Says why a receipt didn't print, and offers the browser's print dialog as a way out. */
+function reportPrintError(err: unknown, fallback: () => void) {
+  const message = err instanceof PrinterError ? err.message : err instanceof Error ? err.message : "Printing failed"
+  const hint = err instanceof PrinterError ? err.hint : undefined
+  toast.error(message, {
+    description: hint,
+    duration: 9000,
+    action: { label: "Print with browser", onClick: fallback },
+  })
+}
+
 export function OrderDetailPage({ id }: { id: string }) {
   const { navigate } = useRouter()
   const { profile } = useAuth()
@@ -790,6 +802,20 @@ export function OrderDetailPage({ id }: { id: string }) {
               variant="outline"
               size="sm"
               onClick={async () => {
+                try {
+                  await printOrderPdf({ order, customer, items, payments, additionalCosts })
+                } catch {
+                  toast.error("Failed to open the PDF")
+                }
+              }}
+            >
+              <Printer className="size-4" />
+              Print PDF
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
                 const html = await getThermalInvoiceHtml({ order, customer, items, payments, additionalCosts })
                 setThermalPreview({ title: `Invoice ${order.order_number}`, html })
               }}
@@ -801,11 +827,13 @@ export function OrderDetailPage({ id }: { id: string }) {
               variant="outline"
               size="sm"
               onClick={async () => {
+                const data = { order, customer, items, payments, additionalCosts }
                 try {
-                  await printThermalInvoice({ order, customer, items, payments, additionalCosts })
+                  await printInvoiceThermal(data)
+                  toast.success("Sent to the printer")
                 } catch (err) {
                   console.error(err)
-                  toast.error(err instanceof Error ? err.message : "Failed to print invoice")
+                  reportPrintError(err, () => void printThermalInvoice(data))
                 }
               }}
             >
@@ -828,10 +856,11 @@ export function OrderDetailPage({ id }: { id: string }) {
               size="sm"
               onClick={async () => {
                 try {
-                  await printThermalOrderTag(order, customer)
+                  await printOrderTagThermal(order, customer)
+                  toast.success("Sent to the printer")
                 } catch (err) {
                   console.error(err)
-                  toast.error(err instanceof Error ? err.message : "Failed to print order tag")
+                  reportPrintError(err, () => void printThermalOrderTag(order, customer))
                 }
               }}
             >
