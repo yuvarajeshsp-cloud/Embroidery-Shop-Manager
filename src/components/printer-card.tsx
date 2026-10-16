@@ -102,6 +102,14 @@ export function PrinterCard() {
           )}
         </div>
 
+        {kinds.length === 0 && (
+          <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+            This browser (for example Firefox or Safari) can't connect to a printer directly. Receipts will open the normal
+            print window instead — pick your receipt printer there. For direct printing use Chrome or Edge on a computer,
+            or the Android / iPhone app.
+          </p>
+        )}
+
         <div className="flex flex-col gap-2">
           {options.map((o) => {
             const supported = kinds.includes(o.kind)
@@ -129,7 +137,7 @@ export function PrinterCard() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" disabled={busy || kinds.length === 0} onClick={() => run(() => printTestPage(), "Test page sent")}>
+          <Button variant="outline" disabled={busy} onClick={() => run(() => printTestPage(), "Test page sent")}>
             Print test page
           </Button>
           {settings?.name && (

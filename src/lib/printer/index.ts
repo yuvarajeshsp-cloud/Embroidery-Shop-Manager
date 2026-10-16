@@ -190,6 +190,42 @@ export async function renderReceiptPreview(blocks: ReceiptBlock[]): Promise<{ ur
   return { url: out.toDataURL("image/png"), width: bitmap.width, height: bitmap.height }
 }
 
+/** Whether this browser can talk to a printer directly (Chrome/Edge, or the phone apps). */
+export function canPrintDirect(): boolean {
+  return availableKinds().length > 0
+}
+
+/**
+ * Prints through the system's own print dialog instead — for browsers that
+ * can't reach a printer directly (Firefox, Safari) and for printers that are
+ * installed on the computer with a normal driver. The page is exactly the
+ * receipt image, sized to the paper.
+ */
+export async function printViaBrowser(blocks: ReceiptBlock[]): Promise<void> {
+  const { url, width } = await renderReceiptPreview(blocks)
+  const dots = currentPaperDots()
+  const paperMm = dots === 384 ? 58 : dots === 576 ? 80 : 104
+  const imageMm = width / 8
+  const frame = document.createElement("iframe")
+  frame.setAttribute("aria-hidden", "true")
+  frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0"
+  document.body.appendChild(frame)
+  const doc = frame.contentDocument!
+  doc.open()
+  doc.write(
+    `<!doctype html><html><head><meta charset="utf-8"><title>Receipt</title><style>` +
+      `@page{size:${paperMm}mm auto;margin:0}html,body{margin:0;padding:0;background:#fff}` +
+      `img{display:block;width:${imageMm}mm;margin:0 auto;image-rendering:pixelated}` +
+      `</style></head><body><img id="r" src="${url}"></body></html>`,
+  )
+  doc.close()
+  const img = doc.getElementById("r") as HTMLImageElement
+  await (img.complete ? Promise.resolve() : new Promise<void>((resolve) => { img.onload = () => resolve(); img.onerror = () => resolve() }))
+  frame.contentWindow!.focus()
+  frame.contentWindow!.print()
+  setTimeout(() => frame.remove(), 60000)
+}
+
 /** Sends already-built receipt blocks to the printer, connecting first if needed. */
 export async function printBlocks(blocks: ReceiptBlock[]): Promise<void> {
   // Connect first: choosing a printer needs the tap that started this, and
@@ -222,8 +258,7 @@ export async function printOrderTagThermal(order: Order, customer: Customer | nu
 
 /** A short test slip so the connection and paper width can be checked. */
 export async function printTestPage(): Promise<void> {
-  await printBlocks(
-    ([
+  const blocks = ([
       { t: "text", text: "Printer test", align: "center", size: "big", bold: true },
       { t: "divider" },
       { t: "row", left: "Rupee sign", right: "₹1,234.50" },
@@ -231,6 +266,7 @@ export async function printTestPage(): Promise<void> {
       { t: "text", text: "தையல் • Tamil text", size: "normal" },
       { t: "text", text: "If every line is complete and not cut off at the edges, the paper width is right.", size: "small", muted: true },
       { t: "divider" },
-    ] as ReceiptBlock[]),
-  )
+  ] as ReceiptBlock[])
+  if (canPrintDirect()) await printBlocks(blocks)
+  else await printViaBrowser(blocks)
 }

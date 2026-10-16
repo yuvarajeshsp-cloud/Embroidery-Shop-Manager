@@ -92,8 +92,6 @@ import { fetchAttachmentsForItems } from "@/lib/attachments"
 import { sendOrderStatusUpdate, sendWhatsAppFile, getWhatsAppMediaType } from "@/lib/whatsapp"
 import { uploadOrderInvoicePdf } from "@/lib/pdf"
 import {
-  printThermalInvoice,
-  printThermalOrderTag,
   shareThermalInvoiceViaWhatsApp,
 } from "@/lib/thermal-print"
 import type { OrderItemAttachment } from "@/lib/types"
@@ -1168,7 +1166,6 @@ export function OrderDetailPage({ id }: { id: string }) {
           title={`Invoice ${order.order_number}`}
           load={() => buildInvoiceBlocks({ order, customer, items, payments, additionalCosts })}
           onClose={() => setReceiptDialog(null)}
-          onBrowserPrint={() => void printThermalInvoice({ order, customer, items, payments, additionalCosts })}
         />
       )}
       {receiptDialog === "tag" && (
@@ -1176,7 +1173,6 @@ export function OrderDetailPage({ id }: { id: string }) {
           title={`Order Tag ${order.order_number}`}
           load={() => buildOrderTagBlocks(order, customer)}
           onClose={() => setReceiptDialog(null)}
-          onBrowserPrint={() => void printThermalOrderTag(order, customer)}
         />
       )}
 

@@ -7,9 +7,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PageLoader } from "@/components/app-loader"
 import {
+  canPrintDirect,
   currentPaperDots,
   PAPER_SIZES,
   printBlocks,
+  printViaBrowser,
   PrinterError,
   renderReceiptPreview,
   setPaperWidth,
@@ -27,15 +29,12 @@ export function ReceiptPrintDialog({
   description,
   load,
   onClose,
-  onBrowserPrint,
 }: {
   title: string
   description?: string
   /** Builds the receipt's content; called once when the popup opens. */
   load: () => Promise<ReceiptBlock[]>
   onClose: () => void
-  /** Offered when the thermal printer can't be used. */
-  onBrowserPrint?: () => void
 }) {
   const [blocks, setBlocks] = React.useState<ReceiptBlock[] | null>(null)
   const [preview, setPreview] = React.useState<{ url: string; width: number; height: number } | null>(null)
@@ -71,19 +70,27 @@ export function ReceiptPrintDialog({
     }
   }, [blocks, paper])
 
-  async function handlePrint() {
+  // Firefox and Safari can't open a printer connection; they print through the
+  // system print dialog instead, which works with any printer installed on the computer.
+  const direct = canPrintDirect()
+
+  async function handlePrint(viaDialog = false) {
     if (!blocks) return
     setPrinting(true)
     try {
-      await printBlocks(blocks)
-      toast.success("Sent to the printer")
+      if (viaDialog || !direct) {
+        await printViaBrowser(blocks)
+      } else {
+        await printBlocks(blocks)
+        toast.success("Sent to the printer")
+      }
     } catch (err) {
       console.error(err)
       if (err instanceof PrinterError && err.message === "No printer was chosen") return
       toast.error(err instanceof Error ? err.message : "Printing failed", {
         description: err instanceof PrinterError ? err.hint : undefined,
         duration: 9000,
-        action: onBrowserPrint ? { label: "Print with browser", onClick: onBrowserPrint } : undefined,
+        action: { label: "Use print dialog", onClick: () => void handlePrint(true) },
       })
     } finally {
       setPrinting(false)
@@ -91,9 +98,9 @@ export function ReceiptPrintDialog({
   }
 
   const printButton = (
-    <Button onClick={handlePrint} disabled={!preview || printing}>
+    <Button onClick={() => handlePrint()} disabled={!preview || printing}>
       <Printer className="size-4" />
-      {printing ? "Printing…" : "Print"}
+      {printing ? "Printing…" : direct ? "Print" : "Print…"}
     </Button>
   )
 
@@ -105,9 +112,23 @@ export function ReceiptPrintDialog({
           <DialogDescription>{description ?? "This is what will print."}</DialogDescription>
         </DialogHeader>
 
+        {!direct && (
+          <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+            This browser can't connect to a printer directly, so Print opens the normal print window — choose your receipt
+            printer there. For direct printing use Chrome or Edge, or the phone app.
+          </p>
+        )}
+
         {/* Top: print + paper size */}
         <div className="flex flex-wrap items-center justify-between gap-2">
-          {printButton}
+          <div className="flex flex-wrap items-center gap-2">
+            {printButton}
+            {direct && (
+              <Button variant="ghost" size="sm" disabled={!preview || printing} onClick={() => handlePrint(true)}>
+                Use print window
+              </Button>
+            )}
+          </div>
           <Select
             value={String(paper)}
             onValueChange={(v) => {
