@@ -21,8 +21,8 @@ import {
 
 /**
  * One popup for a receipt: shows exactly what will come out of the printer and
- * prints it. The Print button is at the top and again at the bottom so it is
- * in reach however far the receipt is scrolled.
+ * prints it, then closes. The Print button is at the top and again at the bottom
+ * so it is in reach however far the receipt is scrolled.
  */
 export function ReceiptPrintDialog({
   title,
@@ -84,6 +84,8 @@ export function ReceiptPrintDialog({
         await printBlocks(blocks)
         toast.success("Sent to the printer")
       }
+      // Done: the popup has nothing left to do.
+      onClose()
     } catch (err) {
       console.error(err)
       if (err instanceof PrinterError && err.message === "No printer was chosen") return
