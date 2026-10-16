@@ -9,6 +9,8 @@ import {
   orderItemUnitPrice,
   orderItemTotal,
   orderTotal,
+  orderDiscountAmount,
+  discountLabel,
   orderSetupCharges,
   orderAdditionalCostsTotal,
   orderAmountPaid,
@@ -192,11 +194,12 @@ function drawThermalInvoiceContent(doc: jsPDF, data: ThermalInvoiceData, setting
   const additionalCosts = data.additionalCosts || []
 
   const setup = orderSetupCharges(items)
-  const total = orderTotal(items, additionalCosts)
-  const subtotal = total - setup - orderAdditionalCostsTotal(additionalCosts)
+  const total = orderTotal(items, additionalCosts, order)
+  const discountAmount = orderDiscountAmount(items, additionalCosts, order)
+  const subtotal = total + discountAmount - setup - orderAdditionalCostsTotal(additionalCosts)
   const paid = orderAmountPaid(payments)
-  const balance = orderBalanceDue(items, payments, additionalCosts)
-  const payStatus = derivePaymentStatus(items, payments, additionalCosts)
+  const balance = orderBalanceDue(items, payments, additionalCosts, order)
+  const payStatus = derivePaymentStatus(items, payments, additionalCosts, order)
 
   let y = 6
   y = drawThermalHeader(doc, y, settings)
@@ -265,6 +268,7 @@ function drawThermalInvoiceContent(doc: jsPDF, data: ThermalInvoiceData, setting
     const label = cost.cost_type
     y = drawThermalRow(doc, label.length > 22 ? `${label.slice(0, 19)}...` : label, formatPdfCurrency(cost.amount), y, false)
   }
+  if (discountAmount > 0) y = drawThermalRow(doc, `Discount (${discountLabel(order)})`, `-${formatPdfCurrency(discountAmount)}`, y, false)
   doc.setFontSize(10)
   y = drawThermalRow(doc, "TOTAL", formatPdfCurrency(total), y, true)
   doc.setFontSize(8.5)
@@ -392,11 +396,12 @@ async function buildInvoiceBody(data: ThermalInvoiceData): Promise<string> {
 
   const additionalCosts = data.additionalCosts || []
   const setup = orderSetupCharges(items)
-  const total = orderTotal(items, additionalCosts)
-  const subtotal = total - setup - orderAdditionalCostsTotal(additionalCosts)
+  const total = orderTotal(items, additionalCosts, order)
+  const discountAmount = orderDiscountAmount(items, additionalCosts, order)
+  const subtotal = total + discountAmount - setup - orderAdditionalCostsTotal(additionalCosts)
   const paid = orderAmountPaid(payments)
-  const balance = orderBalanceDue(items, payments, additionalCosts)
-  const payStatus = derivePaymentStatus(items, payments, additionalCosts)
+  const balance = orderBalanceDue(items, payments, additionalCosts, order)
+  const payStatus = derivePaymentStatus(items, payments, additionalCosts, order)
   const costRows = additionalCosts
     .map(
       (c) =>
@@ -431,6 +436,7 @@ async function buildInvoiceBody(data: ThermalInvoiceData): Promise<string> {
     <div class="row"><span>Subtotal</span><span>${formatCurrency(subtotal)}</span></div>
     ${setup > 0 ? `<div class="row"><span>${escapeHtml(extraLabel(settings))}</span><span>${formatCurrency(setup)}</span></div>` : ""}
     ${costRows}
+    ${discountAmount > 0 ? `<div class="row"><span>Discount (${discountLabel(order)})</span><span>-${formatCurrency(discountAmount)}</span></div>` : ""}
     <div class="row bold big"><span>TOTAL</span><span>${formatCurrency(total)}</span></div>
     <div class="row"><span>Paid</span><span>${formatCurrency(paid)}</span></div>
     <div class="row bold"><span>Balance Due</span><span>${formatCurrency(balance)}</span></div>

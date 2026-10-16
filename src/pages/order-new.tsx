@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight, Camera, Check, ChevronDown, ChevronsUpDown, Plus
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
-import { formatCurrency, generateOrderNumber } from "@/lib/helpers"
+import { discountFromAmounts, discountLabel, formatCurrency, generateOrderNumber } from "@/lib/helpers"
 import { uploadAttachment } from "@/lib/attachments"
 import { cn } from "@/lib/utils"
 import type { Customer, UserProfile } from "@/lib/types"
@@ -34,6 +34,7 @@ import { useRouter } from "@/lib/router"
 import { fetchConfigItems, getDefaultStitchRate } from "@/lib/config"
 import { toast } from "sonner"
 import { CostTypeField, useCostTypes } from "@/components/additional-cost-form"
+import { DiscountFields, EMPTY_DISCOUNT, discountColumns, discountLineOf, discountProblem, type DiscountDraft } from "@/components/discount-form"
 import { ItemPriceFields, formLineTotal, priceColumns, priceProblem, type ItemPriceValues } from "@/components/item-price-fields"
 import { defaultPricingMode, useShopType, useVocabulary, type PricingMode } from "@/lib/shop-type"
 
@@ -72,6 +73,7 @@ export function NewOrderPage() {
   const modeOf = (item: DraftItem): PricingMode => item.pricing_mode ?? defaultPricingMode(shopType)
   const priceValuesOf = (item: DraftItem): ItemPriceValues => ({ ...item, pricing_mode: modeOf(item) })
   const [step, setStep] = React.useState(1)
+  const [discount, setDiscount] = React.useState<DiscountDraft>(EMPTY_DISCOUNT)
   const [saving, setSaving] = React.useState(false)
   const [customers, setCustomers] = React.useState<Customer[]>([])
   const [assignableUsers, setAssignableUsers] = React.useState<UserProfile[]>([])
@@ -227,7 +229,9 @@ export function NewOrderPage() {
   const subtotal = items.reduce((s, i) => s + formLineTotal(priceValuesOf(i)), 0)
   const setup = items.reduce((s, i) => s + (i.setup_digitizing_charge || 0), 0)
   const costsTotal = items.reduce((s, i) => s + itemCostsTotal(i), 0)
-  const grandTotal = subtotal + setup + costsTotal
+  const grossTotal = subtotal + setup + costsTotal
+  const discountAmount = discountFromAmounts(discountLineOf(discount), subtotal, grossTotal)
+  const grandTotal = Math.round((grossTotal - discountAmount) * 100) / 100
 
   async function handleSave() {
     if (!orderForm.customer_id) {
@@ -258,6 +262,12 @@ export function NewOrderPage() {
         return
       }
     }
+    const discountIssue = discountProblem(discount, grossTotal)
+    if (discountIssue) {
+      toast.error(discountIssue)
+      setStep(3)
+      return
+    }
     setSaving(true)
     try {
       let orderNumber = orderForm.order_number
@@ -277,6 +287,8 @@ export function NewOrderPage() {
             sales_channel: orderForm.sales_channel || null,
             special_instructions: orderForm.special_instructions || null,
             assigned_to: orderForm.assigned_to || null,
+            // Only sent when there is a discount, so orders without one don't depend on the columns.
+            ...(discountLineOf(discount).discount_type ? discountColumns(discount) : {}),
             created_by: profile?.id,
             updated_by: profile?.id,
           })
@@ -795,6 +807,10 @@ export function NewOrderPage() {
                   )
                 })}
               </div>
+              <div className="flex flex-col gap-2 border-t px-3 py-3">
+                <span className="text-sm font-medium">Discount <span className="font-normal text-muted-foreground">(optional)</span></span>
+                <DiscountFields draft={discount} onChange={setDiscount} itemsSubtotal={subtotal} gross={grossTotal} />
+              </div>
               <div className="flex flex-col gap-0.5 border-t bg-muted/50 px-3 py-2 text-sm">
                 <div className="flex justify-between">
                   <span>Subtotal</span>
@@ -810,6 +826,12 @@ export function NewOrderPage() {
                   <div className="flex justify-between">
                     <span>Additional costs</span>
                     <span>{formatCurrency(costsTotal)}</span>
+                  </div>
+                )}
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
+                    <span>Discount ({discountLabel(discountLineOf(discount))})</span>
+                    <span>−{formatCurrency(discountAmount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between border-t pt-1 font-bold">

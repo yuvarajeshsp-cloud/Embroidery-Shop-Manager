@@ -7,6 +7,8 @@ import {
   orderAdditionalCostsTotal,
   orderAmountPaid,
   orderBalanceDue,
+  orderDiscountAmount,
+  discountLabel,
   orderItemTotal,
   orderItemUnitPrice,
   orderSetupCharges,
@@ -68,11 +70,12 @@ export async function buildInvoiceBlocks(data: InvoiceData): Promise<ReceiptBloc
   const extraLabel = vocabularyFor(shop).setupLabel.replace(/\s*\(.*\)$/, "")
 
   const setup = orderSetupCharges(items)
-  const total = orderTotal(items, costs)
-  const subtotal = total - setup - orderAdditionalCostsTotal(costs)
+  const total = orderTotal(items, costs, order)
+  const discountAmount = orderDiscountAmount(items, costs, order)
+  const subtotal = total + discountAmount - setup - orderAdditionalCostsTotal(costs)
   const paid = orderAmountPaid(payments)
-  const balance = orderBalanceDue(items, payments, costs)
-  const status = derivePaymentStatus(items, payments, costs)
+  const balance = orderBalanceDue(items, payments, costs, order)
+  const status = derivePaymentStatus(items, payments, costs, order)
 
   const b: ReceiptBlock[] = [...headerBlocks(settings)]
   b.push({ t: "divider" })
@@ -104,6 +107,9 @@ export async function buildInvoiceBlocks(data: InvoiceData): Promise<ReceiptBloc
   b.push({ t: "row", left: "Subtotal", right: formatCurrency(subtotal) })
   if (setup > 0) b.push({ t: "row", left: extraLabel, right: formatCurrency(setup) })
   for (const c of costs) b.push({ t: "row", left: c.cost_type, right: formatCurrency(c.amount) })
+  if (discountAmount > 0) {
+    b.push({ t: "row", left: `Discount (${discountLabel(order)})`, right: `-${formatCurrency(discountAmount)}` })
+  }
   b.push({ t: "row", left: "TOTAL", right: formatCurrency(total), size: "big", bold: true })
   b.push({ t: "row", left: "Paid", right: formatCurrency(paid) })
   b.push({ t: "row", left: "Balance Due", right: formatCurrency(balance), bold: true })

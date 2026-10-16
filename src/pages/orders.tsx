@@ -30,6 +30,8 @@ import {
   orderItemUnitPrice,
   orderItemTotal,
   orderTotal,
+  orderDiscountAmount,
+  discountLabel,
   orderSetupCharges,
   orderAdditionalCostsTotal,
   orderAmountPaid,
@@ -73,6 +75,7 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { AdditionalCostForm } from "@/components/additional-cost-form"
+import { DiscountDialog } from "@/components/discount-form"
 import { ItemPriceFields, formLineTotal, formUnitPrice, priceColumns, priceProblem, type ItemPriceValues } from "@/components/item-price-fields"
 import { isTerminalStatus, defaultPricingMode, itemQuantityText, pricingModeOf, useShopType, useVocabulary } from "@/lib/shop-type"
 import { OrderStatusBadge, PriorityBadge, PaymentStatusBadge, PaymentMethodBadge, PaymentRecordStatusBadge, ExpenseCategoryBadge } from "@/components/status-badges"
@@ -228,10 +231,11 @@ export function OrdersPage() {
     { key: "sales_channel", label: "Sales Channel", value: (o) => o.sales_channel || "" },
     { key: "assigned_to", label: "Assigned To", value: (o) => (o.assigned_to && assigneeMap.get(o.assigned_to)) || "Unassigned" },
     { key: "customer_po_reference", label: "PO Reference", value: (o) => o.customer_po_reference || "" },
-    { key: "order_total", label: "Order Total", value: (o) => orderTotal(o.order_items || [], o.order_additional_costs || []) },
+    { key: "order_total", label: "Order Total", value: (o) => orderTotal(o.order_items || [], o.order_additional_costs || [], o) },
     { key: "amount_paid", label: "Amount Paid", value: (o) => orderAmountPaid(o.payments || []) },
-    { key: "balance_due", label: "Balance Due", value: (o) => orderBalanceDue(o.order_items || [], o.payments || [], o.order_additional_costs || []) },
-    { key: "payment_status", label: "Payment Status", value: (o) => derivePaymentStatus(o.order_items || [], o.payments || [], o.order_additional_costs || []) },
+    { key: "balance_due", label: "Balance Due", value: (o) => orderBalanceDue(o.order_items || [], o.payments || [], o.order_additional_costs || [], o) },
+    { key: "discount", label: "Discount", value: (o) => orderDiscountAmount(o.order_items || [], o.order_additional_costs || [], o) },
+    { key: "payment_status", label: "Payment Status", value: (o) => derivePaymentStatus(o.order_items || [], o.payments || [], o.order_additional_costs || [], o) },
     { key: "item_count", label: "Item Count", value: (o) => (o.order_items || []).length },
   ]
 
@@ -307,8 +311,8 @@ export function OrdersPage() {
           ) : isMobile ? (
             <div className="flex flex-col divide-y">
               {filtered.map((o) => {
-                const total = orderTotal(o.order_items || [], o.order_additional_costs || [])
-                const payStatus = derivePaymentStatus(o.order_items || [], o.payments || [], o.order_additional_costs || [])
+                const total = orderTotal(o.order_items || [], o.order_additional_costs || [], o)
+                const payStatus = derivePaymentStatus(o.order_items || [], o.payments || [], o.order_additional_costs || [], o)
                 const overdue = isOverdue(o.required_date) && !isTerminalStatus(o.order_status)
                 return (
                   <button
@@ -375,8 +379,8 @@ export function OrdersPage() {
               </TableHeader>
               <TableBody>
                 {filtered.map((o) => {
-                  const total = orderTotal(o.order_items || [], o.order_additional_costs || [])
-                  const payStatus = derivePaymentStatus(o.order_items || [], o.payments || [], o.order_additional_costs || [])
+                  const total = orderTotal(o.order_items || [], o.order_additional_costs || [], o)
+                  const payStatus = derivePaymentStatus(o.order_items || [], o.payments || [], o.order_additional_costs || [], o)
                   const overdue = isOverdue(o.required_date) && !isTerminalStatus(o.order_status)
                   return (
                     <TableRow
@@ -453,6 +457,7 @@ export function OrderDetailPage({ id }: { id: string }) {
   const [payments, setPayments] = React.useState<Payment[]>([])
   const [expenses, setExpenses] = React.useState<Expense[]>([])
   const [additionalCosts, setAdditionalCosts] = React.useState<OrderAdditionalCost[]>([])
+  const [discountOpen, setDiscountOpen] = React.useState(false)
   const [costForm, setCostForm] = React.useState<{ itemId: string; cost: OrderAdditionalCost | null } | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [editingItem, setEditingItem] = React.useState<OrderItem | null>(null)
@@ -583,14 +588,15 @@ export function OrderDetailPage({ id }: { id: string }) {
     return <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">Order not found</div>
   }
 
-  const total = orderTotal(items, additionalCosts)
+  const total = orderTotal(items, additionalCosts, order)
   const setup = orderSetupCharges(items)
   const extrasTotal = orderAdditionalCostsTotal(additionalCosts)
   const anyStitchItem = items.some((i) => pricingModeOf(i) === "stitch")
-  const subtotal = total - setup - extrasTotal
+  const discountAmount = orderDiscountAmount(items, additionalCosts, order)
+  const subtotal = total + discountAmount - setup - extrasTotal
   const paid = orderAmountPaid(payments)
-  const balance = orderBalanceDue(items, payments, additionalCosts)
-  const payStatus = derivePaymentStatus(items, payments, additionalCosts)
+  const balance = orderBalanceDue(items, payments, additionalCosts, order)
+  const payStatus = derivePaymentStatus(items, payments, additionalCosts, order)
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
@@ -783,6 +789,24 @@ export function OrderDetailPage({ id }: { id: string }) {
                 <span className="text-sm">{formatCurrency(c.amount)}</span>
               </div>
             ))}
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs text-muted-foreground">
+                {discountAmount > 0 ? (
+                  <>
+                    Discount ({discountLabel(order)})
+                    {order.discount_reason && <span className="block text-[11px]">{order.discount_reason}</span>}
+                  </>
+                ) : (
+                  "Discount"
+                )}
+              </span>
+              <span className="flex items-center gap-2">
+                {discountAmount > 0 && <span className="text-sm text-emerald-600">−{formatCurrency(discountAmount)}</span>}
+                <Button variant="ghost" size="xs" onClick={() => setDiscountOpen(true)}>
+                  {discountAmount > 0 ? "Edit" : "Add"}
+                </Button>
+              </span>
+            </div>
             <div className="flex justify-between border-t pt-2">
               <span className="text-sm font-medium">Total</span>
               <span className="text-sm font-bold">{formatCurrency(total)}</span>
@@ -936,6 +960,18 @@ export function OrderDetailPage({ id }: { id: string }) {
         </CardContent>
       </Card>
 
+      {discountOpen && (
+        <DiscountDialog
+          order={order}
+          items={items}
+          extras={additionalCosts}
+          onClose={() => setDiscountOpen(false)}
+          onSaved={() => {
+            setDiscountOpen(false)
+            void loadOrder()
+          }}
+        />
+      )}
       {costForm && (
         <AdditionalCostForm
           orderId={order.id}

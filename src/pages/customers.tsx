@@ -513,8 +513,8 @@ export function CustomerDetailPage({ id }: { id: string }) {
     return <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">Customer not found</div>
   }
 
-  const totalOrderValue = orders.reduce((sum, o) => sum + orderTotal(o.order_items || [], o.order_additional_costs || []), 0)
-  const totalDue = orders.reduce((sum, o) => sum + orderBalanceDue(o.order_items || [], o.payments || [], o.order_additional_costs || []), 0)
+  const totalOrderValue = orders.reduce((sum, o) => sum + orderTotal(o.order_items || [], o.order_additional_costs || [], o), 0)
+  const totalDue = orders.reduce((sum, o) => sum + orderBalanceDue(o.order_items || [], o.payments || [], o.order_additional_costs || [], o), 0)
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
@@ -622,7 +622,7 @@ export function CustomerDetailPage({ id }: { id: string }) {
                         <span className="text-xs text-muted-foreground">{formatDate(o.order_date)}</span>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-sm font-medium">{formatCurrency(orderTotal(o.order_items || [], o.order_additional_costs || []))}</span>
+                        <span className="text-sm font-medium">{formatCurrency(orderTotal(o.order_items || [], o.order_additional_costs || [], o))}</span>
                         <OrderStatusBadge status={o.order_status} />
                       </div>
                     </button>

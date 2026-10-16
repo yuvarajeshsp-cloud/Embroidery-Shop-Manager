@@ -82,11 +82,46 @@ export function orderAdditionalCostsTotal(extras: CostLine[] = []): number {
   return Math.round(extras.reduce((sum, c) => sum + (Number(c.amount) || 0), 0) * 100) / 100
 }
 
-/** Items + the items' extra charges + the order's additional costs. */
-export function orderTotal(items: OrderItem[], extras: CostLine[] = []): number {
+/** The part of an order that holds its discount (an order row has it). */
+export type DiscountLine = {
+  discount_type?: "amount" | "percent" | null
+  discount_value?: number | string | null
+}
+
+/** Items + the items' extra charges + the order's additional costs, before any discount. */
+export function orderGrossTotal(items: OrderItem[], extras: CostLine[] = []): number {
   return (
     Math.round((orderSubtotal(items) + orderSetupCharges(items) + orderAdditionalCostsTotal(extras)) * 100) / 100
   )
+}
+
+/**
+ * What a discount takes off, given the order's item prices and its full total.
+ * A percentage is taken from the item prices only (not setup charges or extra
+ * costs); an amount comes off the whole order. It never exceeds the order, so
+ * the total cannot go below zero.
+ */
+export function discountFromAmounts(discount: DiscountLine | null | undefined, itemsSubtotal: number, gross: number): number {
+  const value = Number(discount?.discount_value) || 0
+  if (!discount?.discount_type || value <= 0) return 0
+  const raw = discount.discount_type === "percent" ? (itemsSubtotal * Math.min(value, 100)) / 100 : value
+  return Math.round(Math.min(raw, gross) * 100) / 100
+}
+
+export function orderDiscountAmount(items: OrderItem[], extras: CostLine[] = [], discount?: DiscountLine | null): number {
+  return discountFromAmounts(discount, orderSubtotal(items), orderGrossTotal(items, extras))
+}
+
+/** What the customer owes: the order's total after its discount. */
+export function orderTotal(items: OrderItem[], extras: CostLine[] = [], discount?: DiscountLine | null): number {
+  return Math.round((orderGrossTotal(items, extras) - orderDiscountAmount(items, extras, discount)) * 100) / 100
+}
+
+/** "10%" or "₹100.00" — how a discount is named next to its amount. */
+export function discountLabel(discount?: DiscountLine | null): string {
+  const value = Number(discount?.discount_value) || 0
+  if (!discount?.discount_type || value <= 0) return ""
+  return discount.discount_type === "percent" ? `${value}%` : formatCurrency(value)
 }
 
 export function orderAmountPaid(payments: Payment[]): number {
@@ -95,16 +130,22 @@ export function orderAmountPaid(payments: Payment[]): number {
     .reduce((sum, p) => sum + p.amount, 0)
 }
 
-export function orderBalanceDue(items: OrderItem[], payments: Payment[], extras: CostLine[] = []): number {
-  return Math.round((orderTotal(items, extras) - orderAmountPaid(payments)) * 100) / 100
+export function orderBalanceDue(
+  items: OrderItem[],
+  payments: Payment[],
+  extras: CostLine[] = [],
+  discount?: DiscountLine | null,
+): number {
+  return Math.round((orderTotal(items, extras, discount) - orderAmountPaid(payments)) * 100) / 100
 }
 
 export function derivePaymentStatus(
   items: OrderItem[],
   payments: Payment[],
   extras: CostLine[] = [],
+  discount?: DiscountLine | null,
 ): string {
-  const total = orderTotal(items, extras)
+  const total = orderTotal(items, extras, discount)
   const paid = orderAmountPaid(payments)
   if (paid <= 0) return "Unpaid"
   if (paid >= total) return "Paid"

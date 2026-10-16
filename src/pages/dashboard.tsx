@@ -1,8 +1,8 @@
 import * as React from "react"
-import { Link2, TrendingUp, AlertTriangle, Clock, Package, IndianRupee, CalendarCheck, CalendarClock } from "lucide-react"
+import { BadgePercent, Link2, TrendingUp, AlertTriangle, Clock, Package, IndianRupee, CalendarCheck, CalendarClock } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { isInProgressStatus, isTerminalStatus, useVocabulary } from "@/lib/shop-type"
-import { daysFromNow, formatCurrency, formatDate, isOverdue, isDueSoon, orderAmountPaid, orderBalanceDue } from "@/lib/helpers"
+import { daysFromNow, formatCurrency, formatDate, isOverdue, isDueSoon, orderAmountPaid, orderBalanceDue, orderDiscountAmount } from "@/lib/helpers"
 import type { Order, OrderItem, OrderAdditionalCost, Payment, Customer } from "@/lib/types"
 import { PageHeader } from "@/components/page-header"
 import { PageLoader } from "@/components/app-loader"
@@ -113,6 +113,7 @@ interface DashboardData {
   activeOrders: number
   totalRevenue: number
   pendingPayments: number
+  discountsGiven: number
   overdueOrders: number
   dueSoonOrders: number
   inProduction: number
@@ -197,12 +198,14 @@ export function DashboardPage() {
 
       let totalRevenue = 0
       let pendingPayments = 0
+      let discountsGiven = 0
       for (const order of orders) {
         const oi = itemsByOrder.get(order.id) || []
         const pays = paymentsByOrder.get(order.id) || []
         const paid = orderAmountPaid(pays)
-        const balance = orderBalanceDue(oi, pays, costsByOrder.get(order.id) || [])
+        const balance = orderBalanceDue(oi, pays, costsByOrder.get(order.id) || [], order)
         totalRevenue += paid
+        discountsGiven += orderDiscountAmount(oi, costsByOrder.get(order.id) || [], order)
         if (balance > 0 && !isTerminalStatus(order.order_status)) {
           pendingPayments += balance
         }
@@ -286,6 +289,7 @@ export function DashboardPage() {
         activeOrders: activeOrders.length,
         totalRevenue,
         pendingPayments,
+        discountsGiven,
         overdueOrders: overdueOrders.length,
         dueSoonOrders: dueSoonOrders.length,
         inProduction: inProduction.length,
@@ -308,6 +312,9 @@ export function DashboardPage() {
     { label: "Active Orders", value: data.activeOrders.toString(), icon: TrendingUp, color: "text-emerald-600" },
     { label: "Revenue (Collected)", value: formatCurrency(data.totalRevenue), icon: IndianRupee, color: "text-teal-600" },
     { label: "Pending Payments", value: formatCurrency(data.pendingPayments), icon: AlertTriangle, color: "text-amber-600" },
+    ...(data.discountsGiven > 0
+      ? [{ label: "Discounts Given", value: formatCurrency(data.discountsGiven), icon: BadgePercent, color: "text-pink-600" }]
+      : []),
     { label: "Overdue Orders", value: data.overdueOrders.toString(), icon: Clock, color: "text-red-600" },
     { label: vocab.inProgressLabel, value: data.inProduction.toString(), icon: Link2, color: "text-purple-600" },
     ...(vocab.usesTrialDate

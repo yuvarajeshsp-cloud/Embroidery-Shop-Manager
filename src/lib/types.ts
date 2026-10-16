@@ -85,6 +85,10 @@ export interface Order {
   internal_notes: string | null
   archived: boolean
   assigned_to: string | null
+  /** No discount when null. A percentage comes off the item prices only; an amount off the whole order. */
+  discount_type: "amount" | "percent" | null
+  discount_value: number
+  discount_reason: string | null
   created_at: string
   updated_at: string
   created_by: string | null

@@ -5,6 +5,7 @@ import {
   formatCurrency,
   formatDate,
   orderTotal,
+  orderDiscountAmount,
   orderAmountPaid,
   orderBalanceDue,
 } from "@/lib/helpers"
@@ -174,7 +175,7 @@ export function ReportsPage() {
   for (const o of rangedOrders) {
     const key = o.customer_id
     if (!customerTotals[key]) customerTotals[key] = { customer: o.customer, total: 0, count: 0 }
-    customerTotals[key].total += orderTotal(o.order_items || [], o.order_additional_costs || [])
+    customerTotals[key].total += orderTotal(o.order_items || [], o.order_additional_costs || [], o)
     customerTotals[key].count += 1
   }
   const topCustomers = Object.values(customerTotals)
@@ -186,14 +187,15 @@ export function ReportsPage() {
     .filter((o) => !isTerminalStatus(o.order_status))
     .map((o) => ({
       ...o,
-      balance: orderBalanceDue(o.order_items || [], o.payments || [], o.order_additional_costs || []),
+      balance: orderBalanceDue(o.order_items || [], o.payments || [], o.order_additional_costs || [], o),
     }))
     .filter((o) => o.balance > 0)
     .sort((a, b) => b.balance - a.balance)
 
   const totalOutstanding = outstanding.reduce((s, o) => s + o.balance, 0)
   const totalRevenue = rangedOrders.reduce((s, o) => s + orderAmountPaid(o.payments || []), 0)
-  const totalOrderValue = rangedOrders.reduce((s, o) => s + orderTotal(o.order_items || [], o.order_additional_costs || []), 0)
+  const totalOrderValue = rangedOrders.reduce((s, o) => s + orderTotal(o.order_items || [], o.order_additional_costs || [], o), 0)
+  const totalDiscounts = rangedOrders.reduce((s, o) => s + orderDiscountAmount(o.order_items || [], o.order_additional_costs || [], o), 0)
 
   const chartConfig = {
     revenue: { label: "Revenue", color: "var(--chart-1)" },
@@ -211,9 +213,11 @@ export function ReportsPage() {
     { key: "required_date", label: "Delivery Date", value: (o) => (o.required_date ? formatDate(o.required_date) : "") },
     { key: "sales_channel", label: "Sales Channel", value: (o) => o.sales_channel || "" },
     { key: "customer_po_reference", label: "PO Reference", value: (o) => o.customer_po_reference || "" },
-    { key: "order_total", label: "Order Total", value: (o) => orderTotal(o.order_items || [], o.order_additional_costs || []) },
+    { key: "order_total", label: "Order Total", value: (o) => orderTotal(o.order_items || [], o.order_additional_costs || [], o) },
+    { key: "discount", label: "Discount", value: (o) => orderDiscountAmount(o.order_items || [], o.order_additional_costs || [], o) },
+    { key: "discount_reason", label: "Discount Reason", value: (o) => o.discount_reason || "" },
     { key: "amount_paid", label: "Amount Paid", value: (o) => orderAmountPaid(o.payments || []) },
-    { key: "balance_due", label: "Balance Due", value: (o) => orderBalanceDue(o.order_items || [], o.payments || [], o.order_additional_costs || []) },
+    { key: "balance_due", label: "Balance Due", value: (o) => orderBalanceDue(o.order_items || [], o.payments || [], o.order_additional_costs || [], o) },
     { key: "item_count", label: "Item Count", value: (o) => (o.order_items || []).length },
   ]
 
@@ -271,6 +275,9 @@ export function ReportsPage() {
               <Package className="size-4 text-blue-600" />
             </div>
             <span className="text-xl font-bold">{formatCurrency(totalOrderValue)}</span>
+            {totalDiscounts > 0 && (
+              <span className="text-xs text-muted-foreground">after {formatCurrency(totalDiscounts)} in discounts</span>
+            )}
           </CardContent>
         </Card>
         <Card>

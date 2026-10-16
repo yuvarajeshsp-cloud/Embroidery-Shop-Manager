@@ -50,6 +50,7 @@ const CATEGORIES = [
   { key: "sales_channel", label: "Sales Channels" },
   { key: "expense_category", label: "Expense Categories" },
   { key: "additional_cost_type", label: "Additional Cost Types" },
+  { key: "discount_reason", label: "Discount Reasons" },
 ]
 
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
@@ -57,6 +58,8 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     "Pick which order statuses show up as columns on the Production Board, and in what order. Manage the full status list itself under Order Statuses.",
   additional_cost_type:
     "The types offered when adding an additional cost to an order (delivery, packaging, rush charge …). A cost can also be typed in freely on the order.",
+  discount_reason:
+    "The reasons offered when giving a discount on an order (festival offer, regular customer, bulk order …).",
   expense_category:
     "Mark a category Restricted to limit it (and every expense recorded under it) to Administrators only — useful for Salary or anything else staff shouldn't see.",
 }

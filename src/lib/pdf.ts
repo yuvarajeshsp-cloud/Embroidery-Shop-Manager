@@ -10,6 +10,8 @@ import {
   orderItemUnitPrice,
   orderItemTotal,
   orderTotal,
+  orderDiscountAmount,
+  discountLabel,
   orderSetupCharges,
   orderAdditionalCostsTotal,
   orderAmountPaid,
@@ -307,13 +309,14 @@ export async function generateOrderPdf(data: OrderPdfData): Promise<Blob> {
   const summaryW = 200
   const summaryX = margin + tableWidth - summaryW
 
-  const total = orderTotal(items, additionalCosts)
+  const total = orderTotal(items, additionalCosts, order)
+  const discountAmount = orderDiscountAmount(items, additionalCosts, order)
   const setup = orderSetupCharges(items)
   const extrasTotal = orderAdditionalCostsTotal(additionalCosts)
-  const subtotal = total - setup - extrasTotal
+  const subtotal = total + discountAmount - setup - extrasTotal
   const paid = orderAmountPaid(payments)
-  const balance = orderBalanceDue(items, payments, additionalCosts)
-  const payStatus = derivePaymentStatus(items, payments, additionalCosts)
+  const balance = orderBalanceDue(items, payments, additionalCosts, order)
+  const payStatus = derivePaymentStatus(items, payments, additionalCosts, order)
 
   doc.setFont("helvetica", "normal")
   doc.setFontSize(9)
@@ -325,6 +328,9 @@ export async function generateOrderPdf(data: OrderPdfData): Promise<Blob> {
       const label = c.cost_type
       return [label.length > 30 ? `${label.slice(0, 27)}...` : label, formatPdfCurrency(c.amount), false]
     }),
+    ...(discountAmount > 0
+      ? [[`Discount (${discountLabel(order)})`, `-${formatPdfCurrency(discountAmount)}`, false] as [string, string, boolean]]
+      : []),
     ["Total", formatPdfCurrency(total), true],
     ["Paid", formatPdfCurrency(paid), false],
     ["Balance Due", formatPdfCurrency(balance), true],
