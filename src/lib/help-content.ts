@@ -66,8 +66,8 @@ export const HELP_SECTIONS: HelpSection[] = [
     title: "Invoices, PDFs and order tags",
     steps: [
       "On an order, Download PDF saves a full invoice you can share.",
-      "Preview Invoice / Print Invoice produce a compact thermal-printer receipt.",
-      "Preview Order Tag / Print Order Tag produce a small tag to attach to the garment.",
+      "Print Invoice opens a preview of the thermal-printer receipt (with your logo); press Print at the top or bottom to send it to the printer. Paper size can be changed there too.",
+      "Print Order Tag works the same way and gives a small tag to attach to the garment.",
     ],
   },
   {

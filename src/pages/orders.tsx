@@ -9,7 +9,6 @@ import {
   FileDown,
   Share2,
   Printer,
-  Eye,
   MessageCircle,
   Shirt,
   Palette,
@@ -21,7 +20,8 @@ import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
 import { downloadOrderPdf, printOrderPdf } from "@/lib/pdf"
-import { printInvoiceThermal, printOrderTagThermal, PrinterError } from "@/lib/printer"
+import { buildInvoiceBlocks, buildOrderTagBlocks } from "@/lib/printer"
+import { ReceiptPrintDialog } from "@/components/receipt-print-dialog"
 import {
   formatCurrency,
   formatDate,
@@ -96,8 +96,6 @@ import {
   printThermalInvoice,
   printThermalOrderTag,
   shareThermalInvoiceViaWhatsApp,
-  getThermalInvoiceHtml,
-  getThermalOrderTagHtml,
 } from "@/lib/thermal-print"
 import type { OrderItemAttachment } from "@/lib/types"
 
@@ -446,17 +444,6 @@ export function OrdersPage() {
 // ORDER DETAIL PAGE
 // ============================================================
 
-/** Says why a receipt didn't print, and offers the browser's print dialog as a way out. */
-function reportPrintError(err: unknown, fallback: () => void) {
-  const message = err instanceof PrinterError ? err.message : err instanceof Error ? err.message : "Printing failed"
-  const hint = err instanceof PrinterError ? err.hint : undefined
-  toast.error(message, {
-    description: hint,
-    duration: 9000,
-    action: { label: "Print with browser", onClick: fallback },
-  })
-}
-
 export function OrderDetailPage({ id }: { id: string }) {
   const { navigate } = useRouter()
   const { profile } = useAuth()
@@ -478,7 +465,7 @@ export function OrderDetailPage({ id }: { id: string }) {
   const [showShareToCustomer, setShowShareToCustomer] = React.useState(false)
   const [downloadingPdf, setDownloadingPdf] = React.useState(false)
   const [orderStatuses, setOrderStatuses] = React.useState<string[]>([])
-  const [thermalPreview, setThermalPreview] = React.useState<{ title: string; html: string } | null>(null)
+  const [receiptDialog, setReceiptDialog] = React.useState<"invoice" | "tag" | null>(null)
   const [assignableUsers, setAssignableUsers] = React.useState<UserProfile[]>([])
 
   const canReassign = profile?.role === "Administrator" || profile?.role === "Manager"
@@ -812,58 +799,11 @@ export function OrderDetailPage({ id }: { id: string }) {
               <Printer className="size-4" />
               Print PDF
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                const html = await getThermalInvoiceHtml({ order, customer, items, payments, additionalCosts })
-                setThermalPreview({ title: `Invoice ${order.order_number}`, html })
-              }}
-            >
-              <Eye className="size-4" />
-              Preview Invoice
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                const data = { order, customer, items, payments, additionalCosts }
-                try {
-                  await printInvoiceThermal(data)
-                  toast.success("Sent to the printer")
-                } catch (err) {
-                  console.error(err)
-                  reportPrintError(err, () => void printThermalInvoice(data))
-                }
-              }}
-            >
+            <Button variant="outline" size="sm" onClick={() => setReceiptDialog("invoice")}>
               <Printer className="size-4" />
               Print Invoice
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                const html = await getThermalOrderTagHtml(order, customer)
-                setThermalPreview({ title: `Order Tag ${order.order_number}`, html })
-              }}
-            >
-              <Eye className="size-4" />
-              Preview Order Tag
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                try {
-                  await printOrderTagThermal(order, customer)
-                  toast.success("Sent to the printer")
-                } catch (err) {
-                  console.error(err)
-                  reportPrintError(err, () => void printThermalOrderTag(order, customer))
-                }
-              }}
-            >
+            <Button variant="outline" size="sm" onClick={() => setReceiptDialog("tag")}>
               <Printer className="size-4" />
               Print Order Tag
             </Button>
@@ -1250,22 +1190,21 @@ export function OrderDetailPage({ id }: { id: string }) {
 
       <AttachmentViewerDialog attachment={viewingAttachment} onClose={() => setViewingAttachment(null)} />
 
-      {thermalPreview && (
-        <Dialog open onOpenChange={() => setThermalPreview(null)}>
-          <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-sm">
-            <DialogHeader>
-              <DialogTitle>{thermalPreview.title}</DialogTitle>
-              <DialogDescription>Preview of what will print on the 80mm thermal roll.</DialogDescription>
-            </DialogHeader>
-            <div className="flex-1 overflow-auto rounded-md border bg-white">
-              <iframe
-                srcDoc={thermalPreview.html}
-                title={thermalPreview.title}
-                className="h-[500px] w-full"
-              />
-            </div>
-          </DialogContent>
-        </Dialog>
+      {receiptDialog === "invoice" && (
+        <ReceiptPrintDialog
+          title={`Invoice ${order.order_number}`}
+          load={() => buildInvoiceBlocks({ order, customer, items, payments, additionalCosts })}
+          onClose={() => setReceiptDialog(null)}
+          onBrowserPrint={() => void printThermalInvoice({ order, customer, items, payments, additionalCosts })}
+        />
+      )}
+      {receiptDialog === "tag" && (
+        <ReceiptPrintDialog
+          title={`Order Tag ${order.order_number}`}
+          load={() => buildOrderTagBlocks(order, customer)}
+          onClose={() => setReceiptDialog(null)}
+          onBrowserPrint={() => void printThermalOrderTag(order, customer)}
+        />
       )}
 
       {FEATURES.whatsapp && showShareToCustomer && (

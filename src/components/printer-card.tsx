@@ -15,7 +15,9 @@ import {
   pairPrinter,
   PrinterError,
   printTestPage,
+  PAPER_SIZES,
   setPaperWidth,
+  type PaperDots,
   type PrinterKind,
 } from "@/lib/printer"
 
@@ -91,11 +93,12 @@ export function PrinterCard() {
 
         <div className="flex flex-col gap-2">
           <span className="text-xs text-muted-foreground">Paper width</span>
-          <Select value={String(settings?.paperDots ?? 576)} onValueChange={(v) => setPaperWidth(v === "384" ? 384 : 576)}>
+          <Select value={String(settings?.paperDots ?? 576)} onValueChange={(v) => setPaperWidth(Number(v) as PaperDots)}>
             <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="576">80 mm (3 inch)</SelectItem>
-              <SelectItem value="384">58 mm (2 inch)</SelectItem>
+              {PAPER_SIZES.map((p) => (
+                <SelectItem key={p.dots} value={String(p.dots)}>{p.label}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

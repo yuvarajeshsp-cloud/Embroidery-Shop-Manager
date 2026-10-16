@@ -53,7 +53,7 @@ function headerBlocks(settings: Settings): ReceiptBlock[] {
   ].filter(Boolean)
   const blocks: ReceiptBlock[] = []
   const logo = (settings.company_logo_data_url || "").trim()
-  if (logo.startsWith("data:image/")) blocks.push({ t: "image", src: logo, maxWidth: 200, maxHeight: 120 })
+  if (logo.startsWith("data:image/")) blocks.push({ t: "image", src: logo, maxWidth: 230, maxHeight: 150 })
   if (name) blocks.push({ t: "text", text: name, align: "center", size: "big", bold: true })
   if (tagline) blocks.push({ t: "text", text: tagline, align: "center", size: "small", muted: true })
   for (const line of lines) blocks.push({ t: "text", text: line, align: "center", size: "small" })
@@ -142,6 +142,57 @@ export async function buildOrderTagBlocks(order: Order, customer: Customer | nul
 const FONT_FAMILY = `system-ui, -apple-system, "Segoe UI", "Noto Sans", "Noto Sans Tamil", "Noto Sans Devanagari", Roboto, Arial, sans-serif`
 const SIZE_PX: Record<ReceiptSize, number> = { small: 20, normal: 23, big: 30, huge: 46 }
 
+/**
+ * A logo as pure black and white dots. Light or coloured artwork (a gold logo
+ * on white, say) is lighter than a plain black/white cut-off would keep, so
+ * it vanished from the print. The picture is stretched to use the full
+ * dark-to-light range, then dithered so mid-tones become fine dot patterns.
+ */
+function logoToDots(img: HTMLImageElement, w: number, h: number): HTMLCanvasElement {
+  const out = document.createElement("canvas")
+  out.width = w
+  out.height = h
+  const ctx = out.getContext("2d", { willReadFrequently: true })!
+  ctx.fillStyle = "#fff"
+  ctx.fillRect(0, 0, w, h)
+  ctx.drawImage(img, 0, 0, w, h)
+  const image = ctx.getImageData(0, 0, w, h)
+  const gray = new Float32Array(w * h)
+  for (let i = 0; i < gray.length; i++) {
+    const p = i * 4
+    gray[i] = 0.299 * image.data[p] + 0.587 * image.data[p + 1] + 0.114 * image.data[p + 2]
+  }
+  // Stretch between the 2nd and 98th percentile so one stray pixel can't flatten the range.
+  const sorted = Float32Array.from(gray).sort()
+  const lo = sorted[Math.floor(sorted.length * 0.02)]
+  const hi = sorted[Math.floor(sorted.length * 0.98)]
+  const span = Math.max(1, hi - lo)
+  for (let i = 0; i < gray.length; i++) gray[i] = Math.max(0, Math.min(255, ((gray[i] - lo) / span) * 255))
+  // Floyd–Steinberg error diffusion.
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x
+      const old = gray[i]
+      const val = old < 128 ? 0 : 255
+      gray[i] = val
+      const err = old - val
+      if (x + 1 < w) gray[i + 1] += (err * 7) / 16
+      if (y + 1 < h) {
+        if (x > 0) gray[i + w - 1] += (err * 3) / 16
+        gray[i + w] += (err * 5) / 16
+        if (x + 1 < w) gray[i + w + 1] += err / 16
+      }
+    }
+  }
+  for (let i = 0; i < gray.length; i++) {
+    const p = i * 4
+    image.data[p] = image.data[p + 1] = image.data[p + 2] = gray[i]
+    image.data[p + 3] = 255
+  }
+  ctx.putImageData(image, 0, 0)
+  return out
+}
+
 function loadImage(src: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const img = new Image()
@@ -155,6 +206,8 @@ function loadImage(src: string): Promise<HTMLImageElement | null> {
 export async function renderReceipt(blocks: ReceiptBlock[], width = 576): Promise<HTMLCanvasElement> {
   const margin = 10
   const inner = width - margin * 2
+  // Logos are sized for an 80mm (576-dot) roll and scale with the paper.
+  const scale = width / 576
   const measure = document.createElement("canvas").getContext("2d")!
   const fontFor = (size: ReceiptSize, bold?: boolean) => `${bold ? "700" : "400"} ${SIZE_PX[size]}px ${FONT_FAMILY}`
 
@@ -203,7 +256,7 @@ export async function renderReceipt(blocks: ReceiptBlock[], width = 576): Promis
     else if (blk.t === "space") height += blk.h
     else if (blk.t === "image") {
       const img = images.get(i)
-      if (img) height += scaled(img, blk.maxWidth, blk.maxHeight).h + 8
+      if (img) height += scaled(img, blk.maxWidth * scale, blk.maxHeight * scale).h + 8
     }
   }
   height += 12
@@ -248,8 +301,8 @@ export async function renderReceipt(blocks: ReceiptBlock[], width = 576): Promis
     } else if (blk.t === "image") {
       const img = images.get(i)
       if (img) {
-        const { w, h } = scaled(img, blk.maxWidth, blk.maxHeight)
-        ctx.drawImage(img, (width - w) / 2, y, w, h)
+        const { w, h } = scaled(img, blk.maxWidth * scale, blk.maxHeight * scale)
+        ctx.drawImage(logoToDots(img, w, h), (width - w) / 2, y)
         y += h + 8
       }
     }
