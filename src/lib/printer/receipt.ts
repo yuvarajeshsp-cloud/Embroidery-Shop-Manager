@@ -160,7 +160,7 @@ export async function buildInvoiceBlocks(data: InvoiceData): Promise<ReceiptBloc
 
 export async function buildOrderTagBlocks(order: Order, customer: Customer | null): Promise<ReceiptBlock[]> {
   const settings = await fetchBusinessSettings()
-  const b: ReceiptBlock[] = [...headerBlocks(settings)]
+  const b: ReceiptBlock[] = [...headerBlocks(settings, { logo: "left" })]
   b.push({ t: "divider" })
   b.push({ t: "text", text: "ORDER TAG", align: "center", size: "big", bold: true })
   b.push({ t: "divider" })
@@ -385,7 +385,7 @@ export async function renderReceipt(
     } else if (blk.t === "brand") {
       const logo = brandLogo(i, blk.text)
       const { size, lines } = brandName(blk.text, logo?.w ?? 0)
-      height += Math.max(logo?.h ?? 0, lines.length * lineHeight(size)) + 4
+      height += Math.max(logo?.h ?? 0, lines.length * lineHeight(size))
     } else if (blk.t === "divider") height += 18
     else if (blk.t === "space") height += blk.h
     else if (blk.t === "image") {
@@ -442,9 +442,9 @@ export async function renderReceipt(
       ctx.fillStyle = "#000"
       lines.forEach((line, n) => {
         const w = ctx.measureText(line).width
-        ctx.fillText(line, (width - w) / 2, y + (rowH - textH) / 2 + n * lineHeight(nameSize))
+        ctx.fillText(line, (width - w) / 2, y + (rowH - textH) + n * lineHeight(nameSize))
       })
-      y += rowH + 4
+      y += rowH
     } else if (blk.t === "row") {
       const size = blk.size || "normal"
       ctx.font = fontFor(size, blk.bold)
