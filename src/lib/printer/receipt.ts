@@ -4,7 +4,6 @@ import {
   formatCurrency,
   formatDate,
   formatNumber,
-  orderAdditionalCostsTotal,
   orderAmountPaid,
   orderBalanceDue,
   orderDiscountAmount,
@@ -93,7 +92,8 @@ export async function buildInvoiceBlocks(data: InvoiceData): Promise<ReceiptBloc
   const setup = orderSetupCharges(items)
   const total = orderTotal(items, costs, order)
   const discountAmount = orderDiscountAmount(items, costs, order)
-  const subtotal = total + discountAmount - setup - orderAdditionalCostsTotal(costs)
+  // Everything listed above the line: the items and the costs under them.
+  const subtotal = total + discountAmount - setup
   const paid = orderAmountPaid(payments)
   const balance = orderBalanceDue(items, payments, costs, order)
   const status = derivePaymentStatus(items, payments, costs, order)
@@ -102,8 +102,8 @@ export async function buildInvoiceBlocks(data: InvoiceData): Promise<ReceiptBloc
   b.push({ t: "divider" })
   b.push({ t: "text", text: "INVOICE", align: "center", size: "big", bold: true })
   b.push({ t: "row", left: "Order #", right: order.order_number, bold: true })
-  b.push({ t: "row", left: "Date", right: formatDate(order.order_date) })
-  if (order.required_date) b.push({ t: "row", left: "Delivery", right: formatDate(order.required_date) })
+  b.push({ t: "row", left: "Order date", right: formatDate(order.order_date) })
+  if (order.required_date) b.push({ t: "row", left: "Delivery date", right: formatDate(order.required_date) })
   b.push({ t: "divider" })
   const who = customer?.customer_business_name || "Walk-in Customer"
   if (customer?.phone) b.push({ t: "row", left: who, right: customer.phone, bold: true })
@@ -129,13 +129,21 @@ export async function buildInvoiceBlocks(data: InvoiceData): Promise<ReceiptBloc
       if (stitches) parts.push(`${formatNumber(item.stitches_per_unit)} stitches`)
       b.push({ t: "text", text: parts.join(" · "), size: "small", muted: true })
     }
+    // This item's additional costs sit right under it, above the subtotal.
+    for (const c of costs.filter((x) => x.order_item_id === item.id)) {
+      b.push({ t: "row", left: `+ ${c.cost_type}`, right: formatCurrency(c.amount), size: "small" })
+    }
+    b.push({ t: "space", h: 4 })
   })
+  // Costs that don't belong to any item shown here.
+  for (const c of costs.filter((x) => !items.some((i) => i.id === x.order_item_id))) {
+    b.push({ t: "row", left: `+ ${c.cost_type}`, right: formatCurrency(c.amount), size: "small" })
+  }
 
   b.push({ t: "divider" })
-  const hasExtras = setup > 0 || costs.length > 0 || discountAmount > 0
-  if (hasExtras) b.push({ t: "row", left: "Subtotal", right: formatCurrency(subtotal) })
+  // The subtotal only earns a line when something is added or taken off it.
+  if (setup > 0 || discountAmount > 0) b.push({ t: "row", left: "Subtotal", right: formatCurrency(subtotal) })
   if (setup > 0) b.push({ t: "row", left: extraLabel, right: formatCurrency(setup) })
-  for (const c of costs) b.push({ t: "row", left: c.cost_type, right: formatCurrency(c.amount) })
   if (discountAmount > 0) {
     b.push({ t: "row", left: `Discount (${discountLabel(order)})`, right: `-${formatCurrency(discountAmount)}` })
   }
@@ -180,7 +188,9 @@ const SIZE_PX: Record<ReceiptSize, number> = { small: 20, normal: 23, big: 30, h
  * it vanished from the print. The picture is stretched to use the full
  * dark-to-light range, then dithered so mid-tones become fine dot patterns.
  */
-function logoToDots(img: HTMLImageElement, w: number, h: number): HTMLCanvasElement {
+type Drawable = HTMLImageElement | HTMLCanvasElement
+
+function logoToDots(img: Drawable, w: number, h: number): HTMLCanvasElement {
   const out = document.createElement("canvas")
   out.width = w
   out.height = h
@@ -222,6 +232,50 @@ function logoToDots(img: HTMLImageElement, w: number, h: number): HTMLCanvasElem
     image.data[p + 3] = 255
   }
   ctx.putImageData(image, 0, 0)
+  return out
+}
+
+/**
+ * Cuts the empty white (or transparent) border off a logo. Many logo files
+ * carry a wide margin, which would waste paper and push the shop name aside.
+ */
+function trimMargins(img: HTMLImageElement): Drawable {
+  const w = img.naturalWidth || img.width
+  const h = img.naturalHeight || img.height
+  if (!w || !h) return img
+  const probe = document.createElement("canvas")
+  probe.width = w
+  probe.height = h
+  const ctx = probe.getContext("2d", { willReadFrequently: true })!
+  ctx.drawImage(img, 0, 0)
+  const { data } = ctx.getImageData(0, 0, w, h)
+  let minX = w
+  let minY = h
+  let maxX = -1
+  let maxY = -1
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const p = (y * w + x) * 4
+      const ink = data[p + 3] > 32 && (data[p] + data[p + 1] + data[p + 2]) / 3 < 240
+      if (ink) {
+        if (x < minX) minX = x
+        if (x > maxX) maxX = x
+        if (y < minY) minY = y
+        if (y > maxY) maxY = y
+      }
+    }
+  }
+  if (maxX < 0) return img
+  const pad = 2
+  const sx = Math.max(0, minX - pad)
+  const sy = Math.max(0, minY - pad)
+  const sw = Math.min(w, maxX + pad + 1) - sx
+  const sh = Math.min(h, maxY + pad + 1) - sy
+  if (sw >= w * 0.98 && sh >= h * 0.98) return img
+  const out = document.createElement("canvas")
+  out.width = sw
+  out.height = sh
+  out.getContext("2d")!.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh)
   return out
 }
 
@@ -275,17 +329,17 @@ export async function renderReceipt(
   }
 
   // Pre-load images so heights are known.
-  const images = new Map<number, HTMLImageElement>()
+  const images = new Map<number, Drawable>()
   await Promise.all(
     blocks.map(async (blk, i) => {
       if (blk.t === "image" || blk.t === "brand") {
         const img = await loadImage(blk.src)
-        if (img) images.set(i, img)
+        if (img) images.set(i, trimMargins(img))
       }
     }),
   )
 
-  const lineHeight = (size: ReceiptSize) => Math.round(SIZE_PX[size] * 1.22)
+  const lineHeight = (size: ReceiptSize) => Math.round(SIZE_PX[size] * 1.4)
 
   // A keyed row has a plain caption and a bold value; the pair stacks when it can't fit on one line.
   const keyedFits = (blk: Extract<ReceiptBlock, { t: "row" }>) => {
@@ -296,12 +350,26 @@ export async function renderReceipt(
     return l + measure.measureText(blk.right).width + 16 <= inner
   }
 
-  // The logo beside the name: a third of the width at most.
-  const brandLogo = (i: number) => {
+  // The logo at the left edge, the name centred across the whole paper. The
+  // name keeps clear of the logo on both sides so it stays truly centred.
+  const brandLogo = (i: number, text: string) => {
     const img = images.get(i)
-    return img ? scaled(img, Math.round(inner * 0.3), Math.round(86 * scale)) : null
+    if (!img) return null
+    // Room beside a centred, full-size name, so the name never has to shrink or wrap.
+    measure.font = fontFor("big", true)
+    const beside = Math.floor((width - measure.measureText(text).width) / 2 - margin - 8)
+    return scaled(img, Math.max(56, Math.min(Math.round(inner * 0.3), beside)), Math.round(84 * scale))
   }
-  const brandNameWidth = (logoW: number) => inner - (logoW ? logoW + 14 : 0)
+  const brandNameWidth = (logoW: number) => width - 2 * (margin + (logoW ? logoW + 8 : 0))
+  // The name stays on one line if it can: big, else a size smaller, else wrapped.
+  const brandName = (text: string, logoW: number): { size: ReceiptSize; lines: string[] } => {
+    const room = brandNameWidth(logoW)
+    for (const size of ["big", "normal"] as ReceiptSize[]) {
+      measure.font = fontFor(size, true)
+      if (measure.measureText(text).width <= room) return { size, lines: [text] }
+    }
+    return { size: "normal", lines: wrap(text, "normal", true, room) }
+  }
 
   // Layout pass.
   let height = top
@@ -315,10 +383,10 @@ export async function renderReceipt(
       const rightW = measure.measureText(blk.right).width
       height += wrap(blk.left, size, blk.bold, Math.max(80, inner - rightW - 12)).length * lineHeight(size)
     } else if (blk.t === "brand") {
-      const logo = brandLogo(i)
-      const lines = wrap(blk.text, "big", true, brandNameWidth(logo?.w ?? 0))
-      height += Math.max(logo?.h ?? 0, lines.length * lineHeight("big")) + 4
-    } else if (blk.t === "divider") height += 12
+      const logo = brandLogo(i, blk.text)
+      const { size, lines } = brandName(blk.text, logo?.w ?? 0)
+      height += Math.max(logo?.h ?? 0, lines.length * lineHeight(size)) + 4
+    } else if (blk.t === "divider") height += 18
     else if (blk.t === "space") height += blk.h
     else if (blk.t === "image") {
       const img = images.get(i)
@@ -365,18 +433,16 @@ export async function renderReceipt(
       }
     } else if (blk.t === "brand") {
       const img = images.get(i)
-      const logo = brandLogo(i)
-      const nameW = brandNameWidth(logo?.w ?? 0)
-      const lines = wrap(blk.text, "big", true, nameW)
-      const textH = lines.length * lineHeight("big")
+      const logo = brandLogo(i, blk.text)
+      const { size: nameSize, lines } = brandName(blk.text, logo?.w ?? 0)
+      const textH = lines.length * lineHeight(nameSize)
       const rowH = Math.max(logo?.h ?? 0, textH)
       if (img && logo) ctx.drawImage(logoToDots(img, logo.w, logo.h), margin, y + (rowH - logo.h) / 2)
-      ctx.font = fontFor("big", true)
+      ctx.font = fontFor(nameSize, true)
       ctx.fillStyle = "#000"
-      const textLeft = margin + (logo ? logo.w + 14 : 0)
       lines.forEach((line, n) => {
         const w = ctx.measureText(line).width
-        ctx.fillText(line, textLeft + (nameW - w) / 2, y + (rowH - textH) / 2 + n * lineHeight("big"))
+        ctx.fillText(line, (width - w) / 2, y + (rowH - textH) / 2 + n * lineHeight(nameSize))
       })
       y += rowH + 4
     } else if (blk.t === "row") {
@@ -392,8 +458,8 @@ export async function renderReceipt(
       y += lines.length * lineHeight(size)
     } else if (blk.t === "divider") {
       ctx.fillStyle = "#000"
-      for (let x = margin; x < width - margin; x += 10) ctx.fillRect(x, y + 5, 5, 2)
-      y += 12
+      for (let x = margin; x < width - margin; x += 10) ctx.fillRect(x, y + 8, 5, 2)
+      y += 18
     } else if (blk.t === "space") {
       y += blk.h
     } else if (blk.t === "image") {
@@ -419,7 +485,7 @@ export async function renderReceipt(
   return canvas
 }
 
-function scaled(img: HTMLImageElement, maxW: number, maxH: number) {
+function scaled(img: Drawable, maxW: number, maxH: number) {
   const r = Math.min(maxW / img.width, maxH / img.height, 1)
   return { w: Math.max(1, Math.round(img.width * r)), h: Math.max(1, Math.round(img.height * r)) }
 }
