@@ -204,7 +204,12 @@ function loadImage(src: string): Promise<HTMLImageElement | null> {
 
 /** Draws blocks onto a white canvas `width` dots wide, as tall as the content needs. */
 export async function renderReceipt(blocks: ReceiptBlock[], width = 576): Promise<HTMLCanvasElement> {
-  const margin = 10
+  // A frame is drawn round the receipt; the text sits inside it. It is kept off the
+  // very edge because most printers cannot print the outermost dots.
+  const frameInset = 6
+  const frameWidth = 3
+  const margin = 26
+  const top = 24
   const inner = width - margin * 2
   // Logos are sized for an 80mm (576-dot) roll and scale with the paper.
   const scale = width / 576
@@ -244,7 +249,7 @@ export async function renderReceipt(blocks: ReceiptBlock[], width = 576): Promis
   const lineHeight = (size: ReceiptSize) => Math.round(SIZE_PX[size] * 1.35)
 
   // Layout pass.
-  let height = 12
+  let height = top
   for (const [i, blk] of blocks.entries()) {
     if (blk.t === "text") height += wrap(blk.text, blk.size || "normal", blk.bold, inner).length * lineHeight(blk.size || "normal")
     else if (blk.t === "row") {
@@ -259,7 +264,7 @@ export async function renderReceipt(blocks: ReceiptBlock[], width = 576): Promis
       if (img) height += scaled(img, blk.maxWidth * scale, blk.maxHeight * scale).h + 8
     }
   }
-  height += 12
+  height += top
 
   const canvas = document.createElement("canvas")
   canvas.width = width
@@ -269,7 +274,7 @@ export async function renderReceipt(blocks: ReceiptBlock[], width = 576): Promis
   ctx.fillRect(0, 0, width, height)
   ctx.textBaseline = "top"
 
-  let y = 12
+  let y = top
   for (const [i, blk] of blocks.entries()) {
     if (blk.t === "text") {
       const size = blk.size || "normal"
@@ -307,6 +312,18 @@ export async function renderReceipt(blocks: ReceiptBlock[], width = 576): Promis
       }
     }
   }
+  ctx.strokeStyle = "#000"
+  ctx.lineWidth = frameWidth
+  ctx.lineJoin = "round"
+  ctx.beginPath()
+  ctx.roundRect(
+    frameInset + frameWidth / 2,
+    frameInset + frameWidth / 2,
+    width - 2 * frameInset - frameWidth,
+    height - 2 * frameInset - frameWidth,
+    14,
+  )
+  ctx.stroke()
   return canvas
 }
 
