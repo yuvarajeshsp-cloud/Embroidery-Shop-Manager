@@ -20,14 +20,14 @@ const INFO_ROUTES: Route["name"][] = ["more", "help", "faq", "privacy"]
 const ROLE_ROUTES: Record<Exclude<UserRole, "Administrator">, Route["name"][]> = {
   Manager: [
     "dashboard", "customers", "customer-detail", "orders", "order-detail",
-    "order-new", "payments", "expenses", "production", "reports", "whatsapp", "profile",
+    "order-new", "payments", "expenses", "production", "reports", "whatsapp", "printer", "profile",
   ],
   Operator: [
-    "dashboard", "orders", "order-detail", "production", "profile",
+    "dashboard", "orders", "order-detail", "production", "printer", "profile",
   ],
   Accounts: [
     "dashboard", "orders", "order-detail", "customers", "customer-detail",
-    "payments", "expenses", "reports", "profile",
+    "payments", "expenses", "reports", "printer", "profile",
   ],
 }
 
@@ -43,7 +43,7 @@ export function allowedRouteNames(role: UserRole | undefined): Set<Route["name"]
   if (!role || role === "Administrator") {
     const all = new Set<Route["name"]>([
       "dashboard", "customers", "customer-detail", "orders", "order-detail",
-      "order-new", "payments", "expenses", "production", "reports", "config", "whatsapp",
+      "order-new", "payments", "expenses", "production", "reports", "config", "printer", "whatsapp",
       "users", "audit", "profile", "subscription",
     ])
     for (const name of INFO_ROUTES) all.add(name)

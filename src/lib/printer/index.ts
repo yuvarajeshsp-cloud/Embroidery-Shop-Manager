@@ -30,6 +30,36 @@ export interface PrinterSettings {
   ref: Transport["ref"]
   /** Printable dots across the paper: 384 for 58mm, 576 for 80mm, 832 for 4 inch (104mm). */
   paperDots: PaperDots
+  /** Blank lines fed after the receipt so it clears the cutter / tear bar. */
+  feedLines?: number
+  /** Blank dots left above the receipt (8 dots = 1 mm). */
+  topSpace?: number
+  /** Draw a frame round the receipt. */
+  border?: boolean
+  /** Cut the paper after each receipt (ignored by printers without a cutter). */
+  cut?: boolean
+}
+
+export interface ReceiptOptions {
+  paperDots: PaperDots
+  feedLines: number
+  topSpace: number
+  border: boolean
+  cut: boolean
+}
+
+export const DEFAULT_FEED_LINES = 6
+
+/** The saved settings with defaults filled in. */
+export function getReceiptOptions(): ReceiptOptions {
+  const s = getPrinterSettings()
+  return {
+    paperDots: s?.paperDots ?? 576,
+    feedLines: s?.feedLines ?? DEFAULT_FEED_LINES,
+    topSpace: s?.topSpace ?? 0,
+    border: s?.border ?? true,
+    cut: s?.cut ?? true,
+  }
 }
 
 const KEY = "receipt_printer_v1"
@@ -63,10 +93,15 @@ function save(settings: PrinterSettings) {
   emit()
 }
 
-export function setPaperWidth(paperDots: PaperDots) {
+/** Changes how receipts are laid out and fed, keeping the chosen printer. */
+export function updatePrinterOptions(patch: Partial<Pick<PrinterSettings, "paperDots" | "feedLines" | "topSpace" | "border" | "cut">>) {
   const current = getPrinterSettings()
-  if (current) save({ ...current, paperDots })
-  else save({ kind: availableKinds()[0] ?? "usb", name: "", ref: {}, paperDots })
+  if (current) save({ ...current, ...patch })
+  else save({ kind: availableKinds()[0] ?? "usb", name: "", ref: {}, paperDots: 576, ...patch })
+}
+
+export function setPaperWidth(paperDots: PaperDots) {
+  updatePrinterOptions({ paperDots })
 }
 
 export function isPrinterConnected(): boolean {
@@ -138,7 +173,8 @@ export function currentPaperDots(): PaperDots {
  * are sent to the printer, as an image, so the preview is exactly the print.
  */
 export async function renderReceiptPreview(blocks: ReceiptBlock[]): Promise<{ url: string; width: number; height: number }> {
-  const canvas = await renderReceipt(blocks, currentPaperDots())
+  const opts = getReceiptOptions()
+  const canvas = await renderReceipt(blocks, opts.paperDots, { border: opts.border, topSpace: opts.topSpace })
   const bitmap = canvasToBitmap(canvas)
   const out = document.createElement("canvas")
   out.width = bitmap.width
@@ -159,8 +195,9 @@ export async function printBlocks(blocks: ReceiptBlock[]): Promise<void> {
   // Connect first: choosing a printer needs the tap that started this, and
   // the browser only honours that for a few seconds.
   const transport = await ensureTransport()
-  const canvas = await renderReceipt(blocks, currentPaperDots())
-  const job = receiptJob(canvasToBitmap(canvas))
+  const opts = getReceiptOptions()
+  const canvas = await renderReceipt(blocks, opts.paperDots, { border: opts.border, topSpace: opts.topSpace })
+  const job = receiptJob(canvasToBitmap(canvas), { feedLines: opts.feedLines, cut: opts.cut })
   try {
     await transport.write(job)
   } catch {

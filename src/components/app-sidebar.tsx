@@ -8,6 +8,7 @@ import {
   Factory,
   BarChart3,
   Settings,
+  Printer,
   UserCog,
   ScrollText,
   MessageCircle,
@@ -67,6 +68,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     label: "Admin",
     items: [
       { label: "Configuration", icon: Settings, route: { name: "config" } },
+      { label: "Printer", icon: Printer, route: { name: "printer" } },
       { label: "WhatsApp", icon: MessageCircle, route: { name: "whatsapp" } },
       { label: "Users & Roles", icon: UserCog, route: { name: "users" } },
       { label: "Audit Log", icon: ScrollText, route: { name: "audit" } },

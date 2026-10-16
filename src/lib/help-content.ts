@@ -66,7 +66,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     title: "Invoices, PDFs and order tags",
     steps: [
       "On an order, Download / Print PDF opens a preview of the full invoice with Download and Print buttons at the top and bottom.",
-      "Print Invoice opens a preview of the thermal-printer receipt (with your logo); press Print at the top or bottom to send it to the printer. Paper size can be changed there too.",
+      "Print Invoice opens a preview of the thermal-printer receipt (with your logo); press Print at the top or bottom to send it to the printer. Choose your printer and set paper size, border and spacing under Printer (next to Configuration).",
       "Print Order Tag works the same way and gives a small tag to attach to the garment.",
     ],
   },

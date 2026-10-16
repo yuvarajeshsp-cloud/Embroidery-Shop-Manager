@@ -4,7 +4,6 @@ import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   availableKinds,
   forgetPrinter,
@@ -15,9 +14,6 @@ import {
   pairPrinter,
   PrinterError,
   printTestPage,
-  PAPER_SIZES,
-  setPaperWidth,
-  type PaperDots,
   type PrinterKind,
 } from "@/lib/printer"
 
@@ -130,18 +126,6 @@ export function PrinterCard() {
               </div>
             )
           })}
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <span className="text-xs text-muted-foreground">Paper width</span>
-          <Select value={String(settings?.paperDots ?? 576)} onValueChange={(v) => setPaperWidth(Number(v) as PaperDots)}>
-            <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {PAPER_SIZES.map((p) => (
-                <SelectItem key={p.dots} value={String(p.dots)}>{p.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
 
         <div className="flex flex-wrap gap-2">

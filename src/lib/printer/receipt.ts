@@ -203,13 +203,20 @@ function loadImage(src: string): Promise<HTMLImageElement | null> {
 }
 
 /** Draws blocks onto a white canvas `width` dots wide, as tall as the content needs. */
-export async function renderReceipt(blocks: ReceiptBlock[], width = 576): Promise<HTMLCanvasElement> {
+export async function renderReceipt(
+  blocks: ReceiptBlock[],
+  width = 576,
+  opts: { border?: boolean; topSpace?: number } = {},
+): Promise<HTMLCanvasElement> {
+  const { border = true, topSpace = 0 } = opts
   // A frame is drawn round the receipt; the text sits inside it. It is kept off the
   // very edge because most printers cannot print the outermost dots.
   const frameInset = 6
   const frameWidth = 3
-  const margin = 26
-  const top = 24
+  const margin = border ? 26 : 10
+  // Paper starts right at the print head, so nothing is added above the frame.
+  const top = (border ? 16 : 8) + topSpace
+  const bottom = border ? 16 : 8
   const inner = width - margin * 2
   // Logos are sized for an 80mm (576-dot) roll and scale with the paper.
   const scale = width / 576
@@ -264,7 +271,7 @@ export async function renderReceipt(blocks: ReceiptBlock[], width = 576): Promis
       if (img) height += scaled(img, blk.maxWidth * scale, blk.maxHeight * scale).h + 8
     }
   }
-  height += top
+  height += bottom
 
   const canvas = document.createElement("canvas")
   canvas.width = width
@@ -312,18 +319,17 @@ export async function renderReceipt(blocks: ReceiptBlock[], width = 576): Promis
       }
     }
   }
-  ctx.strokeStyle = "#000"
-  ctx.lineWidth = frameWidth
-  ctx.lineJoin = "round"
-  ctx.beginPath()
-  ctx.roundRect(
-    frameInset + frameWidth / 2,
-    frameInset + frameWidth / 2,
-    width - 2 * frameInset - frameWidth,
-    height - 2 * frameInset - frameWidth,
-    14,
-  )
-  ctx.stroke()
+  if (border) {
+    ctx.strokeStyle = "#000"
+    ctx.lineWidth = frameWidth
+    ctx.lineJoin = "round"
+    ctx.beginPath()
+    // Sits at the very top (the paper's leading edge), inset from the sides and bottom.
+    const x = frameInset + frameWidth / 2
+    const frameTop = topSpace + frameWidth / 2
+    ctx.roundRect(x, frameTop, width - 2 * frameInset - frameWidth, height - frameTop - frameInset - frameWidth / 2, 14)
+    ctx.stroke()
+  }
   return canvas
 }
 
