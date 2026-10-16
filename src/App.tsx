@@ -33,6 +33,8 @@ import { ProductionPage } from "@/pages/production"
 import { ReportsPage } from "@/pages/reports"
 import { ConfigPage } from "@/pages/config"
 import { WhatsAppPage } from "@/pages/whatsapp"
+import { OfflineBanner } from "@/components/offline-banner"
+import { useSyncState } from "@/lib/offline/state"
 import { PrinterPage } from "@/pages/printer"
 import { UsersPage, AuditPage } from "@/pages/admin"
 import { PlatformAdminPage, PlatformAdminOrgPage } from "@/pages/platform-admin"
@@ -245,17 +247,35 @@ function AppContent() {
   return FEATURES.subscription ? <SubscriptionGate profile={profile} /> : <AppShell />
 }
 
+/**
+ * After waiting changes reach the server, screens are rebuilt so they show the
+ * server's version. Held back while a form or dialog is open, so nothing
+ * someone is typing is lost; it happens on the next page change instead.
+ */
+function useSyncRefresh(routeName: string): number {
+  const { syncVersion } = useSyncState()
+  const [applied, setApplied] = React.useState(syncVersion)
+  React.useEffect(() => {
+    if (applied === syncVersion) return
+    if (routeName === "order-new" || document.querySelector('[role="dialog"]')) return
+    setApplied(syncVersion)
+  }, [syncVersion, applied, routeName])
+  return applied
+}
+
 function AppShell({ banner }: { banner?: React.ReactNode }) {
   const isMobile = useIsMobile()
   const { route } = useRouter()
   useRouteGuard(isMobile)
+  const refreshKey = useSyncRefresh(route.name)
 
   if (isMobile) {
     return (
       <div className="flex min-h-svh flex-col pt-[env(safe-area-inset-top)]">
+        <OfflineBanner />
         {banner}
         <div className="flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))]">
-          <PageStack renderRoute={(r) => <RouteView route={r} />} />
+          <PageStack key={refreshKey} renderRoute={(r) => <RouteView route={r} />} />
         </div>
         <BottomNav />
       </div>
@@ -266,8 +286,11 @@ function AppShell({ banner }: { banner?: React.ReactNode }) {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
+        <OfflineBanner />
         {banner}
-        <RouteView route={route} />
+        <React.Fragment key={refreshKey}>
+          <RouteView route={route} />
+        </React.Fragment>
       </SidebarInset>
     </SidebarProvider>
   )

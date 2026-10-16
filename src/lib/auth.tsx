@@ -5,6 +5,29 @@ import type { UserProfile, UserRole } from "./types"
 import { DEFAULT_SHOP_TYPE, type ShopType } from "./shop-type-core"
 import { clearConfigCache } from "./config"
 import { claimBusinessProfile, refreshBusinessProfile } from "./business-profile"
+import { isOnline } from "./offline/connectivity"
+import { flushQueue } from "./offline/engine"
+import { getSyncState } from "./offline/state"
+import { setOfflineOrg, setOfflineUser, wipeOfflineData } from "./offline/store"
+import { capacitorSupabaseStorage } from "./capacitor-storage"
+
+/**
+ * With no connection a saved sign-in can't be renewed, and Supabase then
+ * reports "no session". The sign-in itself is still on the device, so keep
+ * using it: everything shown offline comes from the device, and the session is
+ * renewed on its own once the connection returns.
+ */
+async function savedSession(): Promise<Session | null> {
+  if (isOnline()) return null
+  try {
+    const host = new URL(import.meta.env.VITE_SUPABASE_URL).hostname.split(".")[0]
+    const raw = await capacitorSupabaseStorage.getItem(`sb-${host}-auth-token`)
+    const stored = raw ? (JSON.parse(raw) as Session) : null
+    return stored?.user ? stored : null
+  } catch {
+    return null
+  }
+}
 
 function slugify(name: string): string {
   const slug = name
@@ -55,6 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (!error) {
         setProfile(data as UserProfile | null)
+        setOfflineOrg((data as UserProfile | null)?.organization_id ?? null)
         return
       }
       console.error("Failed to load profile:", error)
@@ -77,11 +101,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   React.useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
-      handleUserChange(data.session?.user?.id ?? null)
-      if (data.session?.user) {
-        loadProfile(data.session.user.id).finally(() => setLoading(false))
+    // The saved copy of the data belongs to one person; it must be switched to
+    // them before anything is read.
+    async function activate(next: Session | null) {
+      handleUserChange(next?.user?.id ?? null)
+      await setOfflineUser(next?.user?.id ?? null)
+    }
+
+    supabase.auth.getSession().then(async ({ data }) => {
+      const current = data.session ?? (await savedSession())
+      setSession(current)
+      await activate(current)
+      if (current?.user) {
+        loadProfile(current.user.id).finally(() => setLoading(false))
       } else {
         setLoading(false)
       }
@@ -89,17 +121,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-      handleUserChange(session?.user?.id ?? null)
-      if (session?.user) {
-        // Not called inline: making Supabase requests from inside this
-        // callback can run before the session is fully applied.
-        const userId = session.user.id
-        setTimeout(() => void loadProfile(userId), 0)
-      } else {
-        setProfile(null)
-      }
+    } = supabase.auth.onAuthStateChange((event, next) => {
+      void (async () => {
+        const current = next ?? (event === "SIGNED_OUT" ? null : await savedSession())
+        setSession(current)
+        await activate(current)
+        if (current?.user) {
+          // Not called inline: making Supabase requests from inside this
+          // callback can run before the session is fully applied.
+          const userId = current.user.id
+          setTimeout(() => void loadProfile(userId), 0)
+        } else {
+          setProfile(null)
+        }
+      })()
     })
 
     return () => subscription.unsubscribe()
@@ -176,7 +211,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 
   const signOut = React.useCallback(async () => {
+    // Changes still waiting to be sent would be lost with the saved copy.
+    if (getSyncState().pending > 0) {
+      if (isOnline()) await flushQueue()
+      const left = getSyncState().pending
+      if (left > 0 && !window.confirm(`${left} change${left === 1 ? " hasn't" : "s haven't"} been sent to the server yet. Signing out will discard ${left === 1 ? "it" : "them"}. Sign out anyway?`)) return
+    }
     await supabase.auth.signOut()
+    await wipeOfflineData()
     setProfile(null)
   }, [])
 

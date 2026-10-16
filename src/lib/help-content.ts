@@ -185,6 +185,10 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: "How do I get an invoice to send to a customer?",
         a: "Open the order and tap Download / Print PDF, then Download (or Save / Share on a phone). For a thermal printer receipt use Print Invoice.",
       },
+      {
+        q: "Can I use the app without internet?",
+        a: "Yes. A strip at the top shows when you are offline. You can keep opening orders, customers and payments that were loaded earlier, and add or change orders, customers, payments and expenses; they are saved on the device and sent automatically when you are back online (the strip turns blue while syncing). Sign in once with internet first. Photos, sign-in, WhatsApp and user management need internet.",
+      },
     ],
   },
   {
