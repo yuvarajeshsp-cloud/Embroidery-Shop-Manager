@@ -30,8 +30,8 @@ export type ReceiptBlock =
   | { t: "divider" }
   | { t: "space"; h: number }
   | { t: "image"; src: string; maxWidth: number; maxHeight: number }
-  /** The logo on the left with the shop's name beside it. */
-  | { t: "brand"; src: string; text: string }
+  /** The shop's header: the logo in the left 20%, the name and address in the right 80%. */
+  | { t: "header"; src: string; lines: { text: string; size: ReceiptSize; bold?: boolean; muted?: boolean }[] }
 
 export interface InvoiceData {
   order: Order
@@ -44,12 +44,11 @@ export interface InvoiceData {
 type Settings = Record<string, string>
 
 /**
- * The shop's name block: the logo and name, then the address and contact on as
- * few lines as will hold them. With `logo: "left"` the logo sits beside the
- * name; otherwise it is centred above it. `brief` leaves out the address lines.
+ * The shop's header, split in two columns: the logo fills the left 20% and the
+ * name, address and contact take the right 80%. Without a logo the text simply
+ * runs the full width. Used by the invoice and the order tag alike.
  */
-function headerBlocks(settings: Settings, opts: { logo?: "left" | "center"; brief?: boolean } = {}): ReceiptBlock[] {
-  const { logo: logoAt = "center", brief = false } = opts
+function headerBlocks(settings: Settings): ReceiptBlock[] {
   const name = (settings.company_name || "").trim()
   const tagline = (settings.company_tagline || "").trim()
   const place = [
@@ -65,21 +64,14 @@ function headerBlocks(settings: Settings, opts: { logo?: "left" | "center"; brie
   ]
     .filter(Boolean)
     .join("  ")
-  const blocks: ReceiptBlock[] = []
+  const lines: { text: string; size: ReceiptSize; bold?: boolean; muted?: boolean }[] = []
+  if (name) lines.push({ text: name, size: "big", bold: true })
+  if (tagline) lines.push({ text: tagline, size: "small", muted: true })
+  if (place) lines.push({ text: place, size: "small" })
+  if (contact) lines.push({ text: contact, size: "small" })
   const logo = (settings.company_logo_data_url || "").trim()
-  const hasLogo = logo.startsWith("data:image/")
-  if (hasLogo && logoAt === "left" && name) {
-    blocks.push({ t: "brand", src: logo, text: name })
-  } else {
-    if (hasLogo) blocks.push({ t: "image", src: logo, maxWidth: 170, maxHeight: 84 })
-    if (name) blocks.push({ t: "text", text: name, align: "center", size: "big", bold: true })
-  }
-  if (tagline && !brief) blocks.push({ t: "text", text: tagline, align: "center", size: "small", muted: true })
-  if (!brief) {
-    if (place) blocks.push({ t: "text", text: place, align: "center", size: "small" })
-    if (contact) blocks.push({ t: "text", text: contact, align: "center", size: "small" })
-  }
-  return blocks
+  if (logo.startsWith("data:image/")) return [{ t: "header", src: logo, lines }]
+  return lines.map((l): ReceiptBlock => ({ t: "text", text: l.text, align: "center", size: l.size, bold: l.bold, muted: l.muted }))
 }
 
 export async function buildInvoiceBlocks(data: InvoiceData): Promise<ReceiptBlock[]> {
@@ -98,7 +90,7 @@ export async function buildInvoiceBlocks(data: InvoiceData): Promise<ReceiptBloc
   const balance = orderBalanceDue(items, payments, costs, order)
   const status = derivePaymentStatus(items, payments, costs, order)
 
-  const b: ReceiptBlock[] = [...headerBlocks(settings, { logo: "left" })]
+  const b: ReceiptBlock[] = [...headerBlocks(settings)]
   b.push({ t: "divider" })
   b.push({ t: "text", text: "INVOICE", align: "center", size: "big", bold: true })
   b.push({ t: "row", left: "Order #", right: order.order_number, bold: true })
@@ -160,7 +152,7 @@ export async function buildInvoiceBlocks(data: InvoiceData): Promise<ReceiptBloc
 
 export async function buildOrderTagBlocks(order: Order, customer: Customer | null): Promise<ReceiptBlock[]> {
   const settings = await fetchBusinessSettings()
-  const b: ReceiptBlock[] = [...headerBlocks(settings, { logo: "left" })]
+  const b: ReceiptBlock[] = [...headerBlocks(settings)]
   b.push({ t: "divider" })
   b.push({ t: "text", text: "ORDER TAG", align: "center", size: "big", bold: true })
   b.push({ t: "divider" })
@@ -332,7 +324,7 @@ export async function renderReceipt(
   const images = new Map<number, Drawable>()
   await Promise.all(
     blocks.map(async (blk, i) => {
-      if (blk.t === "image" || blk.t === "brand") {
+      if (blk.t === "image" || blk.t === "header") {
         const img = await loadImage(blk.src)
         if (img) images.set(i, trimMargins(img))
       }
@@ -350,25 +342,17 @@ export async function renderReceipt(
     return l + measure.measureText(blk.right).width + 16 <= inner
   }
 
-  // The logo at the left edge, the name centred across the whole paper. The
-  // name keeps clear of the logo on both sides so it stays truly centred.
-  const brandLogo = (i: number, text: string) => {
+  // The header: logo in the left 20% of the width, text in the right 80%.
+  const leftW = Math.round(inner * 0.2)
+  const rightW = inner - leftW
+  const headerParts = (blk: Extract<ReceiptBlock, { t: "header" }>, i: number) => {
     const img = images.get(i)
-    if (!img) return null
-    // Room beside a centred, full-size name, so the name never has to shrink or wrap.
-    measure.font = fontFor("big", true)
-    const beside = Math.floor((width - measure.measureText(text).width) / 2 - margin - 8)
-    return scaled(img, Math.max(56, Math.min(Math.round(inner * 0.3), beside)), Math.round(84 * scale))
-  }
-  const brandNameWidth = (logoW: number) => width - 2 * (margin + (logoW ? logoW + 8 : 0))
-  // The name stays on one line if it can: big, else a size smaller, else wrapped.
-  const brandName = (text: string, logoW: number): { size: ReceiptSize; lines: string[] } => {
-    const room = brandNameWidth(logoW)
-    for (const size of ["big", "normal"] as ReceiptSize[]) {
-      measure.font = fontFor(size, true)
-      if (measure.measureText(text).width <= room) return { size, lines: [text] }
-    }
-    return { size: "normal", lines: wrap(text, "normal", true, room) }
+    const logo = img ? scaled(img, leftW - 8, Math.round(130 * scale)) : null
+    const lines = blk.lines.flatMap((l) =>
+      wrap(l.text, l.size, l.bold, rightW - 8).map((text) => ({ ...l, text })),
+    )
+    const textH = lines.reduce((n, l) => n + lineHeight(l.size), 0)
+    return { img, logo, lines, textH, rowH: Math.max(textH, logo?.h ?? 0) }
   }
 
   // Layout pass.
@@ -382,10 +366,8 @@ export async function renderReceipt(
       measure.font = fontFor(size, blk.bold)
       const rightW = measure.measureText(blk.right).width
       height += wrap(blk.left, size, blk.bold, Math.max(80, inner - rightW - 12)).length * lineHeight(size)
-    } else if (blk.t === "brand") {
-      const logo = brandLogo(i, blk.text)
-      const { size, lines } = brandName(blk.text, logo?.w ?? 0)
-      height += Math.max(logo?.h ?? 0, lines.length * lineHeight(size))
+    } else if (blk.t === "header") {
+      height += headerParts(blk, i).rowH + 4
     } else if (blk.t === "divider") height += 18
     else if (blk.t === "space") height += blk.h
     else if (blk.t === "image") {
@@ -431,20 +413,19 @@ export async function renderReceipt(
         ctx.fillText(blk.right, width - margin - rightW, y)
         y += lineHeight(size)
       }
-    } else if (blk.t === "brand") {
-      const img = images.get(i)
-      const logo = brandLogo(i, blk.text)
-      const { size: nameSize, lines } = brandName(blk.text, logo?.w ?? 0)
-      const textH = lines.length * lineHeight(nameSize)
-      const rowH = Math.max(logo?.h ?? 0, textH)
-      if (img && logo) ctx.drawImage(logoToDots(img, logo.w, logo.h), margin, y + (rowH - logo.h) / 2)
-      ctx.font = fontFor(nameSize, true)
+    } else if (blk.t === "header") {
+      const { img, logo, lines, textH, rowH } = headerParts(blk, i)
+      if (img && logo) ctx.drawImage(logoToDots(img, logo.w, logo.h), margin + (leftW - logo.w) / 2, y + (rowH - logo.h) / 2)
       ctx.fillStyle = "#000"
-      lines.forEach((line, n) => {
-        const w = ctx.measureText(line).width
-        ctx.fillText(line, (width - w) / 2, y + (rowH - textH) + n * lineHeight(nameSize))
-      })
-      y += rowH
+      let ty = y + (rowH - textH) / 2
+      for (const l of lines) {
+        ctx.font = fontFor(l.size, l.bold)
+        ctx.fillStyle = l.muted ? "#333" : "#000"
+        const w = ctx.measureText(l.text).width
+        ctx.fillText(l.text, margin + leftW + (rightW - w) / 2, ty)
+        ty += lineHeight(l.size)
+      }
+      y += rowH + 4
     } else if (blk.t === "row") {
       const size = blk.size || "normal"
       ctx.font = fontFor(size, blk.bold)
