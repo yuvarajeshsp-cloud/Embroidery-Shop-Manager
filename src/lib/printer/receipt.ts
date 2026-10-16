@@ -42,23 +42,36 @@ export interface InvoiceData {
 
 type Settings = Record<string, string>
 
-function headerBlocks(settings: Settings): ReceiptBlock[] {
+/**
+ * The shop's name block. Compact by default: a small logo, the name, then the
+ * address on as few lines as will hold it. `brief` leaves out the address
+ * lines (a garment tag only needs who made it).
+ */
+function headerBlocks(settings: Settings, brief = false): ReceiptBlock[] {
   const name = (settings.company_name || "").trim()
   const tagline = (settings.company_tagline || "").trim()
-  const cityLine = [settings.company_city, settings.company_state, settings.company_pincode].filter(Boolean).join(", ")
-  const lines = [
+  const place = [
     (settings.company_address || "").trim(),
-    cityLine,
+    [settings.company_city, settings.company_state, settings.company_pincode].filter(Boolean).join(", "),
+  ]
+    .filter(Boolean)
+    .join(", ")
+  const contact = [
     settings.company_phone ? `Ph: ${settings.company_phone.trim()}` : "",
     (settings.company_email || "").trim(),
     settings.company_gst_number ? `GST: ${settings.company_gst_number.trim()}` : "",
-  ].filter(Boolean)
+  ]
+    .filter(Boolean)
+    .join("  ")
   const blocks: ReceiptBlock[] = []
   const logo = (settings.company_logo_data_url || "").trim()
-  if (logo.startsWith("data:image/")) blocks.push({ t: "image", src: logo, maxWidth: 230, maxHeight: 150 })
+  if (logo.startsWith("data:image/")) blocks.push({ t: "image", src: logo, maxWidth: 170, maxHeight: 84 })
   if (name) blocks.push({ t: "text", text: name, align: "center", size: "big", bold: true })
-  if (tagline) blocks.push({ t: "text", text: tagline, align: "center", size: "small", muted: true })
-  for (const line of lines) blocks.push({ t: "text", text: line, align: "center", size: "small" })
+  if (tagline && !brief) blocks.push({ t: "text", text: tagline, align: "center", size: "small", muted: true })
+  if (!brief) {
+    if (place) blocks.push({ t: "text", text: place, align: "center", size: "small" })
+    if (contact) blocks.push({ t: "text", text: contact, align: "center", size: "small" })
+  }
   return blocks
 }
 
@@ -79,67 +92,74 @@ export async function buildInvoiceBlocks(data: InvoiceData): Promise<ReceiptBloc
 
   const b: ReceiptBlock[] = [...headerBlocks(settings)]
   b.push({ t: "divider" })
-  b.push({ t: "text", text: "INVOICE", align: "center", size: "big", bold: true })
-  b.push({ t: "row", left: "Order #", right: order.order_number, bold: true })
-  b.push({ t: "row", left: "Date", right: formatDate(order.order_date) })
-  if (order.required_date) b.push({ t: "row", left: "Delivery", right: formatDate(order.required_date) })
+  // Number and date share a line; the delivery date follows only when there is one.
+  b.push({ t: "row", left: `INVOICE ${order.order_number}`, right: formatDate(order.order_date), bold: true })
+  if (order.required_date) b.push({ t: "row", left: "Delivery", right: formatDate(order.required_date), size: "small" })
   b.push({ t: "divider" })
-  b.push({ t: "text", text: customer?.customer_business_name || "Walk-in Customer", bold: true })
-  if (customer?.contact_person) b.push({ t: "text", text: customer.contact_person, size: "small" })
-  if (customer?.phone) b.push({ t: "text", text: `Ph: ${customer.phone}`, size: "small" })
+  const who = customer?.customer_business_name || "Walk-in Customer"
+  if (customer?.phone) b.push({ t: "row", left: who, right: customer.phone, bold: true })
+  else b.push({ t: "text", text: who, bold: true })
+  if (customer?.contact_person && customer.contact_person !== who) {
+    b.push({ t: "text", text: customer.contact_person, size: "small", muted: true })
+  }
   b.push({ t: "divider" })
 
   items.forEach((item, idx) => {
     const desc = item.product_description || item.design_name_number || ""
-    b.push({ t: "text", text: `${idx + 1}. ${item.product_type}`, bold: true })
-    if (desc) b.push({ t: "text", text: desc, size: "small", muted: true })
-    if (pricingModeOf(item) === "stitch" && item.stitches_per_unit > 0 && item.manual_unit_price == null) {
-      b.push({ t: "text", text: `${formatNumber(item.stitches_per_unit)} stitches`, size: "small", muted: true })
-    }
     b.push({
       t: "row",
-      left: `${Number(item.quantity)} x ${formatCurrency(orderItemUnitPrice(item))}`,
+      left: `${idx + 1}. ${item.product_type}${desc ? ` - ${desc}` : ""}`,
       right: formatCurrency(orderItemTotal(item)),
+      bold: true,
     })
+    // The working line is only worth a line when it says more than the total does.
+    const qty = Number(item.quantity)
+    const stitches = pricingModeOf(item) === "stitch" && item.stitches_per_unit > 0 && item.manual_unit_price == null
+    if (qty !== 1 || stitches) {
+      const parts = [`${qty} x ${formatCurrency(orderItemUnitPrice(item))}`]
+      if (stitches) parts.push(`${formatNumber(item.stitches_per_unit)} stitches`)
+      b.push({ t: "text", text: parts.join(" · "), size: "small", muted: true })
+    }
   })
 
   b.push({ t: "divider" })
-  b.push({ t: "row", left: "Subtotal", right: formatCurrency(subtotal) })
+  const hasExtras = setup > 0 || costs.length > 0 || discountAmount > 0
+  if (hasExtras) b.push({ t: "row", left: "Subtotal", right: formatCurrency(subtotal) })
   if (setup > 0) b.push({ t: "row", left: extraLabel, right: formatCurrency(setup) })
   for (const c of costs) b.push({ t: "row", left: c.cost_type, right: formatCurrency(c.amount) })
   if (discountAmount > 0) {
     b.push({ t: "row", left: `Discount (${discountLabel(order)})`, right: `-${formatCurrency(discountAmount)}` })
   }
   b.push({ t: "row", left: "TOTAL", right: formatCurrency(total), size: "big", bold: true })
-  b.push({ t: "row", left: "Paid", right: formatCurrency(paid) })
-  b.push({ t: "row", left: "Balance Due", right: formatCurrency(balance), bold: true })
-  b.push({ t: "row", left: "Payment Status", right: status, bold: true })
-  b.push({ t: "space", h: 10 })
-  b.push({ t: "text", text: "Thank you for your business!", align: "center", size: "small" })
-  b.push({ t: "text", text: formatDate(new Date()), align: "center", size: "small", muted: true })
+  if (balance <= 0 && paid > 0) {
+    b.push({ t: "row", left: "PAID IN FULL", right: formatCurrency(paid), bold: true })
+  } else {
+    if (paid > 0) b.push({ t: "row", left: "Paid", right: formatCurrency(paid) })
+    b.push({ t: "row", left: `Balance Due${paid > 0 ? "" : ` (${status})`}`, right: formatCurrency(balance), bold: true })
+  }
+  b.push({ t: "text", text: "Thank you for your business!", align: "center", size: "small", muted: true })
   return b
 }
 
 export async function buildOrderTagBlocks(order: Order, customer: Customer | null): Promise<ReceiptBlock[]> {
   const settings = await fetchBusinessSettings()
-  const b: ReceiptBlock[] = [...headerBlocks(settings)]
+  // A tag rides on a garment: the shop's name, the order number big, who it is
+  // for and when. No address block, no field captions.
+  const b: ReceiptBlock[] = [...headerBlocks(settings, true)]
   b.push({ t: "divider" })
-  b.push({ t: "text", text: "ORDER TAG", align: "center", size: "big", bold: true })
+  b.push({ t: "text", text: "ORDER TAG", align: "center", size: "small", muted: true })
+  b.push({ t: "text", text: order.order_number, align: "center", size: "huge", bold: true })
   b.push({ t: "divider" })
-  b.push({ t: "text", text: "Order Number", size: "small", muted: true })
-  b.push({ t: "text", text: order.order_number, size: "huge", bold: true })
-  b.push({ t: "divider" })
-  const field = (label: string, value: string) => {
-    b.push({ t: "text", text: label, size: "small", muted: true })
-    b.push({ t: "text", text: value || "—", bold: true })
-    b.push({ t: "space", h: 6 })
+  b.push({ t: "text", text: customer?.customer_business_name || "—", bold: true })
+  const person = customer?.contact_person || ""
+  const phone = customer?.phone || ""
+  if (person && phone) b.push({ t: "row", left: person, right: phone, size: "small" })
+  else if (person || phone) b.push({ t: "text", text: person || phone, size: "small" })
+  if (order.required_date || order.trial_date) {
+    b.push({ t: "divider" })
+    if (order.required_date) b.push({ t: "row", left: "Delivery", right: formatDate(order.required_date), bold: true })
+    if (order.trial_date) b.push({ t: "row", left: "Trial / Fitting", right: formatDate(order.trial_date), bold: true })
   }
-  field("Business Name", customer?.customer_business_name || "")
-  field("Contact Person", customer?.contact_person || "")
-  field("Phone Number", customer?.phone || "")
-  if (order.required_date) field("Delivery Date", formatDate(order.required_date))
-  if (order.trial_date) field("Trial / Fitting", formatDate(order.trial_date))
-  b.push({ t: "divider" })
   return b
 }
 
@@ -221,8 +241,8 @@ export async function renderReceipt(
   const frameWidth = 3
   const margin = border ? 26 : 10
   // Paper starts right at the print head, so nothing is added above the frame.
-  const top = (border ? 16 : 8) + topSpace
-  const bottom = border ? 16 : 8
+  const top = (border ? 12 : 6) + topSpace
+  const bottom = border ? 16 : 6
   const inner = width - margin * 2
   // Logos are sized for an 80mm (576-dot) roll and scale with the paper.
   const scale = width / 576
@@ -259,7 +279,7 @@ export async function renderReceipt(
     }),
   )
 
-  const lineHeight = (size: ReceiptSize) => Math.round(SIZE_PX[size] * 1.35)
+  const lineHeight = (size: ReceiptSize) => Math.round(SIZE_PX[size] * 1.22)
 
   // Layout pass.
   let height = top
@@ -270,11 +290,11 @@ export async function renderReceipt(
       measure.font = fontFor(size, blk.bold)
       const rightW = measure.measureText(blk.right).width
       height += wrap(blk.left, size, blk.bold, Math.max(80, inner - rightW - 12)).length * lineHeight(size)
-    } else if (blk.t === "divider") height += 18
+    } else if (blk.t === "divider") height += 12
     else if (blk.t === "space") height += blk.h
     else if (blk.t === "image") {
       const img = images.get(i)
-      if (img) height += scaled(img, blk.maxWidth * scale, blk.maxHeight * scale).h + 8
+      if (img) height += scaled(img, blk.maxWidth * scale, blk.maxHeight * scale).h + 4
     }
   }
   height += bottom
@@ -312,8 +332,8 @@ export async function renderReceipt(
       y += lines.length * lineHeight(size)
     } else if (blk.t === "divider") {
       ctx.fillStyle = "#000"
-      for (let x = margin; x < width - margin; x += 10) ctx.fillRect(x, y + 8, 5, 2)
-      y += 18
+      for (let x = margin; x < width - margin; x += 10) ctx.fillRect(x, y + 5, 5, 2)
+      y += 12
     } else if (blk.t === "space") {
       y += blk.h
     } else if (blk.t === "image") {
@@ -321,7 +341,7 @@ export async function renderReceipt(
       if (img) {
         const { w, h } = scaled(img, blk.maxWidth * scale, blk.maxHeight * scale)
         ctx.drawImage(logoToDots(img, w, h), (width - w) / 2, y)
-        y += h + 8
+        y += h + 4
       }
     }
   }
