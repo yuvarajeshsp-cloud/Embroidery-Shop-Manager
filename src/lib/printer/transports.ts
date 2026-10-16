@@ -60,6 +60,33 @@ function concat(chunks: Uint8Array[]): Uint8Array {
   return out
 }
 
+/**
+ * Runs a browser device picker. A picker that closes within a blink was never
+ * shown (embedded browsers, Safari-like engines), which is different from a
+ * person closing it — say so instead of failing silently.
+ */
+async function showPicker<T>(open: () => Promise<T>): Promise<T> {
+  const started = performance.now()
+  try {
+    return await open()
+  } catch (err) {
+    const name = err instanceof Error ? err.name : ""
+    if (name === "NotFoundError" && performance.now() - started < 400) {
+      throw new PrinterError(
+        "This browser didn't show a printer list",
+        "Open the app in Google Chrome or Microsoft Edge on the computer and try again.",
+      )
+    }
+    if (name === "NotFoundError") {
+      throw new PrinterError(
+        "No printer was selected",
+        "If the list was empty, switch the printer on, plug it in (or pair it in the computer's Bluetooth settings) and try again.",
+      )
+    }
+    throw err
+  }
+}
+
 // ---- WebUSB ---------------------------------------------------------------
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -129,7 +156,7 @@ async function connectUsb(ref?: Transport["ref"]): Promise<Transport> {
     if (match) return openUsb(match)
     throw new PrinterError("The USB printer isn't connected", "Plug it in and turn it on.")
   }
-  const device = await usb.requestDevice({ filters: [] })
+  const device = await showPicker(() => usb.requestDevice({ filters: [] }))
   return openUsb(device)
 }
 
@@ -187,7 +214,7 @@ async function connectSerial(ref?: Transport["ref"]): Promise<Transport> {
     if (index >= 0) return openSerial(known[index], index)
     throw new PrinterError("The printer isn't available", "Switch it on, check it is paired in the computer's Bluetooth settings, then choose it again.")
   }
-  const port = await serial.requestPort()
+  const port = await showPicker(() => serial.requestPort())
   const after: AnyDevice[] = await serial.getPorts()
   return openSerial(port, Math.max(0, after.indexOf(port)))
 }
@@ -216,7 +243,7 @@ async function findWritableWeb(server: AnyDevice): Promise<AnyDevice> {
 
 async function connectWebBle(): Promise<Transport> {
   const bt = (navigator as AnyDevice).bluetooth
-  const device = await bt.requestDevice({ acceptAllDevices: true, optionalServices: KNOWN_SERVICES })
+  const device: AnyDevice = await showPicker(() => bt.requestDevice({ acceptAllDevices: true, optionalServices: KNOWN_SERVICES }))
   const server = await device.gatt.connect()
   const characteristic = await findWritableWeb(server)
   return {
