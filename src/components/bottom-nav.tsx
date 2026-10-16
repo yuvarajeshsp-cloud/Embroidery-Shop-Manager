@@ -31,36 +31,50 @@ function routeMatches(current: Route, item: Route): boolean {
 
 // The selected tab is cut out of the bar in the page's own colour, with
 // rounded bottom corners and softened shoulders where it meets the bar's top
-// edge, so the page appears to flow down into the bar.
+// edge, so the page appears to flow down into the bar. One cut-out slides
+// from tab to tab, so choosing a tab animates instead of jumping.
 const FILLET = 14
+const SHOULDER = 6
+const SLIDE = "300ms cubic-bezier(0.32, 0.72, 0, 1)"
 
-type Edge = "first" | "last" | undefined
-
-// On the outermost tabs the cut-out runs flush to the screen edge, with no
-// shoulder on that side, so nothing pokes out past the bar's own corner.
-function ActiveNotch({ edge }: { edge: Edge }) {
-  const fillet = (side: "left" | "right") => (
+function ActiveNotch({ index, count }: { index: number; count: number }) {
+  const visible = index >= 0
+  const at = Math.max(index, 0)
+  // On the outermost tabs the cut-out runs flush to the screen edge, with no
+  // shoulder on that side, so nothing pokes out past the bar's own corner.
+  const first = at === 0
+  const last = at === count - 1
+  const left = first ? 0 : SHOULDER
+  const right = last ? 0 : SHOULDER
+  const fillet = (side: "left" | "right", show: boolean) => (
     <span
       aria-hidden
       className="pointer-events-none absolute top-0"
       style={{
         width: FILLET,
         height: FILLET,
-        [side]: 6 - FILLET,
+        [side]: -FILLET,
+        opacity: show ? 1 : 0,
+        transition: `opacity ${SLIDE}`,
         background: `radial-gradient(circle at ${side === "left" ? "0" : "100%"} 100%, transparent ${FILLET}px, var(--background) ${FILLET + 0.5}px)`,
       }}
     />
   )
   return (
-    <>
-      <span
-        aria-hidden
-        className="pointer-events-none absolute top-0 bottom-2 rounded-b-[22px] bg-background"
-        style={{ left: edge === "first" ? 0 : 6, right: edge === "last" ? 0 : 6 }}
-      />
-      {edge !== "first" && fillet("left")}
-      {edge !== "last" && fillet("right")}
-    </>
+    <span
+      aria-hidden
+      className="pointer-events-none absolute top-0 rounded-b-[22px] bg-background motion-reduce:!transition-none"
+      style={{
+        bottom: "calc(env(safe-area-inset-bottom) + 0.5rem)",
+        left: `calc(${(at * 100) / count}% + ${left}px)`,
+        width: `calc(${100 / count}% - ${left + right}px)`,
+        opacity: visible ? 1 : 0,
+        transition: `left ${SLIDE}, width ${SLIDE}, opacity 200ms ease`,
+      }}
+    >
+      {fillet("left", !first)}
+      {fillet("right", !last)}
+    </span>
   )
 }
 
@@ -68,25 +82,23 @@ function Tab({
   label,
   icon: Icon,
   active,
-  edge,
   onClick,
 }: {
   label: string
   icon: React.ComponentType<{ className?: string }>
   active: boolean
-  edge?: Edge
   onClick: () => void
 }) {
   return (
     <button
       onClick={onClick}
       className={cn(
-        "relative flex flex-1 flex-col items-center justify-center gap-1 pb-2 text-[11px] transition-colors",
+        // No tap flash, text selection or callout while a tab is pressed and held.
+        "nav-tab relative flex flex-1 select-none flex-col items-center justify-center gap-1 pb-2 text-[11px] outline-none transition-colors duration-300 [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [touch-action:manipulation]",
         active ? "font-semibold text-foreground" : "text-sidebar-foreground/75",
       )}
     >
-      {active && <ActiveNotch edge={edge} />}
-      <Icon className={cn("relative size-5", active && "text-primary")} />
+      <Icon className={cn("relative size-5 transition-colors duration-300", active && "text-primary")} />
       <span className="relative">{label}</span>
     </button>
   )
@@ -98,6 +110,8 @@ export function BottomNav() {
   const allowed = allowedRouteNames(profile?.role)
   const visibleTabs = tabs.filter((t) => allowed.has(t.route.name))
   const isMoreActive = isMoreStackRoute(route.name)
+  const tabIndex = visibleTabs.findIndex((t) => routeMatches(route, t.route))
+  const activeIndex = isMoreActive ? visibleTabs.length : tabIndex
 
   function openMore() {
     if (route.name === "more") return
@@ -111,18 +125,18 @@ export function BottomNav() {
   }
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-stretch rounded-t-[28px] border-t border-sidebar-border bg-sidebar pb-[env(safe-area-inset-bottom)]">
-      {visibleTabs.map((tab, index) => (
+    <nav className="fixed inset-x-0 bottom-0 z-50 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-stretch rounded-t-[28px] bg-sidebar pb-[env(safe-area-inset-bottom)]">
+      <ActiveNotch index={activeIndex} count={visibleTabs.length + 1} />
+      {visibleTabs.map((tab) => (
         <Tab
           key={tab.label}
-          edge={index === 0 ? "first" : undefined}
           label={tab.label}
           icon={tab.icon}
           active={routeMatches(route, tab.route)}
           onClick={() => navigate(tab.route)}
         />
       ))}
-      <Tab label="More" icon={Menu} active={isMoreActive} edge="last" onClick={openMore} />
+      <Tab label="More" icon={Menu} active={isMoreActive} onClick={openMore} />
     </nav>
   )
 }
