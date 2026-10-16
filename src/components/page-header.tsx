@@ -10,10 +10,15 @@ interface PageHeaderProps {
   title: string
   description?: string
   children?: React.ReactNode
+  /**
+   * Buttons for this page. On a computer they sit in the header, between the
+   * title and the other controls; on a phone they sit in a row under the title.
+   */
+  actions?: React.ReactNode
   className?: string
 }
 
-export function PageHeader({ title, description, children, className }: PageHeaderProps) {
+export function PageHeader({ title, description, children, actions, className }: PageHeaderProps) {
   const isMobile = useIsMobile()
   const { companyName, companyLogo } = useBusinessProfile()
 
@@ -46,11 +51,13 @@ export function PageHeader({ title, description, children, className }: PageHead
             </div>
           </div>
         </div>
-        <div className="flex shrink-0 flex-nowrap items-center gap-2">
+        <div className={cn("flex items-center gap-2", actions && !isMobile ? "min-w-0 flex-wrap justify-end" : "shrink-0 flex-nowrap")}>
+          {!isMobile && actions}
           {children}
           {!isMobile && <ModeToggle />}
         </div>
       </div>
+      {isMobile && actions && <div className="grid grid-cols-2 gap-2">{actions}</div>}
     </div>
   )
 }

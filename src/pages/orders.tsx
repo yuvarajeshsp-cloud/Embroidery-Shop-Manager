@@ -594,14 +594,63 @@ export function OrderDetailPage({ id }: { id: string }) {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
-      <PageHeader title={order.order_number} description={`Ordered ${formatDate(order.order_date)}`}>
+      <PageHeader
+        title={order.order_number}
+        description={`Ordered ${formatDate(order.order_date)}`}
+        actions={
+          <>
+              <Button variant="outline" size="sm" onClick={() => setShowStatusChange(true)}>
+                Change Status
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setPdfOpen(true)}>
+                <FileDown className="size-4" />
+                {isMobile ? "Download / Print PDF" : "PDF"}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setReceiptDialog("invoice")}>
+                <Printer className="size-4" />
+                Print Invoice
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setReceiptDialog("tag")}>
+                <Printer className="size-4" />
+                {isMobile ? "Print Order Tag" : "Print Tag"}
+              </Button>
+              {FEATURES.whatsapp && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowShareToCustomer(true)}
+                  >
+                    <Share2 className="size-4" />
+                    Share to Customer
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        await shareThermalInvoiceViaWhatsApp({ order, customer, items, payments, additionalCosts })
+                      } catch (err) {
+                        console.error(err)
+                        toast.error(err instanceof Error ? err.message : "Failed to share")
+                      }
+                    }}
+                  >
+                    <MessageCircle className="size-4" />
+                    WhatsApp
+                  </Button>
+                </>
+              )}
+          </>
+        }
+      >
         <Button variant="outline" size="sm" onClick={() => navigate({ name: "orders" })}>
           Back to Orders
         </Button>
       </PageHeader>
 
       {/* Order info + status */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>Order Information</CardTitle></CardHeader>
           <CardContent className="flex flex-col gap-3">
@@ -757,53 +806,6 @@ export function OrderDetailPage({ id }: { id: string }) {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader><CardTitle>Actions</CardTitle></CardHeader>
-          <CardContent className="grid grid-cols-[repeat(auto-fit,minmax(10.5rem,1fr))] gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowStatusChange(true)}>
-              Change Status
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setPdfOpen(true)}>
-              <FileDown className="size-4" />
-              Download / Print PDF
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setReceiptDialog("invoice")}>
-              <Printer className="size-4" />
-              Print Invoice
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setReceiptDialog("tag")}>
-              <Printer className="size-4" />
-              Print Order Tag
-            </Button>
-            {FEATURES.whatsapp && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowShareToCustomer(true)}
-                >
-                  <Share2 className="size-4" />
-                  Share to Customer
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={async () => {
-                    try {
-                      await shareThermalInvoiceViaWhatsApp({ order, customer, items, payments, additionalCosts })
-                    } catch (err) {
-                      console.error(err)
-                      toast.error(err instanceof Error ? err.message : "Failed to share")
-                    }
-                  }}
-                >
-                  <MessageCircle className="size-4" />
-                  WhatsApp
-                </Button>
-              </>
-            )}
-          </CardContent>
-        </Card>
       </div>
 
       {/* Order Items */}
