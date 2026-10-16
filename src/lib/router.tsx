@@ -13,6 +13,7 @@ export type Route =
   | { name: "production" }
   | { name: "reports" }
   | { name: "config" }
+  | { name: "printer" }
   | { name: "whatsapp" }
   | { name: "users" }
   | { name: "audit" }

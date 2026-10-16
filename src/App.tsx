@@ -33,6 +33,7 @@ import { ProductionPage } from "@/pages/production"
 import { ReportsPage } from "@/pages/reports"
 import { ConfigPage } from "@/pages/config"
 import { WhatsAppPage } from "@/pages/whatsapp"
+import { PrinterPage } from "@/pages/printer"
 import { UsersPage, AuditPage } from "@/pages/admin"
 import { PlatformAdminPage, PlatformAdminOrgPage } from "@/pages/platform-admin"
 import { SubscriptionPage } from "@/pages/subscription"
@@ -119,6 +120,8 @@ function RouteView({ route }: { route: Route }) {
       return <ReportsPage />
     case "config":
       return <ConfigPage />
+    case "printer":
+      return <PrinterPage />
     case "whatsapp":
       return <WhatsAppPage />
     case "users":

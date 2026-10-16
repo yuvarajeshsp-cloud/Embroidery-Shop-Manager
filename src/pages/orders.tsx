@@ -9,7 +9,6 @@ import {
   FileDown,
   Share2,
   Printer,
-  Eye,
   MessageCircle,
   Shirt,
   Palette,
@@ -20,8 +19,9 @@ import {
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
-import { downloadOrderPdf, printOrderPdf } from "@/lib/pdf"
-import { printInvoiceThermal, printOrderTagThermal, PrinterError } from "@/lib/printer"
+import { PdfPreviewDialog } from "@/components/pdf-preview-dialog"
+import { buildInvoiceBlocks, buildOrderTagBlocks } from "@/lib/printer"
+import { ReceiptPrintDialog } from "@/components/receipt-print-dialog"
 import {
   formatCurrency,
   formatDate,
@@ -76,7 +76,6 @@ import { AdditionalCostForm } from "@/components/additional-cost-form"
 import { ItemPriceFields, formLineTotal, formUnitPrice, priceColumns, priceProblem, type ItemPriceValues } from "@/components/item-price-fields"
 import { isTerminalStatus, defaultPricingMode, itemQuantityText, pricingModeOf, useShopType, useVocabulary } from "@/lib/shop-type"
 import { OrderStatusBadge, PriorityBadge, PaymentStatusBadge, PaymentMethodBadge, PaymentRecordStatusBadge, ExpenseCategoryBadge } from "@/components/status-badges"
-import { Spinner } from "@/components/ui/spinner"
 import { useRouter } from "@/lib/router"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { fetchConfigItems, getDefaultStitchRate } from "@/lib/config"
@@ -96,8 +95,6 @@ import {
   printThermalInvoice,
   printThermalOrderTag,
   shareThermalInvoiceViaWhatsApp,
-  getThermalInvoiceHtml,
-  getThermalOrderTagHtml,
 } from "@/lib/thermal-print"
 import type { OrderItemAttachment } from "@/lib/types"
 
@@ -446,17 +443,6 @@ export function OrdersPage() {
 // ORDER DETAIL PAGE
 // ============================================================
 
-/** Says why a receipt didn't print, and offers the browser's print dialog as a way out. */
-function reportPrintError(err: unknown, fallback: () => void) {
-  const message = err instanceof PrinterError ? err.message : err instanceof Error ? err.message : "Printing failed"
-  const hint = err instanceof PrinterError ? err.hint : undefined
-  toast.error(message, {
-    description: hint,
-    duration: 9000,
-    action: { label: "Print with browser", onClick: fallback },
-  })
-}
-
 export function OrderDetailPage({ id }: { id: string }) {
   const { navigate } = useRouter()
   const { profile } = useAuth()
@@ -476,9 +462,9 @@ export function OrderDetailPage({ id }: { id: string }) {
   const [showPaymentForm, setShowPaymentForm] = React.useState(false)
   const [showStatusChange, setShowStatusChange] = React.useState(false)
   const [showShareToCustomer, setShowShareToCustomer] = React.useState(false)
-  const [downloadingPdf, setDownloadingPdf] = React.useState(false)
+  const [pdfOpen, setPdfOpen] = React.useState(false)
   const [orderStatuses, setOrderStatuses] = React.useState<string[]>([])
-  const [thermalPreview, setThermalPreview] = React.useState<{ title: string; html: string } | null>(null)
+  const [receiptDialog, setReceiptDialog] = React.useState<"invoice" | "tag" | null>(null)
   const [assignableUsers, setAssignableUsers] = React.useState<UserProfile[]>([])
 
   const canReassign = profile?.role === "Administrator" || profile?.role === "Manager"
@@ -779,91 +765,15 @@ export function OrderDetailPage({ id }: { id: string }) {
             <Button variant="outline" size="sm" onClick={() => setShowStatusChange(true)}>
               Change Status
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={downloadingPdf}
-              onClick={async () => {
-                setDownloadingPdf(true)
-                try {
-                  await downloadOrderPdf({ order, customer, items, payments, additionalCosts })
-                  toast.success("PDF downloaded")
-                } catch {
-                  toast.error("Failed to generate PDF")
-                } finally {
-                  setDownloadingPdf(false)
-                }
-              }}
-            >
-              {downloadingPdf ? <Spinner className="size-4" /> : <FileDown className="size-4" />}
-              Download PDF
+            <Button variant="outline" size="sm" onClick={() => setPdfOpen(true)}>
+              <FileDown className="size-4" />
+              Download / Print PDF
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                try {
-                  await printOrderPdf({ order, customer, items, payments, additionalCosts })
-                } catch {
-                  toast.error("Failed to open the PDF")
-                }
-              }}
-            >
-              <Printer className="size-4" />
-              Print PDF
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                const html = await getThermalInvoiceHtml({ order, customer, items, payments, additionalCosts })
-                setThermalPreview({ title: `Invoice ${order.order_number}`, html })
-              }}
-            >
-              <Eye className="size-4" />
-              Preview Invoice
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                const data = { order, customer, items, payments, additionalCosts }
-                try {
-                  await printInvoiceThermal(data)
-                  toast.success("Sent to the printer")
-                } catch (err) {
-                  console.error(err)
-                  reportPrintError(err, () => void printThermalInvoice(data))
-                }
-              }}
-            >
+            <Button variant="outline" size="sm" onClick={() => setReceiptDialog("invoice")}>
               <Printer className="size-4" />
               Print Invoice
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                const html = await getThermalOrderTagHtml(order, customer)
-                setThermalPreview({ title: `Order Tag ${order.order_number}`, html })
-              }}
-            >
-              <Eye className="size-4" />
-              Preview Order Tag
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                try {
-                  await printOrderTagThermal(order, customer)
-                  toast.success("Sent to the printer")
-                } catch (err) {
-                  console.error(err)
-                  reportPrintError(err, () => void printThermalOrderTag(order, customer))
-                }
-              }}
-            >
+            <Button variant="outline" size="sm" onClick={() => setReceiptDialog("tag")}>
               <Printer className="size-4" />
               Print Order Tag
             </Button>
@@ -1250,22 +1160,24 @@ export function OrderDetailPage({ id }: { id: string }) {
 
       <AttachmentViewerDialog attachment={viewingAttachment} onClose={() => setViewingAttachment(null)} />
 
-      {thermalPreview && (
-        <Dialog open onOpenChange={() => setThermalPreview(null)}>
-          <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-sm">
-            <DialogHeader>
-              <DialogTitle>{thermalPreview.title}</DialogTitle>
-              <DialogDescription>Preview of what will print on the 80mm thermal roll.</DialogDescription>
-            </DialogHeader>
-            <div className="flex-1 overflow-auto rounded-md border bg-white">
-              <iframe
-                srcDoc={thermalPreview.html}
-                title={thermalPreview.title}
-                className="h-[500px] w-full"
-              />
-            </div>
-          </DialogContent>
-        </Dialog>
+      {pdfOpen && (
+        <PdfPreviewDialog data={{ order, customer, items, payments, additionalCosts }} onClose={() => setPdfOpen(false)} />
+      )}
+      {receiptDialog === "invoice" && (
+        <ReceiptPrintDialog
+          title={`Invoice ${order.order_number}`}
+          load={() => buildInvoiceBlocks({ order, customer, items, payments, additionalCosts })}
+          onClose={() => setReceiptDialog(null)}
+          onBrowserPrint={() => void printThermalInvoice({ order, customer, items, payments, additionalCosts })}
+        />
+      )}
+      {receiptDialog === "tag" && (
+        <ReceiptPrintDialog
+          title={`Order Tag ${order.order_number}`}
+          load={() => buildOrderTagBlocks(order, customer)}
+          onClose={() => setReceiptDialog(null)}
+          onBrowserPrint={() => void printThermalOrderTag(order, customer)}
+        />
       )}
 
       {FEATURES.whatsapp && showShareToCustomer && (

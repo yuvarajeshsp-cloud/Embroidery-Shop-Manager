@@ -4,6 +4,7 @@ import {
   Factory,
   BarChart3,
   Settings,
+  Printer,
   MessageCircle,
   UserCog,
   ScrollText,
@@ -37,6 +38,7 @@ export const MORE_GROUPS: { label: string; items: MoreItem[] }[] = [
     label: "Admin",
     items: [
       { label: "Configuration", icon: Settings, route: { name: "config" } },
+      { label: "Printer", icon: Printer, route: { name: "printer" } },
       { label: "WhatsApp", icon: MessageCircle, route: { name: "whatsapp" } },
       { label: "Users & Roles", icon: UserCog, route: { name: "users" } },
       { label: "Audit Log", icon: ScrollText, route: { name: "audit" } },
