@@ -402,29 +402,32 @@ export async function generateOrderPdf(data: OrderPdfData): Promise<Blob> {
   return doc.output("blob")
 }
 
-function getPdfFileName(order: Order): string {
+export function getPdfFileName(order: Order): string {
   return `${order.order_number}.pdf`
 }
 
-export async function downloadOrderPdf(data: OrderPdfData) {
-  const blob = await generateOrderPdf(data)
+/** Saves the PDF: a normal download on the web, the share sheet (Save to Files) in the phone apps. */
+export async function savePdfBlob(blob: Blob, fileName: string, title: string) {
+  if (Capacitor.isNativePlatform()) {
+    await shareFile(blob, fileName, title)
+    return
+  }
   const url = URL.createObjectURL(blob)
   const link = document.createElement("a")
   link.href = url
-  link.download = getPdfFileName(data.order)
+  link.download = fileName
   link.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 /**
- * Opens the invoice PDF for viewing and printing: in a new tab on the web
- * (the browser's PDF viewer has Print), and through the share sheet in the
- * phone apps (which has Print and Save). Receipt-printer printing is separate.
+ * Opens the PDF for printing: in a new tab on the web (the browser's PDF
+ * viewer has Print), and through the share sheet in the phone apps (which has
+ * Print and Save). Receipt-printer printing is separate.
  */
-export async function printOrderPdf(data: OrderPdfData) {
-  const blob = await generateOrderPdf(data)
+export async function printPdfBlob(blob: Blob, fileName: string, title: string) {
   if (Capacitor.isNativePlatform()) {
-    await shareFile(blob, getPdfFileName(data.order), `Invoice ${data.order.order_number}`)
+    await shareFile(blob, fileName, title)
     return
   }
   const url = URL.createObjectURL(blob)
@@ -433,7 +436,7 @@ export async function printOrderPdf(data: OrderPdfData) {
     // Pop-up blocked: fall back to a normal download.
     const link = document.createElement("a")
     link.href = url
-    link.download = getPdfFileName(data.order)
+    link.download = fileName
     link.click()
   }
   setTimeout(() => URL.revokeObjectURL(url), 60000)

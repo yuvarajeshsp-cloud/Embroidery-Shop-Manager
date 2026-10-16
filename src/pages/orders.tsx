@@ -19,7 +19,7 @@ import {
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
-import { downloadOrderPdf, printOrderPdf } from "@/lib/pdf"
+import { PdfPreviewDialog } from "@/components/pdf-preview-dialog"
 import { buildInvoiceBlocks, buildOrderTagBlocks } from "@/lib/printer"
 import { ReceiptPrintDialog } from "@/components/receipt-print-dialog"
 import {
@@ -76,7 +76,6 @@ import { AdditionalCostForm } from "@/components/additional-cost-form"
 import { ItemPriceFields, formLineTotal, formUnitPrice, priceColumns, priceProblem, type ItemPriceValues } from "@/components/item-price-fields"
 import { isTerminalStatus, defaultPricingMode, itemQuantityText, pricingModeOf, useShopType, useVocabulary } from "@/lib/shop-type"
 import { OrderStatusBadge, PriorityBadge, PaymentStatusBadge, PaymentMethodBadge, PaymentRecordStatusBadge, ExpenseCategoryBadge } from "@/components/status-badges"
-import { Spinner } from "@/components/ui/spinner"
 import { useRouter } from "@/lib/router"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { fetchConfigItems, getDefaultStitchRate } from "@/lib/config"
@@ -463,7 +462,7 @@ export function OrderDetailPage({ id }: { id: string }) {
   const [showPaymentForm, setShowPaymentForm] = React.useState(false)
   const [showStatusChange, setShowStatusChange] = React.useState(false)
   const [showShareToCustomer, setShowShareToCustomer] = React.useState(false)
-  const [downloadingPdf, setDownloadingPdf] = React.useState(false)
+  const [pdfOpen, setPdfOpen] = React.useState(false)
   const [orderStatuses, setOrderStatuses] = React.useState<string[]>([])
   const [receiptDialog, setReceiptDialog] = React.useState<"invoice" | "tag" | null>(null)
   const [assignableUsers, setAssignableUsers] = React.useState<UserProfile[]>([])
@@ -766,38 +765,9 @@ export function OrderDetailPage({ id }: { id: string }) {
             <Button variant="outline" size="sm" onClick={() => setShowStatusChange(true)}>
               Change Status
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={downloadingPdf}
-              onClick={async () => {
-                setDownloadingPdf(true)
-                try {
-                  await downloadOrderPdf({ order, customer, items, payments, additionalCosts })
-                  toast.success("PDF downloaded")
-                } catch {
-                  toast.error("Failed to generate PDF")
-                } finally {
-                  setDownloadingPdf(false)
-                }
-              }}
-            >
-              {downloadingPdf ? <Spinner className="size-4" /> : <FileDown className="size-4" />}
-              Download PDF
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                try {
-                  await printOrderPdf({ order, customer, items, payments, additionalCosts })
-                } catch {
-                  toast.error("Failed to open the PDF")
-                }
-              }}
-            >
-              <Printer className="size-4" />
-              Print PDF
+            <Button variant="outline" size="sm" onClick={() => setPdfOpen(true)}>
+              <FileDown className="size-4" />
+              Download / Print PDF
             </Button>
             <Button variant="outline" size="sm" onClick={() => setReceiptDialog("invoice")}>
               <Printer className="size-4" />
@@ -1190,6 +1160,9 @@ export function OrderDetailPage({ id }: { id: string }) {
 
       <AttachmentViewerDialog attachment={viewingAttachment} onClose={() => setViewingAttachment(null)} />
 
+      {pdfOpen && (
+        <PdfPreviewDialog data={{ order, customer, items, payments, additionalCosts }} onClose={() => setPdfOpen(false)} />
+      )}
       {receiptDialog === "invoice" && (
         <ReceiptPrintDialog
           title={`Invoice ${order.order_number}`}

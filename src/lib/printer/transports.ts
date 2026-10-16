@@ -3,18 +3,20 @@ import { BleClient, numbersToDataView } from "@capacitor-community/bluetooth-le"
 
 // How bytes get to the printer. Three ways, picked by where the app runs:
 //   usb         – a printer plugged into a computer (WebUSB, Chrome/Edge)
+//   serial      – a printer already paired in the computer's Bluetooth settings
+//                 (classic Bluetooth shows up as a serial port; Chrome/Edge)
 //   web-ble     – Bluetooth Low Energy from a desktop/Android browser
 //   native-ble  – Bluetooth Low Energy from the Android / iPhone app
 // Everything below this file only sees a Transport.
 
-export type PrinterKind = "usb" | "web-ble" | "native-ble"
+export type PrinterKind = "usb" | "serial" | "web-ble" | "native-ble"
 
 export interface Transport {
   kind: PrinterKind
   /** Human name shown in settings. */
   name: string
   /** Id needed to find the same printer again without asking. */
-  ref: { id?: string; vendorId?: number; productId?: number }
+  ref: { id?: string; vendorId?: number; productId?: number; serialIndex?: number }
   write(chunks: Uint8Array[]): Promise<void>
   close(): Promise<void>
 }
@@ -129,6 +131,65 @@ async function connectUsb(ref?: Transport["ref"]): Promise<Transport> {
   }
   const device = await usb.requestDevice({ filters: [] })
   return openUsb(device)
+}
+
+// ---- Web Serial (paired classic Bluetooth, or a USB-serial printer) -------
+
+export function serialSupported(): boolean {
+  return typeof navigator !== "undefined" && !!(navigator as AnyDevice).serial && !Capacitor.isNativePlatform()
+}
+
+async function openSerial(port: AnyDevice, index: number): Promise<Transport> {
+  try {
+    // The baud rate is ignored by Bluetooth serial and matters only for a real serial cable.
+    await port.open({ baudRate: 115200, bufferSize: 4096 })
+  } catch (err) {
+    // Already open (e.g. from an earlier print) is fine; anything else isn't.
+    if (!(port.readable || port.writable)) {
+      throw new PrinterError(
+        "Couldn't open the printer's serial port",
+        `Make sure the printer is switched on and paired in the computer's Bluetooth settings, and that no other program is using it.${err instanceof Error && err.message ? ` (${err.message})` : ""}`,
+      )
+    }
+  }
+  const info = port.getInfo?.() ?? {}
+  return {
+    kind: "serial",
+    name: info.usbVendorId ? "USB serial printer" : "Paired Bluetooth printer",
+    ref: { vendorId: info.usbVendorId, productId: info.usbProductId, serialIndex: index },
+    async write(chunks) {
+      const writer = port.writable.getWriter()
+      try {
+        const data = concat(chunks)
+        for (let i = 0; i < data.length; i += 1024) {
+          await writer.write(data.slice(i, i + 1024))
+        }
+      } finally {
+        writer.releaseLock()
+      }
+    },
+    async close() {
+      try {
+        await port.close()
+      } catch {
+        // already gone
+      }
+    },
+  }
+}
+
+async function connectSerial(ref?: Transport["ref"]): Promise<Transport> {
+  const serial = (navigator as AnyDevice).serial
+  const known: AnyDevice[] = await serial.getPorts()
+  if (ref) {
+    const byId = ref.vendorId != null ? known.findIndex((p) => p.getInfo?.().usbVendorId === ref.vendorId && p.getInfo?.().usbProductId === ref.productId) : -1
+    const index = byId >= 0 ? byId : ref.serialIndex != null && known[ref.serialIndex] ? ref.serialIndex : -1
+    if (index >= 0) return openSerial(known[index], index)
+    throw new PrinterError("The printer isn't available", "Switch it on, check it is paired in the computer's Bluetooth settings, then choose it again.")
+  }
+  const port = await serial.requestPort()
+  const after: AnyDevice[] = await serial.getPorts()
+  return openSerial(port, Math.max(0, after.indexOf(port)))
 }
 
 // ---- Web Bluetooth ---------------------------------------------------------
@@ -253,18 +314,22 @@ export function availableKinds(): PrinterKind[] {
   const kinds: PrinterKind[] = []
   if (nativeBleSupported()) kinds.push("native-ble")
   if (usbSupported()) kinds.push("usb")
+  if (serialSupported()) kinds.push("serial")
   if (webBleSupported()) kinds.push("web-ble")
   return kinds
 }
 
 export function kindLabel(kind: PrinterKind): string {
-  return kind === "usb" ? "USB cable" : "Bluetooth"
+  if (kind === "usb") return "USB cable"
+  if (kind === "serial") return "Paired Bluetooth"
+  return "Bluetooth"
 }
 
 /** Opens the system picker (needs a tap) and connects. `ref` reconnects without asking. */
 export async function connectPrinter(kind: PrinterKind, ref?: Transport["ref"]): Promise<Transport> {
   try {
     if (kind === "usb") return await connectUsb(ref)
+    if (kind === "serial") return await connectSerial(ref)
     if (kind === "web-ble") return await connectWebBle()
     return await connectNativeBle(ref)
   } catch (err) {

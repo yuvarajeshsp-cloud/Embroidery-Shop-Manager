@@ -121,7 +121,7 @@ async function ensureTransport(): Promise<Transport> {
     } catch (err) {
       // A saved Bluetooth printer that's off or out of range lands here; fall
       // through to asking, which also covers a printer that was swapped.
-      if (!(err instanceof PrinterError) || saved.kind === "usb") throw err
+      if (!(err instanceof PrinterError) || saved.kind === "usb" || saved.kind === "serial") throw err
     }
   }
   await pairPrinter(saved?.kind)

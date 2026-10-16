@@ -65,7 +65,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: "documents",
     title: "Invoices, PDFs and order tags",
     steps: [
-      "On an order, Download PDF saves a full invoice you can share.",
+      "On an order, Download / Print PDF opens a preview of the full invoice with Download and Print buttons at the top and bottom.",
       "Print Invoice opens a preview of the thermal-printer receipt (with your logo); press Print at the top or bottom to send it to the printer. Paper size can be changed there too.",
       "Print Order Tag works the same way and gives a small tag to attach to the garment.",
     ],
@@ -183,7 +183,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         q: "How do I get an invoice to send to a customer?",
-        a: "Open the order and tap Download PDF. You can then share the file from your phone or computer. For a thermal printer receipt use Preview/Print Invoice.",
+        a: "Open the order and tap Download / Print PDF, then Download (or Save / Share on a phone). For a thermal printer receipt use Print Invoice.",
       },
     ],
   },
