@@ -27,10 +27,12 @@ export type ReceiptSize = "small" | "normal" | "big" | "huge"
 
 export type ReceiptBlock =
   | { t: "text"; text: string; align?: "left" | "center" | "right"; size?: ReceiptSize; bold?: boolean; muted?: boolean }
-  | { t: "row"; left: string; right: string; size?: ReceiptSize; bold?: boolean; muted?: boolean }
+  | { t: "row"; left: string; right: string; size?: ReceiptSize; bold?: boolean; muted?: boolean; keyed?: boolean }
   | { t: "divider" }
   | { t: "space"; h: number }
   | { t: "image"; src: string; maxWidth: number; maxHeight: number }
+  /** The logo on the left with the shop's name beside it. */
+  | { t: "brand"; src: string; text: string }
 
 export interface InvoiceData {
   order: Order
@@ -43,11 +45,12 @@ export interface InvoiceData {
 type Settings = Record<string, string>
 
 /**
- * The shop's name block. Compact by default: a small logo, the name, then the
- * address on as few lines as will hold it. `brief` leaves out the address
- * lines (a garment tag only needs who made it).
+ * The shop's name block: the logo and name, then the address and contact on as
+ * few lines as will hold them. With `logo: "left"` the logo sits beside the
+ * name; otherwise it is centred above it. `brief` leaves out the address lines.
  */
-function headerBlocks(settings: Settings, brief = false): ReceiptBlock[] {
+function headerBlocks(settings: Settings, opts: { logo?: "left" | "center"; brief?: boolean } = {}): ReceiptBlock[] {
+  const { logo: logoAt = "center", brief = false } = opts
   const name = (settings.company_name || "").trim()
   const tagline = (settings.company_tagline || "").trim()
   const place = [
@@ -65,8 +68,13 @@ function headerBlocks(settings: Settings, brief = false): ReceiptBlock[] {
     .join("  ")
   const blocks: ReceiptBlock[] = []
   const logo = (settings.company_logo_data_url || "").trim()
-  if (logo.startsWith("data:image/")) blocks.push({ t: "image", src: logo, maxWidth: 170, maxHeight: 84 })
-  if (name) blocks.push({ t: "text", text: name, align: "center", size: "big", bold: true })
+  const hasLogo = logo.startsWith("data:image/")
+  if (hasLogo && logoAt === "left" && name) {
+    blocks.push({ t: "brand", src: logo, text: name })
+  } else {
+    if (hasLogo) blocks.push({ t: "image", src: logo, maxWidth: 170, maxHeight: 84 })
+    if (name) blocks.push({ t: "text", text: name, align: "center", size: "big", bold: true })
+  }
   if (tagline && !brief) blocks.push({ t: "text", text: tagline, align: "center", size: "small", muted: true })
   if (!brief) {
     if (place) blocks.push({ t: "text", text: place, align: "center", size: "small" })
@@ -90,11 +98,12 @@ export async function buildInvoiceBlocks(data: InvoiceData): Promise<ReceiptBloc
   const balance = orderBalanceDue(items, payments, costs, order)
   const status = derivePaymentStatus(items, payments, costs, order)
 
-  const b: ReceiptBlock[] = [...headerBlocks(settings)]
+  const b: ReceiptBlock[] = [...headerBlocks(settings, { logo: "left" })]
   b.push({ t: "divider" })
-  // Number and date share a line; the delivery date follows only when there is one.
-  b.push({ t: "row", left: `INVOICE ${order.order_number}`, right: formatDate(order.order_date), bold: true })
-  if (order.required_date) b.push({ t: "row", left: "Delivery", right: formatDate(order.required_date), size: "small" })
+  b.push({ t: "text", text: "INVOICE", align: "center", size: "big", bold: true })
+  b.push({ t: "row", left: "Order #", right: order.order_number, bold: true })
+  b.push({ t: "row", left: "Date", right: formatDate(order.order_date) })
+  if (order.required_date) b.push({ t: "row", left: "Delivery", right: formatDate(order.required_date) })
   b.push({ t: "divider" })
   const who = customer?.customer_business_name || "Walk-in Customer"
   if (customer?.phone) b.push({ t: "row", left: who, right: customer.phone, bold: true })
@@ -143,23 +152,20 @@ export async function buildInvoiceBlocks(data: InvoiceData): Promise<ReceiptBloc
 
 export async function buildOrderTagBlocks(order: Order, customer: Customer | null): Promise<ReceiptBlock[]> {
   const settings = await fetchBusinessSettings()
-  // A tag rides on a garment: the shop's name, the order number big, who it is
-  // for and when. No address block, no field captions.
-  const b: ReceiptBlock[] = [...headerBlocks(settings, true)]
+  const b: ReceiptBlock[] = [...headerBlocks(settings)]
   b.push({ t: "divider" })
-  b.push({ t: "text", text: "ORDER TAG", align: "center", size: "small", muted: true })
-  b.push({ t: "text", text: order.order_number, align: "center", size: "huge", bold: true })
+  b.push({ t: "text", text: "ORDER TAG", align: "center", size: "big", bold: true })
   b.push({ t: "divider" })
-  b.push({ t: "text", text: customer?.customer_business_name || "—", bold: true })
-  const person = customer?.contact_person || ""
-  const phone = customer?.phone || ""
-  if (person && phone) b.push({ t: "row", left: person, right: phone, size: "small" })
-  else if (person || phone) b.push({ t: "text", text: person || phone, size: "small" })
-  if (order.required_date || order.trial_date) {
-    b.push({ t: "divider" })
-    if (order.required_date) b.push({ t: "row", left: "Delivery", right: formatDate(order.required_date), bold: true })
-    if (order.trial_date) b.push({ t: "row", left: "Trial / Fitting", right: formatDate(order.trial_date), bold: true })
-  }
+  // Each caption and its value share a line.
+  b.push({ t: "row", left: "Order Number", right: order.order_number, size: "big", bold: true, keyed: true })
+  b.push({ t: "divider" })
+  const field = (label: string, value: string) => b.push({ t: "row", left: label, right: value || "—", keyed: true })
+  field("Business Name", customer?.customer_business_name || "")
+  field("Contact Person", customer?.contact_person || "")
+  field("Phone Number", customer?.phone || "")
+  if (order.required_date) field("Delivery Date", formatDate(order.required_date))
+  if (order.trial_date) field("Trial / Fitting", formatDate(order.trial_date))
+  b.push({ t: "divider" })
   return b
 }
 
@@ -272,7 +278,7 @@ export async function renderReceipt(
   const images = new Map<number, HTMLImageElement>()
   await Promise.all(
     blocks.map(async (blk, i) => {
-      if (blk.t === "image") {
+      if (blk.t === "image" || blk.t === "brand") {
         const img = await loadImage(blk.src)
         if (img) images.set(i, img)
       }
@@ -281,15 +287,37 @@ export async function renderReceipt(
 
   const lineHeight = (size: ReceiptSize) => Math.round(SIZE_PX[size] * 1.22)
 
+  // A keyed row has a plain caption and a bold value; the pair stacks when it can't fit on one line.
+  const keyedFits = (blk: Extract<ReceiptBlock, { t: "row" }>) => {
+    const size = blk.size || "normal"
+    measure.font = fontFor(size, false)
+    const l = measure.measureText(blk.left).width
+    measure.font = fontFor(size, true)
+    return l + measure.measureText(blk.right).width + 16 <= inner
+  }
+
+  // The logo beside the name: a third of the width at most.
+  const brandLogo = (i: number) => {
+    const img = images.get(i)
+    return img ? scaled(img, Math.round(inner * 0.3), Math.round(86 * scale)) : null
+  }
+  const brandNameWidth = (logoW: number) => inner - (logoW ? logoW + 14 : 0)
+
   // Layout pass.
   let height = top
   for (const [i, blk] of blocks.entries()) {
     if (blk.t === "text") height += wrap(blk.text, blk.size || "normal", blk.bold, inner).length * lineHeight(blk.size || "normal")
-    else if (blk.t === "row") {
+    else if (blk.t === "row" && blk.keyed) {
+      height += (keyedFits(blk) ? 1 : 2) * lineHeight(blk.size || "normal")
+    } else if (blk.t === "row") {
       const size = blk.size || "normal"
       measure.font = fontFor(size, blk.bold)
       const rightW = measure.measureText(blk.right).width
       height += wrap(blk.left, size, blk.bold, Math.max(80, inner - rightW - 12)).length * lineHeight(size)
+    } else if (blk.t === "brand") {
+      const logo = brandLogo(i)
+      const lines = wrap(blk.text, "big", true, brandNameWidth(logo?.w ?? 0))
+      height += Math.max(logo?.h ?? 0, lines.length * lineHeight("big")) + 4
     } else if (blk.t === "divider") height += 12
     else if (blk.t === "space") height += blk.h
     else if (blk.t === "image") {
@@ -319,6 +347,38 @@ export async function renderReceipt(
         ctx.fillText(line, x, y)
         y += lineHeight(size)
       }
+    } else if (blk.t === "row" && blk.keyed) {
+      const size = blk.size || "normal"
+      const fits = keyedFits(blk)
+      ctx.fillStyle = "#000"
+      ctx.font = fontFor(size, false)
+      ctx.fillText(blk.left, margin, y)
+      ctx.font = fontFor(size, true)
+      const rightW = ctx.measureText(blk.right).width
+      if (fits) {
+        ctx.fillText(blk.right, width - margin - rightW, y)
+        y += lineHeight(size)
+      } else {
+        y += lineHeight(size)
+        ctx.fillText(blk.right, width - margin - rightW, y)
+        y += lineHeight(size)
+      }
+    } else if (blk.t === "brand") {
+      const img = images.get(i)
+      const logo = brandLogo(i)
+      const nameW = brandNameWidth(logo?.w ?? 0)
+      const lines = wrap(blk.text, "big", true, nameW)
+      const textH = lines.length * lineHeight("big")
+      const rowH = Math.max(logo?.h ?? 0, textH)
+      if (img && logo) ctx.drawImage(logoToDots(img, logo.w, logo.h), margin, y + (rowH - logo.h) / 2)
+      ctx.font = fontFor("big", true)
+      ctx.fillStyle = "#000"
+      const textLeft = margin + (logo ? logo.w + 14 : 0)
+      lines.forEach((line, n) => {
+        const w = ctx.measureText(line).width
+        ctx.fillText(line, textLeft + (nameW - w) / 2, y + (rowH - textH) / 2 + n * lineHeight("big"))
+      })
+      y += rowH + 4
     } else if (blk.t === "row") {
       const size = blk.size || "normal"
       ctx.font = fontFor(size, blk.bold)
