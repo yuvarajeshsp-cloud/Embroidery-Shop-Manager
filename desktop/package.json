@@ -11,7 +11,8 @@
     "prepare-app": "cd .. && npm run build && rm -rf desktop/app && cp -R dist desktop/app",
     "dist:mac": "npm run prepare-app && electron-builder --mac",
     "dist:win": "npm run prepare-app && electron-builder --win",
-    "dist": "npm run prepare-app && electron-builder --mac --win"
+    "dist": "npm run prepare-app && electron-builder --mac --win",
+    "dist:win:signed": "npm run prepare-app && CSC_LINK=\"$PWD/signing/shop-manager-test.pfx\" CSC_KEY_PASSWORD=\"$(cat signing/password.txt)\" electron-builder --win"
   },
   "build": {
     "appId": "com.paavaiembroidery.shopmanager.desktop",
@@ -58,7 +59,13 @@
             "x64"
           ]
         }
-      ]
+      ],
+      "signtoolOptions": {
+        "publisherName": "Paavai Embroidery",
+        "signingHashAlgorithms": [
+          "sha256"
+        ]
+      }
     },
     "nsis": {
       "oneClick": false,

@@ -23,7 +23,13 @@ npm run prepare-app && npm start
 
 ## Notes
 
-- The installers are **not code-signed**. macOS shows "unidentified developer"
+- `npm run dist:win:signed` signs the Windows installer with the certificate in
+  `desktop/signing/` (git-ignored: a self-signed **test** certificate valid to
+  2029 — Windows still warns on other PCs because it is not issued by a trusted
+  authority). To remove the warning for real, buy a code-signing certificate
+  (or use Azure Trusted Signing) and point `CSC_LINK` / `CSC_KEY_PASSWORD` at it
+  instead; nothing else changes.
+- Mac installers are **not code-signed**. macOS shows "unidentified developer"
   (right-click → Open the first time); Windows SmartScreen shows "Windows
   protected your PC" (More info → Run anyway). Signing needs an Apple Developer
   ID and a Windows code-signing certificate.

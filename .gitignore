@@ -60,3 +60,4 @@ android/keystore.properties
 desktop/node_modules
 desktop/app
 desktop/release
+desktop/signing
