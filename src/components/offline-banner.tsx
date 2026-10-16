@@ -88,15 +88,15 @@ export function OfflineBanner() {
   const { pending, failed, syncing, syncVersion, lastBatch } = useSyncState()
   const [notice, setNotice] = React.useState<string | null>(null)
   const [reviewing, setReviewing] = React.useState(false)
-  const first = React.useRef(true)
+  // The state seen last, so only a real change is announced (never the first render,
+  // and not a repeat run of the effect while developing).
+  const lastOnline = React.useRef(online)
   const seenVersion = React.useRef(syncVersion)
 
   // Say so when the connection changes — not on the first render.
   React.useEffect(() => {
-    if (first.current) {
-      first.current = false
-      return
-    }
+    if (lastOnline.current === online) return
+    lastOnline.current = online
     if (online) {
       toast.success("You're back online", {
         id: "connectivity",
