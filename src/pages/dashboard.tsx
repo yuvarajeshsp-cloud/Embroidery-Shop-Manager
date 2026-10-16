@@ -14,6 +14,7 @@ import { BarChart, Bar, XAxis, CartesianGrid, PieChart, Pie, Cell } from "rechar
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 import { toast } from "sonner"
+import { Switch } from "@/components/ui/switch"
 import { DateRangeFilter } from "@/components/date-range-filter"
 import { computeDateRange, isWithinRange, type DateRangePreset } from "@/lib/date-range"
 import { cn } from "@/lib/utils"
@@ -108,6 +109,37 @@ const GRANULARITY_DESCRIPTION: Record<TrendGranularity, string> = {
   year: "Orders and revenue by year",
 }
 
+const RANGE_KEY = "dashboard_range_v1"
+const FOLLOW_KEY = "dashboard_follow_range_v1"
+
+interface SavedRange {
+  preset: DateRangePreset
+  from: string
+  to: string
+}
+
+/** The period last picked on this device, so it isn't reset to "this week" on every visit. */
+function savedRange(): SavedRange {
+  try {
+    const raw = localStorage.getItem(RANGE_KEY)
+    if (raw) {
+      const v = JSON.parse(raw) as Partial<SavedRange>
+      if (typeof v.preset === "string") return { preset: v.preset, from: v.from || "", to: v.to || "" }
+    }
+  } catch {
+    // storage unavailable — fall back to the default
+  }
+  return { preset: "this_week", from: "", to: "" }
+}
+
+function savedFollow(): boolean {
+  try {
+    return localStorage.getItem(FOLLOW_KEY) === "1"
+  } catch {
+    return false
+  }
+}
+
 interface DashboardData {
   totalOrders: number
   activeOrders: number
@@ -135,9 +167,28 @@ export function DashboardPage() {
   const [rawItems, setRawItems] = React.useState<OrderItem[]>([])
   const [rawPayments, setRawPayments] = React.useState<Payment[]>([])
   const [rawCosts, setRawCosts] = React.useState<OrderAdditionalCost[]>([])
-  const [datePreset, setDatePreset] = React.useState<DateRangePreset>("this_week")
-  const [customFrom, setCustomFrom] = React.useState("")
-  const [customTo, setCustomTo] = React.useState("")
+  const [initialRange] = React.useState(savedRange)
+  const [datePreset, setDatePreset] = React.useState<DateRangePreset>(initialRange.preset)
+  const [customFrom, setCustomFrom] = React.useState(initialRange.from)
+  const [customTo, setCustomTo] = React.useState(initialRange.to)
+  // Pending payments and overdue orders cover every order unless this is on.
+  const [followRange, setFollowRange] = React.useState(savedFollow)
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(RANGE_KEY, JSON.stringify({ preset: datePreset, from: customFrom, to: customTo }))
+    } catch {
+      // not remembered — still works
+    }
+  }, [datePreset, customFrom, customTo])
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(FOLLOW_KEY, followRange ? "1" : "0")
+    } catch {
+      // not remembered — still works
+    }
+  }, [followRange])
 
   React.useEffect(() => {
     loadDashboard()
@@ -197,21 +248,30 @@ export function DashboardPage() {
       const activeOrders = orders.filter((o) => !isTerminalStatus(o.order_status))
 
       let totalRevenue = 0
-      let pendingPayments = 0
       let discountsGiven = 0
       for (const order of orders) {
         const oi = itemsByOrder.get(order.id) || []
         const pays = paymentsByOrder.get(order.id) || []
-        const paid = orderAmountPaid(pays)
-        const balance = orderBalanceDue(oi, pays, costsByOrder.get(order.id) || [], order)
-        totalRevenue += paid
+        totalRevenue += orderAmountPaid(pays)
         discountsGiven += orderDiscountAmount(oi, costsByOrder.get(order.id) || [], order)
-        if (balance > 0 && !isTerminalStatus(order.order_status)) {
-          pendingPayments += balance
-        }
       }
 
-      const overdueOrders = activeOrders.filter((o) => isOverdue(o.required_date))
+      // Money still owed and late orders matter whenever the order was placed,
+      // so by default they cover every order; the switch limits them to the range.
+      const scope = followRange ? orders : rawOrders
+      let pendingPayments = 0
+      for (const order of scope) {
+        if (isTerminalStatus(order.order_status)) continue
+        const balance = orderBalanceDue(
+          itemsByOrder.get(order.id) || [],
+          paymentsByOrder.get(order.id) || [],
+          costsByOrder.get(order.id) || [],
+          order,
+        )
+        if (balance > 0) pendingPayments += balance
+      }
+
+      const overdueOrders = scope.filter((o) => !isTerminalStatus(o.order_status) && isOverdue(o.required_date))
       const dueSoonOrders = activeOrders.filter((o) => isDueSoon(o.required_date) && !isOverdue(o.required_date))
       const inProduction = orders.filter((o) => isInProgressStatus(o.order_status))
       const trialsToday = activeOrders.filter((o) => o.trial_date && daysFromNow(o.trial_date) === 0)
@@ -301,21 +361,24 @@ export function DashboardPage() {
         trendDescription,
         statusBreakdown,
       }
-  }, [rawOrders, rawCustomers, rawItems, rawPayments, rawCosts, datePreset, customFrom, customTo])
+  }, [rawOrders, rawCustomers, rawItems, rawPayments, rawCosts, datePreset, customFrom, customTo, followRange])
 
   if (loading) {
     return <PageLoader label="Loading dashboard..." />
   }
 
-  const kpis = [
+  const scopeNote = followRange ? "In this range" : "All orders"
+  const noOrdersInRange = data.totalOrders === 0 && rawOrders.length > 0
+
+  const kpis: { label: string; value: string; icon: React.ComponentType<{ className?: string }>; color: string; note?: string }[] = [
     { label: "Total Orders", value: data.totalOrders.toString(), icon: Package, color: "text-blue-600" },
     { label: "Active Orders", value: data.activeOrders.toString(), icon: TrendingUp, color: "text-emerald-600" },
     { label: "Revenue (Collected)", value: formatCurrency(data.totalRevenue), icon: IndianRupee, color: "text-teal-600" },
-    { label: "Pending Payments", value: formatCurrency(data.pendingPayments), icon: AlertTriangle, color: "text-amber-600" },
+    { label: "Pending Payments", value: formatCurrency(data.pendingPayments), icon: AlertTriangle, color: "text-amber-600", note: scopeNote },
     ...(data.discountsGiven > 0
       ? [{ label: "Discounts Given", value: formatCurrency(data.discountsGiven), icon: BadgePercent, color: "text-pink-600" }]
       : []),
-    { label: "Overdue Orders", value: data.overdueOrders.toString(), icon: Clock, color: "text-red-600" },
+    { label: "Overdue Orders", value: data.overdueOrders.toString(), icon: Clock, color: "text-red-600", note: scopeNote },
     { label: vocab.inProgressLabel, value: data.inProduction.toString(), icon: Link2, color: "text-purple-600" },
     ...(vocab.usesTrialDate
       ? [
@@ -362,6 +425,17 @@ export function DashboardPage() {
         />
       </div>
 
+      {noOrdersInRange && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/40 px-4 py-3 text-sm">
+          <span className="text-muted-foreground">
+            No orders in this period, but you have {rawOrders.length} order{rawOrders.length === 1 ? "" : "s"} overall.
+          </span>
+          <Button size="sm" variant="outline" onClick={() => setDatePreset("all_time")}>
+            Show all time
+          </Button>
+        </div>
+      )}
+
       {/* KPI Cards */}
       <div className="grid min-w-0 grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
         {kpis.map((kpi) => {
@@ -376,11 +450,17 @@ export function DashboardPage() {
                 <span className={cn("w-full truncate font-bold tracking-tight", kpiValueTextSize(kpi.value))}>
                   {kpi.value}
                 </span>
+                {kpi.note && <span className="-mt-2 text-[11px] text-muted-foreground">{kpi.note}</span>}
               </CardContent>
             </Card>
           )
         })}
       </div>
+
+      <label className="-mt-3 flex items-center justify-end gap-2 text-xs text-muted-foreground">
+        <span>Pending Payments and Overdue Orders follow the date range</span>
+        <Switch checked={followRange} onCheckedChange={setFollowRange} aria-label="Pending Payments and Overdue Orders follow the date range" />
+      </label>
 
       {/* Charts */}
       <div className="grid min-w-0 gap-4 lg:grid-cols-3">
