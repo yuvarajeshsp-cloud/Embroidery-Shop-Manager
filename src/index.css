@@ -162,6 +162,15 @@ button:not(:disabled):active {
   box-shadow: inset 0 1px 4px rgb(0 0 0 / 0.15);
 }
 
+/* The bottom bar's tabs show their state by the cut-out and colour, so they
+   skip the press effect above (it left a dark inset shadow while held). */
+button.nav-tab:not(:disabled),
+button.nav-tab:not(:disabled):active {
+  transform: none;
+  filter: none;
+  box-shadow: none;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

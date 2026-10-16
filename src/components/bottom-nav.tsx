@@ -81,7 +81,8 @@ function Tab({
     <button
       onClick={onClick}
       className={cn(
-        "relative flex flex-1 flex-col items-center justify-center gap-1 pb-2 text-[11px] transition-colors",
+        // No tap flash, text selection or callout while a tab is pressed and held.
+        "nav-tab relative flex flex-1 select-none flex-col items-center justify-center gap-1 pb-2 text-[11px] outline-none transition-colors [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [touch-action:manipulation]",
         active ? "font-semibold text-foreground" : "text-sidebar-foreground/75",
       )}
     >
@@ -111,7 +112,7 @@ export function BottomNav() {
   }
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-stretch rounded-t-[28px] border-t border-sidebar-border bg-sidebar pb-[env(safe-area-inset-bottom)]">
+    <nav className="fixed inset-x-0 bottom-0 z-50 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-stretch rounded-t-[28px] bg-sidebar pb-[env(safe-area-inset-bottom)]">
       {visibleTabs.map((tab, index) => (
         <Tab
           key={tab.label}
