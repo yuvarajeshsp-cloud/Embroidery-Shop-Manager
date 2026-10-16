@@ -55,3 +55,8 @@ ios/App/Podfile.lock
 
 # Android release signing secrets
 android/keystore.properties
+
+# Desktop app (Electron)
+desktop/node_modules
+desktop/app
+desktop/release

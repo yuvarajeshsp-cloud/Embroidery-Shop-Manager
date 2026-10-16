@@ -1,0 +1,73 @@
+{
+  "name": "shop-manager-desktop",
+  "productName": "Shop Manager",
+  "version": "3.0.0",
+  "description": "Shop Manager for Windows and Mac",
+  "author": "Paavai Embroidery",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "prepare-app": "cd .. && npm run build && rm -rf desktop/app && cp -R dist desktop/app",
+    "dist:mac": "npm run prepare-app && electron-builder --mac",
+    "dist:win": "npm run prepare-app && electron-builder --win",
+    "dist": "npm run prepare-app && electron-builder --mac --win"
+  },
+  "build": {
+    "appId": "com.paavaiembroidery.shopmanager.desktop",
+    "productName": "Shop Manager",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "chooser.html",
+      "app/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.business",
+      "identity": null,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "extendInfo": {
+        "NSBluetoothAlwaysUsageDescription": "Shop Manager uses Bluetooth to connect to your receipt printer.",
+        "NSBluetoothPeripheralUsageDescription": "Shop Manager uses Bluetooth to connect to your receipt printer."
+      }
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false
+    }
+  },
+  "devDependencies": {
+    "electron": "^44.8.0",
+    "electron-builder": "^26.15.3"
+  }
+}
