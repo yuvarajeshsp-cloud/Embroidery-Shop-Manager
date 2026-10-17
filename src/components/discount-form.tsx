@@ -1,5 +1,6 @@
 import * as React from "react"
 import { toast } from "sonner"
+import { notify } from "@/lib/notify"
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -192,7 +193,7 @@ export function DiscountDialog({
         { discount_type: order.discount_type, discount_value: order.discount_value, discount_reason: order.discount_reason },
         columns,
       )
-      toast.success(columns.discount_type ? "Discount saved" : "Discount removed")
+      notify.success(columns.discount_type ? "Discount saved" : "Discount removed")
       onSaved()
     } catch (err) {
       console.error(err)

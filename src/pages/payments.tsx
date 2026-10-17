@@ -46,6 +46,7 @@ import { useRouter } from "@/lib/router"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { fetchConfigItems } from "@/lib/config"
 import { toast } from "sonner"
+import { notify } from "@/lib/notify"
 import { MultiSelectFilter } from "@/components/multi-select-filter"
 import { DateRangeFilter } from "@/components/date-range-filter"
 import { ExportDialog } from "@/components/export-dialog"
@@ -77,7 +78,7 @@ export function PaymentsPage() {
   }, [])
 
   async function loadPayments() {
-    setLoading(true)
+    // Reloading after a save keeps the page as it is; the spinner is only for the first load.
     const { data } = await supabase
       .from("payments")
       .select("*")
@@ -370,11 +371,11 @@ function PaymentForm({
         const { error } = await supabase.from("payments").update(payload).eq("id", payment.id)
         if (error) throw error
         await logAudit(profile, "payments", payment.id, "UPDATE", null, payload as unknown as Record<string, unknown>)
-        toast.success("Payment updated")
+        notify.success("Payment updated")
       } else {
         const { error } = await supabase.from("payments").insert({ ...payload, created_by: profile?.id })
         if (error) throw error
-        toast.success("Payment recorded")
+        notify.success("Payment recorded")
       }
       onSaved()
     } catch (err) {

@@ -44,6 +44,7 @@ import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { toast } from "sonner"
+import { notify } from "@/lib/notify"
 
 const CATEGORIES: WhatsAppTemplateCategory[] = ["utility", "marketing", "authentication"]
 
@@ -77,7 +78,7 @@ export function WhatsAppPage() {
   }, [])
 
   async function loadAll() {
-    setLoading(true)
+    // Reloading after a save keeps the page as it is; the spinner is only for the first load.
     const [cfg, tpl] = await Promise.all([fetchWhatsAppConfig(), fetchWhatsAppTemplates()])
     setConfig(cfg)
     setTemplates(tpl)
@@ -104,7 +105,7 @@ export function WhatsAppPage() {
         [WHATSAPP_CONFIG_KEYS.imageShareTemplateName]: config.imageShareTemplateName,
         [WHATSAPP_CONFIG_KEYS.imageShareTemplateLanguage]: config.imageShareTemplateLanguage,
       })
-      toast.success("WhatsApp configuration saved")
+      notify.success("WhatsApp configuration saved")
     } catch (err) {
       console.error(err)
       toast.error("Failed to save configuration")
@@ -131,7 +132,7 @@ export function WhatsAppPage() {
     if (error) {
       toast.error("Failed to remove template")
     } else {
-      toast.success("Template removed")
+      notify.success("Template removed")
       loadAll()
     }
   }
@@ -146,7 +147,7 @@ export function WhatsAppPage() {
       const template = templates.find((t) => t.name === testTemplate)
       const result = await sendWhatsAppTestMessage(testPhone.trim(), testTemplate, template?.language || "en", profile?.id)
       if (result.success) {
-        toast.success("Test message sent")
+        notify.success("Test message sent")
       } else {
         toast.error(result.error || "Failed to send test message")
       }
@@ -471,7 +472,7 @@ function AddTemplateDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
         }
         return
       }
-      toast.success("Template added")
+      notify.success("Template added")
       onSaved()
     } catch (err) {
       console.error(err)

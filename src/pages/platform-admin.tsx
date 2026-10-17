@@ -1,6 +1,7 @@
 import * as React from "react"
 import { ShieldCheck, ArrowLeft, Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { notify } from "@/lib/notify"
 
 import { supabase } from "@/lib/supabase"
 import { formatDateTime, formatDate, formatCurrency, orderTotal, orderAmountPaid } from "@/lib/helpers"
@@ -94,7 +95,7 @@ function PricingCard() {
       toast.error("Failed to save price")
       return
     }
-    toast.success("Monthly price updated")
+    notify.success("Monthly price updated")
     void fetchPlatformSettings().then(setSettings)
   }
 
@@ -340,7 +341,7 @@ export function PlatformAdminOrgPage({ id }: { id: string }) {
       return
     }
     setOrg({ ...org, subscription_status: months === null ? "expired" : "comped", comp_access_until: compAccessUntil })
-    toast.success(months === null ? "Complimentary access revoked" : `Complimentary access granted for ${months} months`)
+    notify.success(months === null ? "Complimentary access revoked" : `Complimentary access granted for ${months} months`)
   }
 
   if (loading) return <PageLoader />

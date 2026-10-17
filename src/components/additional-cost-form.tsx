@@ -1,6 +1,7 @@
 import * as React from "react"
 import { ChevronDown } from "lucide-react"
 import { toast } from "sonner"
+import { notify } from "@/lib/notify"
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -144,7 +145,7 @@ export function AdditionalCostForm({
             .from("order_additional_costs")
             .insert({ ...payload, order_id: orderId, order_item_id: orderItemId, created_by: profile?.id ?? null })
       if (error) throw error
-      toast.success(cost ? "Cost updated" : "Cost added")
+      notify.success(cost ? "Cost updated" : "Cost added")
       onSaved()
     } catch (err) {
       console.error(err)

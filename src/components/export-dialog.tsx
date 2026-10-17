@@ -13,6 +13,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { toast } from "sonner"
+import { notify } from "@/lib/notify"
 
 export function ExportDialog<T>({
   open,
@@ -64,7 +65,7 @@ export function ExportDialog<T>({
     }
     const chosenFields = fields.filter((f) => selected.has(f.key))
     exportToExcel(filename, sheetName, rows, chosenFields)
-    toast.success(`Exported ${rows.length} row(s)`)
+    notify.success(`Exported ${rows.length} row(s)`)
     onOpenChange(false)
   }
 

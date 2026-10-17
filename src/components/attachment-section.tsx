@@ -68,6 +68,7 @@ export function AttachmentSection({
   const { profile } = useAuth()
   const [attachments, setAttachments] = React.useState<OrderItemAttachment[]>([])
   const [loading, setLoading] = React.useState(true)
+  const shown = React.useRef<string | null>(null)
   const [uploading, setUploading] = React.useState(false)
   const [viewing, setViewing] = React.useState<OrderItemAttachment | null>(null)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
@@ -78,9 +79,11 @@ export function AttachmentSection({
   }, [orderItemId, category])
 
   async function load() {
-    setLoading(true)
+    const key = `${orderItemId}|${category}`
+    if (shown.current !== key) setLoading(true)
     const all = await fetchAttachments(orderItemId)
     setAttachments(all.filter((a) => a.category === category))
+    shown.current = key
     setLoading(false)
   }
 

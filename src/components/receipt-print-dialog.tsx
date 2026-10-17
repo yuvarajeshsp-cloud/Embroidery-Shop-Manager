@@ -1,6 +1,7 @@
 import * as React from "react"
 import { Printer } from "lucide-react"
 import { toast } from "sonner"
+import { notify } from "@/lib/notify"
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -82,7 +83,7 @@ export function ReceiptPrintDialog({
         await printViaBrowser(blocks)
       } else {
         await printBlocks(blocks)
-        toast.success("Sent to the printer")
+        notify.success("Sent to the printer")
       }
       // Done: the popup has nothing left to do.
       onClose()

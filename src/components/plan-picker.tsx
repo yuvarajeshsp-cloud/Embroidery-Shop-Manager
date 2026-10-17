@@ -1,6 +1,7 @@
 import * as React from "react"
 import { Check, Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { notify } from "@/lib/notify"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -45,7 +46,7 @@ export function PlanPicker({ onSubscribed }: { onSubscribed: () => void }) {
         handler: async (response: { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string }) => {
           try {
             await verifyRazorpayPayment(response)
-            toast.success("Subscription active — thank you!")
+            notify.success("Subscription active — thank you!")
             onSubscribed()
           } catch (err) {
             toast.error(err instanceof Error ? err.message : "Payment succeeded but confirmation failed — contact support")

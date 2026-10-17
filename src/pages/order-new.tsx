@@ -33,6 +33,7 @@ import {
 import { useRouter } from "@/lib/router"
 import { fetchConfigItems, getDefaultStitchRate } from "@/lib/config"
 import { toast } from "sonner"
+import { notify } from "@/lib/notify"
 import { CostTypeField, useCostTypes } from "@/components/additional-cost-form"
 import { DiscountFields, EMPTY_DISCOUNT, discountColumns, discountLineOf, discountProblem, type DiscountDraft } from "@/components/discount-form"
 import { ItemPriceFields, formLineTotal, priceColumns, priceProblem, type ItemPriceValues } from "@/components/item-price-fields"
@@ -355,7 +356,7 @@ export function NewOrderPage() {
       }
 
       await logAudit(profile, "orders", orderData.id, "INSERT", null, { order_number: orderNumber } as Record<string, unknown>)
-      toast.success("Order created successfully")
+      notify.success("Order created successfully")
       navigate({ name: "order-detail", id: orderData.id })
     } catch (err) {
       console.error(err)

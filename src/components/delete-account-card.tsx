@@ -1,6 +1,7 @@
 import * as React from "react"
 import { Loader2, UserX } from "lucide-react"
 import { toast } from "sonner"
+import { notify } from "@/lib/notify"
 
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
@@ -65,7 +66,7 @@ export function DeleteAccountCard() {
     await clearBiometricCredentials()
     await setBiometricUnlockEnabled(false)
     await supabase.auth.signOut({ scope: "local" })
-    toast.success("Your account has been deleted")
+    notify.success("Your account has been deleted")
   }
 
   return (

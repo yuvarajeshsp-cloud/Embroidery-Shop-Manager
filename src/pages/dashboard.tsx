@@ -195,7 +195,7 @@ export function DashboardPage() {
   }, [])
 
   async function loadDashboard() {
-    setLoading(true)
+    // Reloading after a save keeps the page as it is; the spinner is only for the first load.
     try {
       const [ordersRes, customersRes, itemsRes, paymentsRes, costsRes] = await Promise.all([
         supabase.from("orders").select("*").order("created_at", { ascending: false }),

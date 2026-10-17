@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
+import { notify } from "@/lib/notify"
 
 const supportsPasskey = !Capacitor.isNativePlatform() && typeof window !== "undefined" && !!window.PublicKeyCredential
 
@@ -82,7 +83,7 @@ export function ProfilePage() {
     try {
       const { error } = await supabase.auth.registerPasskey()
       if (error) throw error
-      toast.success("Passkey added")
+      notify.success("Passkey added")
       await loadPasskeys()
     } catch (err) {
       console.error(err)
@@ -109,7 +110,7 @@ export function ProfilePage() {
     if (error) {
       toast.error("Failed to remove passkey")
     } else {
-      toast.success("Passkey removed")
+      notify.success("Passkey removed")
       await loadPasskeys()
     }
   }
@@ -133,7 +134,7 @@ export function ProfilePage() {
     }
     setBiometricEnabled(enabled)
     setBiometricBusy(false)
-    toast.success(enabled ? `${biometryLabel || "Biometric"} unlock enabled` : "Biometric unlock disabled")
+    notify.success(enabled ? `${biometryLabel || "Biometric"} unlock enabled` : "Biometric unlock disabled")
   }
 
   const dirty = displayName !== (profile?.display_name || "") || phone !== (profile?.phone || "")
@@ -163,7 +164,7 @@ export function ProfilePage() {
         { display_name: profile.display_name, phone: profile.phone } as Record<string, unknown>,
         { display_name: displayName.trim(), phone: phone.trim() || null } as Record<string, unknown>,
       )
-      toast.success("Profile updated")
+      notify.success("Profile updated")
       await refreshProfile()
     } catch (err) {
       console.error(err)
@@ -192,7 +193,7 @@ export function ProfilePage() {
       if (biometricEnabled && accountEmail) {
         await saveBiometricCredentials(accountEmail, newPassword, profile?.display_name)
       }
-      toast.success("Password changed")
+      notify.success("Password changed")
       setNewPassword("")
       setConfirmPassword("")
     } catch (err) {

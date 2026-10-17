@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
+import { notify } from "@/lib/notify"
 
 const PRODUCTION_BOARD_CATEGORY = PRODUCTION_BOARD_STAGE_CATEGORY
 
@@ -87,6 +88,7 @@ export function ConfigPage() {
   const [activeCategory, setActiveCategory] = React.useState("order_status")
   const [items, setItems] = React.useState<ConfigItem[]>([])
   const [loading, setLoading] = React.useState(true)
+  const shownCategory = React.useRef<string | null>(null)
   const [showAdd, setShowAdd] = React.useState(false)
   const [newName, setNewName] = React.useState("")
   const [profile, setProfile] = React.useState<Record<string, string>>({})
@@ -126,7 +128,7 @@ export function ConfigPage() {
       setDocumentTitleFromSettings(profile)
       clearConfigCache()
       await refreshBusinessProfile()
-      toast.success("Business profile saved")
+      notify.success("Business profile saved")
     } catch (error) {
       console.error(error)
       toast.error("Failed to save business profile")
@@ -152,7 +154,8 @@ export function ConfigPage() {
   }
 
   async function loadItems() {
-    setLoading(true)
+    // Switching to another list shows the spinner; saving within a list does not.
+    if (shownCategory.current !== activeCategory) setLoading(true)
     clearConfigCache()
     const { data, error } = await supabase
       .from("config_items")
@@ -164,6 +167,7 @@ export function ConfigPage() {
     } else {
       setItems(data || [])
     }
+    shownCategory.current = activeCategory
     setLoading(false)
   }
 
@@ -186,7 +190,7 @@ export function ConfigPage() {
         toast.error("Failed to add item")
       }
     } else {
-      toast.success("Item added")
+      notify.success("Item added")
       setNewName("")
       setShowAdd(false)
       loadItems()
@@ -237,7 +241,7 @@ export function ConfigPage() {
     if (error) {
       toast.error("Failed to delete")
     } else {
-      toast.success("Item deleted")
+      notify.success("Item deleted")
       loadItems()
     }
   }

@@ -40,6 +40,7 @@ import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { toast } from "sonner"
+import { notify } from "@/lib/notify"
 
 const ROLES: UserRole[] = ["Administrator", "Manager", "Operator", "Accounts"]
 
@@ -91,7 +92,7 @@ export function UsersPage() {
       toast.error("Failed to update user")
     } else {
       await logAudit(currentUser, "user_profiles", user.id, "UPDATE", { is_active: user.is_active } as Record<string, unknown>, { is_active: !user.is_active } as Record<string, unknown>)
-      toast.success("User updated")
+      notify.success("User updated")
       loadUsers()
     }
   }
@@ -107,7 +108,7 @@ export function UsersPage() {
       toast.error("Failed to update phone number")
     } else {
       await logAudit(currentUser, "user_profiles", user.id, "UPDATE", { phone: user.phone } as Record<string, unknown>, { phone: trimmed } as Record<string, unknown>)
-      toast.success("Phone number updated")
+      notify.success("Phone number updated")
       loadUsers()
     }
   }
@@ -121,7 +122,7 @@ export function UsersPage() {
       toast.error("Failed to update role")
     } else {
       await logAudit(currentUser, "user_profiles", user.id, "UPDATE", { role: user.role } as Record<string, unknown>, { role } as Record<string, unknown>)
-      toast.success("Role updated")
+      notify.success("Role updated")
       loadUsers()
     }
   }
@@ -144,7 +145,7 @@ export function UsersPage() {
       if (!data?.success) throw new Error(data?.error || "Failed to send invite")
 
       await logAudit(currentUser, "user_profiles", data.user_id, "INSERT", null, { email: inviteEmail.trim(), role: inviteRole } as Record<string, unknown>, "Invited")
-      toast.success(`Invite sent to ${inviteEmail.trim()}`)
+      notify.success(`Invite sent to ${inviteEmail.trim()}`)
       setInviteEmail("")
       setInviteName("")
       setInviteRole("Operator")
@@ -181,7 +182,7 @@ export function UsersPage() {
       if (!data?.success) throw new Error(data?.error || "Failed to create user")
 
       await logAudit(currentUser, "user_profiles", data.user_id, "INSERT", null, { email: createEmail.trim(), role: createRole } as Record<string, unknown>, "Created directly")
-      toast.success(`${createName.trim()} can now sign in`)
+      notify.success(`${createName.trim()} can now sign in`)
       setCreateEmail("")
       setCreateName("")
       setCreateRole("Operator")

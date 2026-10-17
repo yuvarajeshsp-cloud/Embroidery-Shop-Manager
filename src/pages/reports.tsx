@@ -82,7 +82,7 @@ export function ReportsPage() {
   }, [])
 
   async function loadAll() {
-    setLoading(true)
+    // Reloading after a save keeps the page as it is; the spinner is only for the first load.
     const [ordersRes, customersRes, itemsRes, paymentsRes, costsRes] = await Promise.all([
       supabase.from("orders").select("*").order("order_date", { ascending: false }),
       supabase.from("customers").select("*"),

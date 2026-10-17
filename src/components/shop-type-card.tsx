@@ -1,6 +1,7 @@
 import * as React from "react"
 import { Store } from "lucide-react"
 import { toast } from "sonner"
+import { notify } from "@/lib/notify"
 
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
@@ -40,7 +41,7 @@ export function ShopTypeCard({ onApplied }: { onApplied: () => void }) {
       await refreshBusinessProfile()
       onApplied()
       const added = typeof data === "number" ? data : 0
-      toast.success(added > 0 ? `Shop type saved — ${added} list entries updated` : "Shop type saved")
+      notify.success(added > 0 ? `Shop type saved — ${added} list entries updated` : "Shop type saved")
     } catch (err) {
       console.error(err)
       toast.error("Could not change the shop type")

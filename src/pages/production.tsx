@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge"
 import { useRouter } from "@/lib/router"
 import { fetchConfigItems, PRODUCTION_BOARD_STAGE_CATEGORY } from "@/lib/config"
 import { toast } from "sonner"
+import { notify } from "@/lib/notify"
 import { cn } from "@/lib/utils"
 import { useOnline } from "@/lib/offline/connectivity"
 
@@ -365,7 +366,7 @@ function OrderStageDialog({
       { order_status: newStatus } as Record<string, unknown>,
       `Production stage changed to ${newStatus}`,
     )
-    toast.success(`Moved to ${newStatus}`)
+    notify.success(`Moved to ${newStatus}`)
     setSaving(false)
     // The database stamps who moved it; show the same right away.
     onSaved({ ...order, ...updates, status_changed_by: profile?.id ?? null, status_changed_at: updates.updated_at ?? null } as Order)

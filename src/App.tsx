@@ -34,6 +34,7 @@ import { ReportsPage } from "@/pages/reports"
 import { ConfigPage } from "@/pages/config"
 import { WhatsAppPage } from "@/pages/whatsapp"
 import { OfflineBanner } from "@/components/offline-banner"
+import { NoticeBanner } from "@/components/notice-banner"
 import { useSyncState } from "@/lib/offline/state"
 import { PrinterPage } from "@/pages/printer"
 import { UsersPage, AuditPage } from "@/pages/admin"
@@ -273,6 +274,7 @@ function AppShell({ banner }: { banner?: React.ReactNode }) {
     return (
       <div className="flex min-h-svh flex-col pt-[env(safe-area-inset-top)]">
         <OfflineBanner />
+        <NoticeBanner />
         {banner}
         <div className="flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))]">
           <PageStack key={refreshKey} renderRoute={(r) => <RouteView route={r} />} />
@@ -287,6 +289,7 @@ function AppShell({ banner }: { banner?: React.ReactNode }) {
       <AppSidebar />
       <SidebarInset>
         <OfflineBanner />
+        <NoticeBanner />
         {banner}
         <React.Fragment key={refreshKey}>
           <RouteView route={route} />

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { toast } from "sonner"
+import { notify } from "@/lib/notify"
 
 const RESEND_COOLDOWN_SECONDS = 60
 
@@ -58,7 +58,7 @@ export function VerifyPhoneScreen() {
       return false
     }
     setChannel("email")
-    toast.success(`Code sent to ${profile.email}`)
+    notify.success(`Code sent to ${profile.email}`)
     return true
   }, [profile?.email])
 
@@ -70,7 +70,7 @@ export function VerifyPhoneScreen() {
       const { data, error } = await supabase.functions.invoke("send-phone-otp")
       if (!error && data?.success) {
         setChannel("sms")
-        toast.success(`Code sent to ${data.phone} via SMS`)
+        notify.success(`Code sent to ${data.phone} via SMS`)
         setCooldown(RESEND_COOLDOWN_SECONDS)
         setSending(false)
         return
@@ -126,7 +126,7 @@ export function VerifyPhoneScreen() {
       }
     }
 
-    toast.success("Verified — welcome aboard!")
+    notify.success("Verified — welcome aboard!")
     await refreshProfile()
     setVerifying(false)
   }

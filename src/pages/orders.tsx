@@ -83,6 +83,7 @@ import { useRouter } from "@/lib/router"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { fetchConfigItems, getDefaultStitchRate } from "@/lib/config"
 import { toast } from "sonner"
+import { notify } from "@/lib/notify"
 import { cn } from "@/lib/utils"
 import { MultiSelectFilter } from "@/components/multi-select-filter"
 import { DateRangeFilter } from "@/components/date-range-filter"
@@ -137,7 +138,7 @@ export function OrdersPage() {
   }, [])
 
   async function loadOrders() {
-    setLoading(true)
+    // Reloading after a save keeps the page as it is; the spinner is only for the first load.
     const query = supabase.from("orders").select("*").eq("archived", false).order("order_date", { ascending: false })
     const { data: orderData } = await query
     if (!orderData) { setLoading(false); return }
@@ -460,6 +461,8 @@ export function OrderDetailPage({ id }: { id: string }) {
   const [discountOpen, setDiscountOpen] = React.useState(false)
   const [costForm, setCostForm] = React.useState<{ itemId: string; cost: OrderAdditionalCost | null } | null>(null)
   const [loading, setLoading] = React.useState(true)
+  // Which order the page is currently showing: a spinner only when it changes.
+  const shownId = React.useRef<string | null>(null)
   const [editingItem, setEditingItem] = React.useState<OrderItem | null>(null)
   const [showItemForm, setShowItemForm] = React.useState(false)
   const [showPaymentForm, setShowPaymentForm] = React.useState(false)
@@ -496,7 +499,7 @@ export function OrderDetailPage({ id }: { id: string }) {
   }, [id])
 
   async function loadOrder() {
-    setLoading(true)
+    if (shownId.current !== id) setLoading(true)
     const { data: orderData } = await supabase.from("orders").select("*").eq("id", id).maybeSingle()
     if (!orderData) { setLoading(false); return }
     setOrder(orderData as Order)
@@ -515,6 +518,7 @@ export function OrderDetailPage({ id }: { id: string }) {
     setPayments(payRes.data || [])
     setExpenses(expRes.data || [])
     setAttachments(await fetchAttachmentsForItems(orderItems.map((i: OrderItem) => i.id)))
+    shownId.current = id
     setLoading(false)
   }
 
@@ -529,7 +533,7 @@ export function OrderDetailPage({ id }: { id: string }) {
       toast.error("Failed to update status")
     } else {
       await logAudit(profile, "orders", order.id, "UPDATE", { order_status: order.order_status } as Record<string, unknown>, { order_status: newStatus } as Record<string, unknown>, `Status changed to ${newStatus}`)
-      toast.success(`Order status changed to ${newStatus}`)
+      notify.success(`Order status changed to ${newStatus}`)
       const updatedOrder = { ...order, ...updates } as Order
       setOrder(updatedOrder)
 
@@ -554,7 +558,7 @@ export function OrderDetailPage({ id }: { id: string }) {
       toast.error("Failed to update assignment")
     } else {
       await logAudit(profile, "orders", order.id, "UPDATE", { assigned_to: order.assigned_to } as Record<string, unknown>, { assigned_to: userId } as Record<string, unknown>, "Reassigned")
-      toast.success("Order assignment updated")
+      notify.success("Order assignment updated")
       setOrder({ ...order, assigned_to: userId })
     }
   }
@@ -565,7 +569,7 @@ export function OrderDetailPage({ id }: { id: string }) {
     if (error) {
       toast.error("Failed to remove the cost")
     } else {
-      toast.success("Cost removed")
+      notify.success("Cost removed")
       setAdditionalCosts((prev) => prev.filter((c) => c.id !== cost.id))
     }
   }
@@ -576,7 +580,7 @@ export function OrderDetailPage({ id }: { id: string }) {
     if (error) {
       toast.error("Failed to delete item")
     } else {
-      toast.success("Item deleted")
+      notify.success("Item deleted")
       loadOrder()
     }
   }
@@ -1302,7 +1306,7 @@ function ShareToCustomerDialog({
         }
       }
 
-      if (successCount > 0) toast.success(`Sent ${successCount} file(s) via WhatsApp`)
+      if (successCount > 0) notify.success(`Sent ${successCount} file(s) via WhatsApp`)
       if (failCount > 0) toast.error(`${failCount} file(s) failed to send`)
       if (successCount > 0 && failCount === 0) onClose()
     } finally {
@@ -1470,16 +1474,16 @@ function OrderItemForm({
         const { error } = await supabase.from("order_items").update(payload).eq("id", savedItemId)
         if (error) throw error
         if (wasNew) {
-          toast.success("Changes saved")
+          notify.success("Changes saved")
         } else {
-          toast.success("Item updated")
+          notify.success("Item updated")
           onSaved()
         }
       } else {
         const { data, error } = await supabase.from("order_items").insert(payload).select().single()
         if (error) throw error
         setSavedItemId(data.id)
-        toast.success("Item added — attach photos or documents below, then click Done")
+        notify.success("Item added — attach photos or documents below, then click Done")
       }
     } catch (err) {
       console.error(err)
@@ -1646,7 +1650,7 @@ function PaymentForm({
         updated_by: profile?.id,
       })
       if (error) throw error
-      toast.success("Payment recorded")
+      notify.success("Payment recorded")
       onSaved()
     } catch (err) {
       console.error(err)

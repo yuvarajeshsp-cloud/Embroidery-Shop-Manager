@@ -1,6 +1,7 @@
 import * as React from "react"
 import { Printer, Bluetooth, Usb } from "lucide-react"
 import { toast } from "sonner"
+import { notify } from "@/lib/notify"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -67,7 +68,7 @@ export function PrinterCard() {
     setBusy(true)
     try {
       await action()
-      toast.success(success)
+      notify.success(success)
     } catch (err) {
       const { message, hint } = explain(err)
       if (message !== "No printer was chosen") toast.error(message, { description: hint, duration: 9000 })

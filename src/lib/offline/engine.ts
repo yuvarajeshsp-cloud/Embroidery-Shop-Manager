@@ -21,6 +21,7 @@ import {
   type QueuedOp,
 } from "./store"
 import { getSyncState, patchSyncState } from "./state"
+import { noteSave } from "@/lib/notify"
 
 // Sits between the app and Supabase. Reads are answered from the network and
 // remembered; with no connection they are answered from what was remembered.
@@ -198,12 +199,14 @@ async function writeOffline(method: "POST" | "PATCH" | "DELETE", url: URL, heade
     at: Date.now(),
   })
   await refreshCounts()
+  noteSave(parseQuery(url).table, method, { queued: true, upsert: (headers.get("prefer") ?? "").includes("resolution=") })
   return writeResponse(method === "POST" ? 201 : 200, rows, url, headers)
 }
 
 async function writeOnline(input: RequestInfo | URL, init: RequestInit | undefined, base: typeof fetch, method: string, url: URL, headers: Headers): Promise<Response> {
   const res = await base(input, init)
   if (res.ok) {
+    noteSave(parseQuery(url).table, method as "POST" | "PATCH" | "DELETE", { upsert: (headers.get("prefer") ?? "").includes("resolution=") })
     try {
       const prefer = headers.get("prefer") ?? ""
       const bodyText = typeof init?.body === "string" ? init.body : null

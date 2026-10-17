@@ -42,6 +42,7 @@ import { useRouter } from "@/lib/router"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { fetchConfigItems } from "@/lib/config"
 import { toast } from "sonner"
+import { notify } from "@/lib/notify"
 import { MultiSelectFilter } from "@/components/multi-select-filter"
 import { DateRangeFilter } from "@/components/date-range-filter"
 import { ExportDialog } from "@/components/export-dialog"
@@ -74,7 +75,7 @@ export function ExpensesPage() {
   }, [])
 
   async function loadExpenses() {
-    setLoading(true)
+    // Reloading after a save keeps the page as it is; the spinner is only for the first load.
     const { data } = await supabase
       .from("expenses")
       .select("*")
@@ -99,7 +100,7 @@ export function ExpensesPage() {
       toast.error("Failed to delete expense")
     } else {
       await logAudit(profile, "expenses", expense.id, "DELETE", expense as unknown as Record<string, unknown>, null)
-      toast.success("Expense deleted")
+      notify.success("Expense deleted")
       loadExpenses()
     }
   }
@@ -359,12 +360,12 @@ function ExpenseForm({
         const { error } = await supabase.from("expenses").update(payload).eq("id", expense.id)
         if (error) throw error
         await logAudit(profile, "expenses", expense.id, "UPDATE", null, payload as unknown as Record<string, unknown>)
-        toast.success("Expense updated")
+        notify.success("Expense updated")
       } else {
         const { data, error } = await supabase.from("expenses").insert({ ...payload, created_by: profile?.id }).select("id").single()
         if (error) throw error
         await logAudit(profile, "expenses", data.id, "INSERT", null, payload as unknown as Record<string, unknown>)
-        toast.success("Expense recorded")
+        notify.success("Expense recorded")
       }
       onSaved()
     } catch (err) {

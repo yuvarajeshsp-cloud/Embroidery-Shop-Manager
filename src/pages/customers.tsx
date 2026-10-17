@@ -45,6 +45,7 @@ import { useRouter } from "@/lib/router"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { fetchConfigItems } from "@/lib/config"
 import { toast } from "sonner"
+import { notify } from "@/lib/notify"
 import { orderTotal, orderBalanceDue } from "@/lib/helpers"
 
 export function CustomersPage() {
@@ -67,7 +68,7 @@ export function CustomersPage() {
   }, [])
 
   async function loadCustomers() {
-    setLoading(true)
+    // Reloading after a save keeps the page as it is; the spinner is only for the first load.
     const query = supabase.from("customers").select("*").eq("archived", false).order("customer_business_name")
     const { data, error } = await query
     if (error) {
@@ -121,7 +122,7 @@ export function CustomersPage() {
     if (error) {
       toast.error("Cannot delete — customer has linked orders or payments")
     } else {
-      toast.success("Customer deleted")
+      notify.success("Customer deleted")
       loadCustomers()
     }
   }
@@ -307,7 +308,7 @@ function CustomerForm({
           .eq("id", customer.id)
         if (error) throw error
         await logAudit(profile, "customers", customer.id, "UPDATE", customer as unknown as Record<string, unknown>, form as unknown as Record<string, unknown>)
-        toast.success("Customer updated")
+        notify.success("Customer updated")
       } else {
         let code = form.customer_code
         let data
@@ -329,7 +330,7 @@ function CustomerForm({
         }
         if (!data) throw new Error("Failed to create customer")
         await logAudit(profile, "customers", data.id, "INSERT", null, { ...form, customer_code: code } as unknown as Record<string, unknown>)
-        toast.success("Customer created")
+        notify.success("Customer created")
       }
       onSaved()
     } catch (err) {
@@ -475,12 +476,15 @@ export function CustomerDetailPage({ id }: { id: string }) {
   const [orders, setOrders] = React.useState<(Order & { order_items?: OrderItem[]; order_additional_costs?: OrderAdditionalCost[]; payments?: Payment[] })[]>([])
   const [loading, setLoading] = React.useState(true)
 
+  // Which customer the page is currently showing: a spinner only when it changes.
+  const shownId = React.useRef<string | null>(null)
+
   React.useEffect(() => {
     loadCustomer()
   }, [id])
 
   async function loadCustomer() {
-    setLoading(true)
+    if (shownId.current !== id) setLoading(true)
     const [custRes, ordersRes, itemsRes, paymentsRes, costsRes] = await Promise.all([
       supabase.from("customers").select("*").eq("id", id).maybeSingle(),
       supabase.from("orders").select("*").eq("customer_id", id).order("order_date", { ascending: false }),
@@ -502,6 +506,7 @@ export function CustomerDetailPage({ id }: { id: string }) {
       payments: allPayments.filter((p: Payment) => p.order_id === o.id),
     }))
     setOrders(ordersWithDetails)
+    shownId.current = id
     setLoading(false)
   }
 

@@ -1,6 +1,7 @@
 import * as React from "react"
 import { FileDown, Printer } from "lucide-react"
 import { toast } from "sonner"
+import { notify } from "@/lib/notify"
 import { Capacitor } from "@capacitor/core"
 
 import { Button } from "@/components/ui/button"
@@ -69,7 +70,7 @@ export function PdfPreviewDialog({ data, onClose }: { data: OrderPdfData; onClos
     if (!blob) return
     try {
       await action()
-      if (success) toast.success(success)
+      if (success) notify.success(success)
     } catch (err) {
       console.error(err)
       if (err instanceof Error && /cancel|abort|dismiss/i.test(err.message)) return
