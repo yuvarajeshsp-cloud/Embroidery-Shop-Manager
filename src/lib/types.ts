@@ -89,6 +89,9 @@ export interface Order {
   discount_type: "amount" | "percent" | null
   discount_value: number
   discount_reason: string | null
+  /** When the order last moved to its current stage, and who moved it. */
+  status_changed_at: string | null
+  status_changed_by: string | null
   created_at: string
   updated_at: string
   created_by: string | null
