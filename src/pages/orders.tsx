@@ -89,6 +89,7 @@ import { MultiSelectFilter } from "@/components/multi-select-filter"
 import { DateRangeFilter } from "@/components/date-range-filter"
 import { ExportDialog } from "@/components/export-dialog"
 import { ExpenseForm } from "@/pages/expenses"
+import { UserInfoButton } from "@/components/info-card"
 import { AttachmentSection, AttachmentThumb } from "@/components/attachment-section"
 import { AttachmentViewerDialog } from "@/components/attachment-viewer"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -754,6 +755,7 @@ export function OrderDetailPage({ id }: { id: string }) {
             </div>
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs text-muted-foreground">Assigned To</span>
+              <span className="flex items-center gap-1">
               {canReassign ? (
                 <Select
                   value={order.assigned_to || "unassigned"}
@@ -772,6 +774,8 @@ export function OrderDetailPage({ id }: { id: string }) {
                   {assignableUsers.find((u) => u.id === order.assigned_to)?.display_name || "Unassigned"}
                 </span>
               )}
+              <UserInfoButton user={assignableUsers.find((u) => u.id === order.assigned_to)} />
+              </span>
             </div>
             {order.customer_po_reference && (
               <div className="flex justify-between">

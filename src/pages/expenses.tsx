@@ -7,6 +7,7 @@ import { formatCurrency, formatDate, generateExpenseNumber } from "@/lib/helpers
 import type { Expense, Order } from "@/lib/types"
 import type { ExportField } from "@/lib/export"
 import { computeDateRange, isWithinRange, type DateRangePreset } from "@/lib/date-range"
+import { OrderInfoButton } from "@/components/info-card"
 import { PageHeader } from "@/components/page-header"
 import { PageLoader } from "@/components/app-loader"
 import { Button } from "@/components/ui/button"
@@ -418,13 +419,16 @@ export function ExpenseForm({
             </div>
             <div className="flex flex-col gap-2">
               <Label>Linked Order (optional)</Label>
-              <Select value={selectedOrderId || "none"} onValueChange={(v) => setSelectedOrderId(v === "none" ? "" : v)}>
-                <SelectTrigger><SelectValue placeholder="No order" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No order</SelectItem>
-                  {orders.map((o) => <SelectItem key={o.id} value={o.id}>{o.order_number}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-1">
+                <Select value={selectedOrderId || "none"} onValueChange={(v) => setSelectedOrderId(v === "none" ? "" : v)}>
+                  <SelectTrigger><SelectValue placeholder="No order" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No order</SelectItem>
+                    {orders.map((o) => <SelectItem key={o.id} value={o.id}>{o.order_number}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <OrderInfoButton orderId={selectedOrderId} />
+              </div>
             </div>
           </div>
           <div className="flex flex-col gap-2">

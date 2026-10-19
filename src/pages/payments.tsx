@@ -11,6 +11,7 @@ import {
 import type { Payment, Order, Customer } from "@/lib/types"
 import type { ExportField } from "@/lib/export"
 import { computeDateRange, isWithinRange, type DateRangePreset } from "@/lib/date-range"
+import { OrderInfoButton } from "@/components/info-card"
 import { PageHeader } from "@/components/page-header"
 import { PageLoader } from "@/components/app-loader"
 import { Button } from "@/components/ui/button"
@@ -396,16 +397,19 @@ function PaymentForm({
         <div className="grid gap-4 py-2">
           <div className="flex flex-col gap-2">
             <Label>Order *</Label>
-            <Select value={selectedOrderId} onValueChange={setSelectedOrderId}>
-              <SelectTrigger><SelectValue placeholder="Select order..." /></SelectTrigger>
-              <SelectContent>
-                {orders.map((o) => (
-                  <SelectItem key={o.id} value={o.id}>
-                    {o.order_number} — {o.customer?.customer_business_name || "—"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-1">
+              <Select value={selectedOrderId} onValueChange={setSelectedOrderId}>
+                <SelectTrigger><SelectValue placeholder="Select order..." /></SelectTrigger>
+                <SelectContent>
+                  {orders.map((o) => (
+                    <SelectItem key={o.id} value={o.id}>
+                      {o.order_number} — {o.customer?.customer_business_name || "—"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <OrderInfoButton orderId={selectedOrderId} />
+            </div>
           </div>
           {selectedOrder && (
             <div className="rounded-lg border bg-muted/50 p-2 text-xs text-muted-foreground">

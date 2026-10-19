@@ -34,6 +34,7 @@ import {
 import { useRouter } from "@/lib/router"
 import { fetchConfigItems, getDefaultStitchRate } from "@/lib/config"
 import { CustomerForm } from "@/pages/customers"
+import { CustomerInfoButton, UserInfoButton } from "@/components/info-card"
 import { toast } from "sonner"
 import { notify } from "@/lib/notify"
 import { CostTypeField, useCostTypes } from "@/components/additional-cost-form"
@@ -450,6 +451,7 @@ export function NewOrderPage() {
                 />
               </Field>
               <Field label="Customer *">
+                <div className="flex items-center gap-1">
                 <Popover open={customerPickerOpen} onOpenChange={setCustomerPickerOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -510,6 +512,8 @@ export function NewOrderPage() {
                     </Command>
                   </PopoverContent>
                 </Popover>
+                <CustomerInfoButton customer={customers.find((c) => c.id === orderForm.customer_id)} />
+                </div>
               </Field>
             </div>
 
@@ -562,18 +566,21 @@ export function NewOrderPage() {
                 </Select>
               </Field>
               <Field label="Assign To">
-                <Select
-                  value={orderForm.assigned_to || "unassigned"}
-                  onValueChange={(v) => setOrderForm({ ...orderForm, assigned_to: v === "unassigned" ? "" : v })}
-                >
-                  <SelectTrigger className="h-9 w-full"><SelectValue placeholder="Unassigned" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">Unassigned</SelectItem>
-                    {assignableUsers.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>{u.display_name} ({u.role})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-1">
+                  <Select
+                    value={orderForm.assigned_to || "unassigned"}
+                    onValueChange={(v) => setOrderForm({ ...orderForm, assigned_to: v === "unassigned" ? "" : v })}
+                  >
+                    <SelectTrigger className="h-9 w-full"><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">Unassigned</SelectItem>
+                      {assignableUsers.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>{u.display_name} ({u.role})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <UserInfoButton user={assignableUsers.find((u) => u.id === orderForm.assigned_to)} />
+                </div>
               </Field>
               <Field label="Sales Channel">
                 <Select value={orderForm.sales_channel} onValueChange={(v) => setOrderForm({ ...orderForm, sales_channel: v })}>
