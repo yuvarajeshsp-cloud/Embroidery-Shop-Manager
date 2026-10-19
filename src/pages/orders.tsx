@@ -88,6 +88,7 @@ import { cn } from "@/lib/utils"
 import { MultiSelectFilter } from "@/components/multi-select-filter"
 import { DateRangeFilter } from "@/components/date-range-filter"
 import { ExportDialog } from "@/components/export-dialog"
+import { ExpenseForm } from "@/pages/expenses"
 import { AttachmentSection, AttachmentThumb } from "@/components/attachment-section"
 import { AttachmentViewerDialog } from "@/components/attachment-viewer"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -476,6 +477,8 @@ export function OrderDetailPage({ id }: { id: string }) {
   const canReassign = profile?.role === "Administrator" || profile?.role === "Manager"
   const vocab = useVocabulary()
   const [showEditOrder, setShowEditOrder] = React.useState(false)
+  const [expenseForm, setExpenseForm] = React.useState<{ expense: Expense | null } | null>(null)
+  const canRecordExpense = profile?.role === "Administrator" || profile?.role === "Manager" || profile?.role === "Accounts"
   const [editingMaterial, setEditingMaterial] = React.useState(false)
   const [materialDraft, setMaterialDraft] = React.useState("")
 
@@ -973,6 +976,17 @@ export function OrderDetailPage({ id }: { id: string }) {
         </CardContent>
       </Card>
 
+      {expenseForm && (
+        <ExpenseForm
+          expense={expenseForm.expense}
+          orderId={order.id}
+          onClose={() => setExpenseForm(null)}
+          onSaved={() => {
+            setExpenseForm(null)
+            void loadOrder()
+          }}
+        />
+      )}
       {showEditOrder && (
         <OrderEditDialog
           order={order}
@@ -1107,55 +1121,82 @@ export function OrderDetailPage({ id }: { id: string }) {
       </Card>
 
       {/* Expenses */}
-      {expenses.length > 0 && (
-        <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Expenses</CardTitle>
-            <Button variant="outline" size="sm" onClick={() => navigate({ name: "expenses" })}>
-              Manage
-            </Button>
-          </CardHeader>
-          <CardContent className="p-0">
-            {isMobile ? (
-              <div className="flex flex-col divide-y">
-                {expenses.map((e) => (
-                  <div key={e.id} className="flex flex-col gap-2 p-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-sm">{e.expense_number}</span>
-                      <span className="font-semibold">{formatCurrency(e.amount)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
-                      <ExpenseCategoryBadge category={e.category} />
-                      <span>{formatDate(e.expense_date)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Expense #</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {expenses.map((e) => (
-                    <TableRow key={e.id}>
-                      <TableCell className="font-mono text-xs">{e.expense_number}</TableCell>
-                      <TableCell className="text-sm">{formatDate(e.expense_date)}</TableCell>
-                      <TableCell><ExpenseCategoryBadge category={e.category} /></TableCell>
-                      <TableCell className="text-right font-medium">{formatCurrency(e.amount)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+      <Card>
+        <CardHeader className="flex-row items-center justify-between">
+          <CardTitle>Expenses</CardTitle>
+          <div className="flex gap-2">
+            {canRecordExpense && (
+              <Button size="sm" onClick={() => setExpenseForm({ expense: null })}>
+                <Plus className="size-4" /> Add Expense
+              </Button>
             )}
-          </CardContent>
-        </Card>
-      )}
+            {expenses.length > 0 && (
+              <Button variant="outline" size="sm" onClick={() => navigate({ name: "expenses" })}>
+                Manage
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {expenses.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No expenses recorded for this order</p>
+          ) : isMobile ? (
+            <div className="flex flex-col divide-y">
+              {expenses.map((e) => (
+                <div key={e.id} className="flex flex-col gap-2 p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-sm">{e.expense_number}</span>
+                    <span className="flex items-center gap-2 font-semibold">
+                      {formatCurrency(e.amount)}
+                      {canRecordExpense && (
+                        <Button variant="ghost" size="icon-sm" onClick={() => setExpenseForm({ expense: e })}>
+                          <Pencil className="size-3.5" />
+                        </Button>
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+                    <ExpenseCategoryBadge category={e.category} />
+                    <span>{formatDate(e.expense_date)}</span>
+                  </div>
+                  {e.description && <p className="text-xs text-muted-foreground">{e.description}</p>}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Expense #</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  {canRecordExpense && <TableHead className="w-10"></TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {expenses.map((e) => (
+                  <TableRow key={e.id}>
+                    <TableCell className="font-mono text-xs">{e.expense_number}</TableCell>
+                    <TableCell className="text-sm">{formatDate(e.expense_date)}</TableCell>
+                    <TableCell><ExpenseCategoryBadge category={e.category} /></TableCell>
+                    <TableCell className="max-w-[260px] truncate text-sm text-muted-foreground">{e.description || "—"}</TableCell>
+                    <TableCell className="text-right font-medium">{formatCurrency(e.amount)}</TableCell>
+                    {canRecordExpense && (
+                      <TableCell>
+                        <Button variant="ghost" size="icon-sm" onClick={() => setExpenseForm({ expense: e })}>
+                          <Pencil className="size-3.5" />
+                        </Button>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Notes */}
       {(order.special_instructions || order.internal_notes) && (

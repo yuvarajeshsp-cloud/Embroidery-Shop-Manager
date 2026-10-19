@@ -1,5 +1,6 @@
 import * as React from "react"
 import { ArrowLeft, ArrowRight, Camera, Check, ChevronDown, ChevronsUpDown, Plus, Trash2, X } from "lucide-react"
+import { isOnline } from "@/lib/offline/connectivity"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/use-auth"
 import { logAudit } from "@/lib/audit"
@@ -60,8 +61,8 @@ interface DraftItem {
   manual_unit_price: string
   setup_digitizing_charge: number
   notes: string
-  photoFile: File | null
-  photoPreviewUrl: string
+  /** Pictures of the customer's material or the design, sent up after the order is saved. */
+  photos: { id: string; file: File; url: string }[]
 }
 
 export function NewOrderPage() {
@@ -107,9 +108,7 @@ export function NewOrderPage() {
 
   React.useEffect(() => {
     return () => {
-      itemsRef.current.forEach((i) => {
-        if (i.photoPreviewUrl) URL.revokeObjectURL(i.photoPreviewUrl)
-      })
+      itemsRef.current.forEach((i) => i.photos.forEach((p) => URL.revokeObjectURL(p.url)))
     }
   }, [])
 
@@ -156,8 +155,7 @@ export function NewOrderPage() {
           manual_unit_price: "",
           setup_digitizing_charge: 0,
           notes: "",
-          photoFile: null,
-          photoPreviewUrl: "",
+          photos: [],
         },
       ])
     }
@@ -184,8 +182,7 @@ export function NewOrderPage() {
         manual_unit_price: "",
         setup_digitizing_charge: 0,
         notes: "",
-        photoFile: null,
-        photoPreviewUrl: "",
+        photos: [],
       },
     ])
   }
@@ -211,18 +208,33 @@ export function NewOrderPage() {
 
   function removeItem(tempId: string) {
     setItems((prev) => {
-      const item = prev.find((i) => i.tempId === tempId)
-      if (item?.photoPreviewUrl) URL.revokeObjectURL(item.photoPreviewUrl)
+      prev.find((i) => i.tempId === tempId)?.photos.forEach((p) => URL.revokeObjectURL(p.url))
       return prev.filter((i) => i.tempId !== tempId)
     })
   }
 
-  function setItemPhoto(tempId: string, file: File | null) {
+  const MAX_PHOTOS = 6
+
+  function addItemPhotos(tempId: string, files: FileList | null) {
+    const picked = Array.from(files || []).filter((f) => f.type.startsWith("image/"))
+    if (picked.length === 0) return
     setItems((prev) =>
       prev.map((i) => {
         if (i.tempId !== tempId) return i
-        if (i.photoPreviewUrl) URL.revokeObjectURL(i.photoPreviewUrl)
-        return { ...i, photoFile: file, photoPreviewUrl: file ? URL.createObjectURL(file) : "" }
+        const room = Math.max(0, MAX_PHOTOS - i.photos.length)
+        if (picked.length > room) toast.error(`Up to ${MAX_PHOTOS} photos per item`)
+        const added = picked.slice(0, room).map((file) => ({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file) }))
+        return { ...i, photos: [...i.photos, ...added] }
+      }),
+    )
+  }
+
+  function removeItemPhoto(tempId: string, photoId: string) {
+    setItems((prev) =>
+      prev.map((i) => {
+        if (i.tempId !== tempId) return i
+        i.photos.filter((p) => p.id === photoId).forEach((p) => URL.revokeObjectURL(p.url))
+        return { ...i, photos: i.photos.filter((p) => p.id !== photoId) }
       }),
     )
   }
@@ -344,9 +356,12 @@ export function NewOrderPage() {
       }
 
       const photosToUpload = items
-        .map((item, idx) => ({ file: item.photoFile, orderItemId: insertedItems?.[idx]?.id }))
-        .filter((p): p is { file: File; orderItemId: string } => !!p.file && !!p.orderItemId)
-      if (photosToUpload.length > 0) {
+        .flatMap((item, idx) => item.photos.map((p) => ({ file: p.file, orderItemId: insertedItems?.[idx]?.id })))
+        .filter((p): p is { file: File; orderItemId: string } => !!p.orderItemId)
+      if (photosToUpload.length > 0 && !isOnline()) {
+        // Pictures go to online storage, so they can't be sent from here with no connection.
+        toast.info("The order is saved. Its photos need internet — add them from the order's item once you're back online.")
+      } else if (photosToUpload.length > 0) {
         const results = await Promise.allSettled(
           photosToUpload.map((p) => uploadAttachment(p.orderItemId, "material", p.file, profile?.id)),
         )
@@ -636,41 +651,47 @@ export function NewOrderPage() {
                             </Select>
                           </Field>
                           <Field label="Description">
-                            <div className="flex items-center gap-2">
-                              <Input
-                                className="h-9"
-                                value={item.product_description}
-                                onChange={(e) => updateItem(item.tempId, { product_description: e.target.value })}
-                              />
-                              {item.photoPreviewUrl ? (
-                                <div className="relative size-9 shrink-0 overflow-hidden rounded-md border">
-                                  <img src={item.photoPreviewUrl} alt="" className="size-full object-cover" />
-                                  <button
-                                    type="button"
-                                    onClick={() => setItemPhoto(item.tempId, null)}
-                                    className="absolute right-0 top-0 flex size-4 items-center justify-center rounded-bl bg-background/90 text-muted-foreground hover:text-destructive"
-                                    title="Remove photo"
-                                  >
-                                    <X className="size-2.5" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <label
-                                  title="Add photo"
-                                  className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed text-muted-foreground hover:bg-muted/50"
-                                >
-                                  <Camera className="size-4" />
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    className="hidden"
-                                    onChange={(e) => setItemPhoto(item.tempId, e.target.files?.[0] || null)}
-                                  />
-                                </label>
-                              )}
-                            </div>
+                            <Input
+                              className="h-9"
+                              value={item.product_description}
+                              onChange={(e) => updateItem(item.tempId, { product_description: e.target.value })}
+                            />
                           </Field>
                         </div>
+
+                        <Field label="Photos (optional)">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {item.photos.map((p) => (
+                              <div key={p.id} className="relative size-16 shrink-0 overflow-hidden rounded-md border">
+                                <img src={p.url} alt="" className="size-full object-cover" />
+                                <button
+                                  type="button"
+                                  onClick={() => removeItemPhoto(item.tempId, p.id)}
+                                  className="absolute right-0.5 top-0.5 flex size-4 items-center justify-center rounded-full bg-background/90 text-muted-foreground hover:text-destructive"
+                                  title="Remove photo"
+                                >
+                                  <X className="size-2.5" />
+                                </button>
+                              </div>
+                            ))}
+                            {item.photos.length < MAX_PHOTOS && (
+                              <label className="flex size-16 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed text-muted-foreground hover:bg-muted/50">
+                                <Camera className="size-4" />
+                                <span className="text-[10px]">Add photos</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  multiple
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    addItemPhotos(item.tempId, e.target.files)
+                                    e.target.value = ""
+                                  }}
+                                />
+                              </label>
+                            )}
+                          </div>
+                        </Field>
 
                         <ItemPriceFields values={values} onChange={(patch) => updateItem(item.tempId, patch)} />
 

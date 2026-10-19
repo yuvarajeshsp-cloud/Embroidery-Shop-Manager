@@ -300,12 +300,15 @@ export function ExpensesPage() {
   )
 }
 
-function ExpenseForm({
+export function ExpenseForm({
   expense,
+  orderId,
   onClose,
   onSaved,
 }: {
   expense: Expense | null
+  /** Pre-selects the linked order (e.g. when adding from an order page). */
+  orderId?: string
   onClose: () => void
   onSaved: () => void
 }) {
@@ -314,7 +317,7 @@ function ExpenseForm({
   const [saving, setSaving] = React.useState(false)
   const [categories, setCategories] = React.useState<string[]>([])
   const [orders, setOrders] = React.useState<Order[]>([])
-  const [selectedOrderId, setSelectedOrderId] = React.useState(expense?.order_id || "")
+  const [selectedOrderId, setSelectedOrderId] = React.useState(expense?.order_id || orderId || "")
   const [form, setForm] = React.useState({
     expense_number: expense?.expense_number || generateExpenseNumber(),
     expense_date: expense?.expense_date || new Date().toISOString().split("T")[0],
