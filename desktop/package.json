@@ -1,7 +1,7 @@
 {
   "name": "shop-manager-desktop",
   "productName": "Shop Manager",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Shop Manager for Windows and Mac",
   "author": "Paavai Embroidery",
   "private": true,

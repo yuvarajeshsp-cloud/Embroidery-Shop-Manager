@@ -8,3 +8,9 @@
   Permissions-Policy: camera=(self), microphone=(), geolocation=(), payment=()
   Strict-Transport-Security: max-age=31536000
   Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'
+
+# The desktop apps check these for a newer web build; never serve a stale copy.
+/update-manifest.json
+  Cache-Control: no-store
+/update-manifest.sig
+  Cache-Control: no-store

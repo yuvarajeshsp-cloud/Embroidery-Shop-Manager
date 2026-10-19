@@ -21,6 +21,29 @@ npm run dist:win    # release/Shop Manager Setup <version>.exe (64-bit)
 npm run prepare-app && npm start
 ```
 
+## Updates
+
+The installed apps update their web content by themselves:
+
+1. `npm run build` (in the project root) also writes `dist/update-manifest.json`
+   — every file with its hash — and signs it (`update-manifest.sig`) with the
+   private key in `desktop/signing/update-private.pem`.
+2. Deploying the web app puts those files on the website.
+3. Each desktop app checks the website at start and every 3 hours. If the
+   signature is valid and the build is newer, it downloads only the changed
+   files, checks every hash, and offers "Restart now". It runs the new build
+   from the next launch; if that build fails to load it falls back to the
+   bundled one.
+
+A new **installer** is only needed when the desktop shell itself changes
+(`desktop/main.cjs`, Electron version, printer chooser). Bump `version` in
+`desktop/package.json` and `MIN_SHELL` in `scripts/make-update-manifest.mjs`
+together when a web build starts to depend on a newer shell.
+
+Keep `desktop/signing/update-private.pem` safe and backed up. Without it no
+update can be signed; apps would need a new installer carrying a new public key.
+Builds made without the key (e.g. on another machine) are ignored by the apps.
+
 ## Notes
 
 - `npm run dist:win:signed` signs the Windows installer with the certificate in
