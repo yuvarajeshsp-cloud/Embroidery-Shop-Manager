@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/command"
 import { useRouter } from "@/lib/router"
 import { fetchConfigItems, getDefaultStitchRate } from "@/lib/config"
+import { CustomerForm } from "@/pages/customers"
 import { toast } from "sonner"
 import { notify } from "@/lib/notify"
 import { CostTypeField, useCostTypes } from "@/components/additional-cost-form"
@@ -80,6 +81,9 @@ export function NewOrderPage() {
   const [customers, setCustomers] = React.useState<Customer[]>([])
   const [assignableUsers, setAssignableUsers] = React.useState<UserProfile[]>([])
   const [customerPickerOpen, setCustomerPickerOpen] = React.useState(false)
+  const [customerSearch, setCustomerSearch] = React.useState("")
+  const [newCustomer, setNewCustomer] = React.useState<{ name: string } | null>(null)
+  const [customerTypes, setCustomerTypes] = React.useState<string[]>([])
   const [orderStatuses, setOrderStatuses] = React.useState<string[]>([])
   const [priorities, setPriorities] = React.useState<string[]>([])
   const [productTypes, setProductTypes] = React.useState<string[]>([])
@@ -125,6 +129,7 @@ export function NewOrderPage() {
         generateOrderNumber(),
       ])
       setCustomers(custRes.data || [])
+      fetchConfigItems("customer_type").then((items) => setCustomerTypes(items.map((i) => i.name)))
       setAssignableUsers(usersRes.data || [])
       setOrderStatuses(statusItems.map((i) => i.name))
       setPriorities(priorityItems.map((i) => i.name))
@@ -410,6 +415,25 @@ export function NewOrderPage() {
         ))}
       </div>
 
+      {newCustomer && (
+        <CustomerForm
+          customer={null}
+          customerTypes={customerTypes}
+          initialName={newCustomer.name}
+          onClose={() => setNewCustomer(null)}
+          onSaved={(saved) => {
+            setNewCustomer(null)
+            if (!saved) return
+            // The new customer goes into the list and onto this order.
+            setCustomers((prev) =>
+              [...prev.filter((c) => c.id !== saved.id), saved].sort((a, b) => a.customer_business_name.localeCompare(b.customer_business_name)),
+            )
+            setOrderForm((f) => ({ ...f, customer_id: saved.id }))
+            setCustomerSearch("")
+          }}
+        />
+      )}
+
       {/* Step 1: Order Details */}
       {step === 1 && (
         <Card className="gap-3 py-4">
@@ -449,10 +473,23 @@ export function NewOrderPage() {
                   </PopoverTrigger>
                   <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                     <Command>
-                      <CommandInput placeholder="Search customers..." />
+                      <CommandInput placeholder="Search customers..." value={customerSearch} onValueChange={setCustomerSearch} />
                       <CommandList>
                         <CommandEmpty>No customer found.</CommandEmpty>
                         <CommandGroup>
+                          {/* Always offered, whatever is typed in the search */}
+                          <CommandItem
+                            forceMount
+                            value="__new_customer__"
+                            className="font-medium text-primary"
+                            onSelect={() => {
+                              setNewCustomer({ name: customerSearch.trim() })
+                              setCustomerPickerOpen(false)
+                            }}
+                          >
+                            <Plus className="mr-2 size-4" />
+                            {customerSearch.trim() ? `Add "${customerSearch.trim()}" as a new customer` : "Add a new customer"}
+                          </CommandItem>
                           {customers.map((c) => (
                             <CommandItem
                               key={c.id}

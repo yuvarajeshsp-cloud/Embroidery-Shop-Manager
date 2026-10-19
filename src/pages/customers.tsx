@@ -260,22 +260,26 @@ export function CustomersPage() {
   )
 }
 
-function CustomerForm({
+export function CustomerForm({
   customer,
   customerTypes,
+  initialName,
   onClose,
   onSaved,
 }: {
   customer: Customer | null
   customerTypes: string[]
+  /** A name to start a new customer with (e.g. what was typed into a search). */
+  initialName?: string
   onClose: () => void
-  onSaved: () => void
+  /** Gets the saved customer, so a caller can use it straight away. */
+  onSaved: (saved?: Customer) => void
 }) {
   const { profile } = useAuth()
   const [saving, setSaving] = React.useState(false)
   const [form, setForm] = React.useState({
     customer_code: customer?.customer_code || "",
-    customer_business_name: customer?.customer_business_name || "",
+    customer_business_name: customer?.customer_business_name || initialName || "",
     contact_person: customer?.contact_person || "",
     phone: customer?.phone || "",
     whatsapp: customer?.whatsapp || "",
@@ -309,6 +313,8 @@ function CustomerForm({
         if (error) throw error
         await logAudit(profile, "customers", customer.id, "UPDATE", customer as unknown as Record<string, unknown>, form as unknown as Record<string, unknown>)
         notify.success("Customer updated")
+        onSaved({ ...customer, ...form } as Customer)
+        return
       } else {
         let code = form.customer_code
         let data
@@ -331,6 +337,8 @@ function CustomerForm({
         if (!data) throw new Error("Failed to create customer")
         await logAudit(profile, "customers", data.id, "INSERT", null, { ...form, customer_code: code } as unknown as Record<string, unknown>)
         notify.success("Customer created")
+        onSaved({ ...data, customer_code: code } as Customer)
+        return
       }
       onSaved()
     } catch (err) {
