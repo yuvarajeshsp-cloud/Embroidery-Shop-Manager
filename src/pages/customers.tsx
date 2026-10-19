@@ -478,6 +478,12 @@ export function CustomerDetailPage({ id }: { id: string }) {
 
   // Which customer the page is currently showing: a spinner only when it changes.
   const shownId = React.useRef<string | null>(null)
+  const [showEdit, setShowEdit] = React.useState(false)
+  const [customerTypes, setCustomerTypes] = React.useState<string[]>([])
+
+  React.useEffect(() => {
+    fetchConfigItems("customer_type").then((items) => setCustomerTypes(items.map((i) => i.name)))
+  }, [])
 
   React.useEffect(() => {
     loadCustomer()
@@ -524,10 +530,26 @@ export function CustomerDetailPage({ id }: { id: string }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-x-hidden p-4 md:p-6">
       <PageHeader title={customer.customer_business_name} description={`Customer Code: ${customer.customer_code}`}>
+        <Button variant="outline" size="sm" onClick={() => setShowEdit(true)}>
+          <Pencil className="size-4" />
+          Edit
+        </Button>
         <Button variant="outline" size="sm" onClick={() => navigate({ name: "customers" })}>
           Back to List
         </Button>
       </PageHeader>
+
+      {showEdit && (
+        <CustomerForm
+          customer={customer}
+          customerTypes={customerTypes}
+          onClose={() => setShowEdit(false)}
+          onSaved={() => {
+            setShowEdit(false)
+            void loadCustomer()
+          }}
+        />
+      )}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-1">

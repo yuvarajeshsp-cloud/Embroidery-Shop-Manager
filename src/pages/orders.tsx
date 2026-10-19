@@ -475,6 +475,7 @@ export function OrderDetailPage({ id }: { id: string }) {
 
   const canReassign = profile?.role === "Administrator" || profile?.role === "Manager"
   const vocab = useVocabulary()
+  const [showEditOrder, setShowEditOrder] = React.useState(false)
   const [editingMaterial, setEditingMaterial] = React.useState(false)
   const [materialDraft, setMaterialDraft] = React.useState("")
 
@@ -662,7 +663,15 @@ export function OrderDetailPage({ id }: { id: string }) {
       {/* Order info + status */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle>Order Information</CardTitle></CardHeader>
+          <CardHeader className="flex-row items-center justify-between">
+            <CardTitle>Order Information</CardTitle>
+            {canReassign && (
+              <Button variant="outline" size="sm" onClick={() => setShowEditOrder(true)}>
+                <Pencil className="size-3.5" />
+                Edit
+              </Button>
+            )}
+          </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <div className="flex justify-between">
               <span className="text-xs text-muted-foreground">Customer</span>
@@ -964,6 +973,16 @@ export function OrderDetailPage({ id }: { id: string }) {
         </CardContent>
       </Card>
 
+      {showEditOrder && (
+        <OrderEditDialog
+          order={order}
+          onClose={() => setShowEditOrder(false)}
+          onSaved={(patch) => {
+            setShowEditOrder(false)
+            setOrder({ ...order, ...patch } as Order)
+          }}
+        />
+      )}
       {discountOpen && (
         <DiscountDialog
           order={order}
@@ -1717,6 +1736,147 @@ function PaymentForm({
           <Button onClick={handleSave} disabled={saving}>
             {saving ? "Saving..." : "Record Payment"}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** Edit an order's own details: dates, priority, channel and notes. Status, assignee and items keep their own controls. */
+function OrderEditDialog({
+  order,
+  onClose,
+  onSaved,
+}: {
+  order: Order
+  onClose: () => void
+  onSaved: (patch: Partial<Order>) => void
+}) {
+  const { profile } = useAuth()
+  const vocab = useVocabulary()
+  const [priorities, setPriorities] = React.useState<string[]>([])
+  const [channels, setChannels] = React.useState<string[]>([])
+  const [saving, setSaving] = React.useState(false)
+  const [form, setForm] = React.useState({
+    order_date: order.order_date,
+    required_date: order.required_date || "",
+    trial_date: order.trial_date || "",
+    priority: order.priority,
+    sales_channel: order.sales_channel || "",
+    material_received: order.material_received || "",
+    special_instructions: order.special_instructions || "",
+  })
+
+  React.useEffect(() => {
+    fetchConfigItems("priority").then((items) => setPriorities(items.map((i) => i.name)))
+    fetchConfigItems("sales_channel").then((items) => setChannels(items.map((i) => i.name)))
+  }, [])
+
+  // A saved value whose list entry has since been removed stays selectable.
+  const withCurrent = (list: string[], current: string) => (current && !list.includes(current) ? [current, ...list] : list)
+
+  async function handleSave() {
+    if (!form.order_date) {
+      toast.error("Order date is required")
+      return
+    }
+    if (form.required_date && form.required_date < form.order_date) {
+      toast.error("Delivery date can't be before the order date")
+      return
+    }
+    const patch = {
+      order_date: form.order_date,
+      required_date: form.required_date || null,
+      trial_date: form.trial_date || null,
+      priority: form.priority,
+      sales_channel: form.sales_channel || null,
+      material_received: form.material_received.trim() || null,
+      special_instructions: form.special_instructions.trim() || null,
+    }
+    setSaving(true)
+    try {
+      const { error } = await supabase
+        .from("orders")
+        .update({ ...patch, updated_at: new Date().toISOString(), updated_by: profile?.id })
+        .eq("id", order.id)
+      if (error) throw error
+      await logAudit(
+        profile,
+        "orders",
+        order.id,
+        "UPDATE",
+        Object.fromEntries(Object.keys(patch).map((k) => [k, order[k as keyof Order]])) as Record<string, unknown>,
+        patch as Record<string, unknown>,
+      )
+      notify.success(`Order ${order.order_number} updated`)
+      onSaved(patch)
+    } catch (err) {
+      console.error(err)
+      toast.error("Failed to save the order")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Edit Order {order.order_number}</DialogTitle>
+          <DialogDescription>Status, assignee, items and discount are changed from the order page itself.</DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Order date</Label>
+            <Input type="date" value={form.order_date} onChange={(e) => setForm({ ...form, order_date: e.target.value })} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Delivery date</Label>
+            <Input type="date" value={form.required_date} onChange={(e) => setForm({ ...form, required_date: e.target.value })} />
+          </div>
+          {(vocab.usesTrialDate || order.trial_date) && (
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">Trial / Fitting</Label>
+              <Input type="date" value={form.trial_date} onChange={(e) => setForm({ ...form, trial_date: e.target.value })} />
+            </div>
+          )}
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Priority</Label>
+            <Select value={form.priority} onValueChange={(v) => setForm({ ...form, priority: v })}>
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {withCurrent(priorities, form.priority).map((p) => (
+                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Sales channel</Label>
+            <Select value={form.sales_channel || "none"} onValueChange={(v) => setForm({ ...form, sales_channel: v === "none" ? "" : v })}>
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {withCurrent(channels, form.sales_channel).map((c) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {(vocab.usesMaterialReceived || order.material_received) && (
+            <div className="col-span-2 flex flex-col gap-1.5">
+              <Label className="text-xs">Material received</Label>
+              <Input value={form.material_received} onChange={(e) => setForm({ ...form, material_received: e.target.value })} />
+            </div>
+          )}
+          <div className="col-span-2 flex flex-col gap-1.5">
+            <Label className="text-xs">Special instructions</Label>
+            <Textarea rows={3} value={form.special_instructions} onChange={(e) => setForm({ ...form, special_instructions: e.target.value })} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
