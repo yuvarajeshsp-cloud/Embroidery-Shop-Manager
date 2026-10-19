@@ -112,7 +112,11 @@ type EnrichedOrder = Order & {
 
 export function OrdersPage() {
   const { navigate } = useRouter()
+  const { profile } = useAuth()
   const isMobile = useIsMobile()
+  // Same people who can edit from the order page.
+  const canEditOrder = profile?.role === "Administrator" || profile?.role === "Manager"
+  const [editOrder, setEditOrder] = React.useState<Order | null>(null)
   const [orders, setOrders] = React.useState<EnrichedOrder[]>([])
   const [loading, setLoading] = React.useState(true)
   const [search, setSearch] = React.useState("")
@@ -318,10 +322,10 @@ export function OrdersPage() {
                 const payStatus = derivePaymentStatus(o.order_items || [], o.payments || [], o.order_additional_costs || [], o)
                 const overdue = isOverdue(o.required_date) && !isTerminalStatus(o.order_status)
                 return (
+                  <div key={o.id} className="relative">
                   <button
-                    key={o.id}
                     onClick={() => navigate({ name: "order-detail", id: o.id })}
-                    className="flex items-start gap-3 p-4 text-left active:bg-accent"
+                    className="flex w-full items-start gap-3 p-4 text-left active:bg-accent"
                   >
                     <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted/30">
                       {o.thumbnailAttachment ? (
@@ -361,6 +365,18 @@ export function OrdersPage() {
                     </div>
                     </div>
                   </button>
+                  {canEditOrder && (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="absolute bottom-2 right-2"
+                      aria-label={`Edit order ${o.order_number}`}
+                      onClick={() => setEditOrder(o)}
+                    >
+                      <Pencil className="size-3.5" />
+                    </Button>
+                  )}
+                  </div>
                 )
               })}
             </div>
@@ -378,6 +394,7 @@ export function OrdersPage() {
                   <TableHead>Assigned To</TableHead>
                   <TableHead>Payment</TableHead>
                   <TableHead className="text-right">Total</TableHead>
+                  {canEditOrder && <TableHead className="w-10"></TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -422,6 +439,21 @@ export function OrdersPage() {
                       </TableCell>
                       <TableCell><PaymentStatusBadge status={payStatus} /></TableCell>
                       <TableCell className="text-right font-medium">{formatCurrency(total)}</TableCell>
+                      {canEditOrder && (
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Edit order ${o.order_number}`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setEditOrder(o)
+                            }}
+                          >
+                            <Pencil className="size-3.5" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   )
                 })}
@@ -430,6 +462,18 @@ export function OrdersPage() {
           )}
         </CardContent>
       </Card>
+
+      {editOrder && (
+        <OrderEditDialog
+          order={editOrder}
+          onClose={() => setEditOrder(null)}
+          onSaved={(patch) => {
+            const id = editOrder.id
+            setEditOrder(null)
+            setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)))
+          }}
+        />
+      )}
 
       <ExportDialog
         open={showExport}
