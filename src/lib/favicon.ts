@@ -1,4 +1,4 @@
-const DEFAULT_HREF = "/favicon.svg"
+const DEFAULT_HREF = "/favicon.png"
 const ICON_SIZE = 64
 
 let lastSourceHref: string | null | undefined
@@ -18,7 +18,7 @@ function getLink(): HTMLLinkElement {
 function applyHref(href: string, isDefault: boolean) {
   const link = getLink()
   if (isDefault) {
-    link.type = "image/svg+xml"
+    link.type = "image/png"
   } else {
     link.removeAttribute("type")
   }

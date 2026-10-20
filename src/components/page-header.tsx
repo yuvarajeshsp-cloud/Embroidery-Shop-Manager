@@ -37,7 +37,7 @@ export function PageHeader({ title, description, children, actions, className }:
               {companyLogo ? (
                 <img src={companyLogo} alt={companyName} className="h-full w-full object-cover" />
               ) : (
-                <img src="/favicon.svg" alt={companyName} className="h-full w-full object-cover" />
+                <img src="/app-icon.png" alt={companyName} className="h-full w-full object-cover" />
               )}
             </div>
             <div className="flex min-w-0 flex-col gap-0.5">

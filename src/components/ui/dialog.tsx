@@ -186,7 +186,7 @@ function DialogPage({
             <span className="sr-only">Back</span>
           </DialogPrimitive.Close>
           <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-background">
-            <img src={companyLogo || "/favicon.svg"} alt="" className="h-full w-full object-cover" />
+            <img src={companyLogo || "/app-icon.png"} alt="" className="h-full w-full object-cover" />
           </div>
           <div className="flex min-w-0 flex-col gap-0.5">
             <span className="truncate text-[11px] font-semibold uppercase leading-tight tracking-[0.12em] text-muted-foreground">

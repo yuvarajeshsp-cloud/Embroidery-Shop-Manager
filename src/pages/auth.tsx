@@ -175,11 +175,11 @@ export function AuthScreen() {
     <div className="flex min-h-svh items-center justify-center bg-gradient-to-br from-slate-50 to-slate-200 p-4 dark:from-slate-950 dark:to-slate-900">
       <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center gap-2">
-          <img src="/favicon.svg" alt="" className="size-14 rounded-xl shadow-lg" />
-          <div className="flex flex-col items-center">
-            <h1 className="text-2xl font-bold tracking-tight">{APP_NAME}</h1>
-            <p className="text-sm text-muted-foreground">{APP_TAGLINE}</p>
-          </div>
+          {/* The logo's dark purple needs a light ground, so dark mode gets a white plate. */}
+          <h1 className="rounded-2xl dark:bg-white dark:px-5 dark:py-3">
+            <img src="/logo-wordmark.png" alt={APP_NAME} className="h-auto w-56" />
+          </h1>
+          <p className="text-sm text-muted-foreground">{APP_TAGLINE}</p>
         </div>
 
         <Card>

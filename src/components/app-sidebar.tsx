@@ -131,7 +131,7 @@ export function AppSidebar() {
             {companyLogo ? (
               <img src={companyLogo} alt={companyName} className="h-full w-full object-cover" />
             ) : (
-              <img src="/favicon.svg" alt={companyName} className="h-full w-full object-cover" />
+              <img src="/app-icon.png" alt={companyName} className="h-full w-full object-cover" />
             )}
           </div>
           <div className="flex flex-col">

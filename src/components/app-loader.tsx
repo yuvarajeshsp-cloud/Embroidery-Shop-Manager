@@ -14,7 +14,7 @@ function LogoSpinner({ size = "md" }: { size?: keyof typeof SIZE_CLASSES }) {
       <div className="absolute inset-0 animate-spin rounded-full border-2 border-muted border-t-primary" />
       <div className="absolute inset-[3px] flex items-center justify-center overflow-hidden rounded-full bg-background">
         {/* The shop's own logo when it has one, otherwise the app's logo. */}
-        <img src={logo || "/favicon.svg"} alt="" className="size-full object-cover" />
+        <img src={logo || "/app-icon.png"} alt="" className="size-full object-cover" />
       </div>
     </div>
   )
