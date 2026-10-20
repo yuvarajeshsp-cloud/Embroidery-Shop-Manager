@@ -520,6 +520,8 @@ export function OrderDetailPage({ id }: { id: string }) {
   const [assignableUsers, setAssignableUsers] = React.useState<UserProfile[]>([])
 
   const canReassign = profile?.role === "Administrator" || profile?.role === "Manager"
+  // Operators work the production stages; prices, items, payments and discounts are not theirs to change.
+  const canEditOrderData = profile?.role !== "Operator"
   const vocab = useVocabulary()
   const [showEditOrder, setShowEditOrder] = React.useState(false)
   const [expenseForm, setExpenseForm] = React.useState<{ expense: Expense | null } | null>(null)
@@ -866,9 +868,11 @@ export function OrderDetailPage({ id }: { id: string }) {
               </span>
               <span className="flex items-center gap-2">
                 {discountAmount > 0 && <span className="text-sm text-emerald-600">−{formatCurrency(discountAmount)}</span>}
-                <Button variant="ghost" size="xs" onClick={() => setDiscountOpen(true)}>
-                  {discountAmount > 0 ? "Edit" : "Add"}
-                </Button>
+                {canEditOrderData && (
+                  <Button variant="ghost" size="xs" onClick={() => setDiscountOpen(true)}>
+                    {discountAmount > 0 ? "Edit" : "Add"}
+                  </Button>
+                )}
               </span>
             </div>
             <div className="flex justify-between border-t pt-2">
@@ -887,10 +891,12 @@ export function OrderDetailPage({ id }: { id: string }) {
               <span className="text-xs text-muted-foreground">Payment Status</span>
               <PaymentStatusBadge status={payStatus} />
             </div>
-            <Button variant="outline" size="sm" className="mt-2" onClick={() => setShowPaymentForm(true)}>
-              <Plus className="size-4" />
-              Record Payment
-            </Button>
+            {canEditOrderData && (
+              <Button variant="outline" size="sm" className="mt-2" onClick={() => setShowPaymentForm(true)}>
+                <Plus className="size-4" />
+                Record Payment
+              </Button>
+            )}
           </CardContent>
         </Card>
 
@@ -900,9 +906,11 @@ export function OrderDetailPage({ id }: { id: string }) {
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle>Order Items</CardTitle>
-          <Button size="sm" onClick={() => { setEditingItem(null); setShowItemForm(true) }}>
-            <Plus className="size-4" /> Add Item
-          </Button>
+          {canEditOrderData && (
+            <Button size="sm" onClick={() => { setEditingItem(null); setShowItemForm(true) }}>
+              <Plus className="size-4" /> Add Item
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="p-0">
           {items.length === 0 ? (
@@ -916,14 +924,16 @@ export function OrderDetailPage({ id }: { id: string }) {
                       <span className="text-xs text-muted-foreground">#{idx + 1}</span>
                       <Badge variant="outline">{item.product_type}</Badge>
                     </div>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon-sm" onClick={() => { setEditingItem(item); setShowItemForm(true) }}>
-                        <Pencil className="size-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon-sm" onClick={() => handleDeleteItem(item.id)}>
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </div>
+                    {canEditOrderData && (
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon-sm" onClick={() => { setEditingItem(item); setShowItemForm(true) }}>
+                          <Pencil className="size-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" onClick={() => handleDeleteItem(item.id)}>
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                   {item.product_description && (
                     <div className="text-sm">{item.product_description}</div>
@@ -949,6 +959,7 @@ export function OrderDetailPage({ id }: { id: string }) {
                     <span className="font-semibold">{formatCurrency(orderItemTotal(item))}</span>
                   </div>
                   <ItemCosts
+                    readOnly={!canEditOrderData}
                     costs={additionalCosts.filter((c) => c.order_item_id === item.id)}
                     onAdd={() => setCostForm({ itemId: item.id, cost: null })}
                     onEdit={(c) => setCostForm({ itemId: item.id, cost: c })}
@@ -995,20 +1006,23 @@ export function OrderDetailPage({ id }: { id: string }) {
                     <TableCell className="text-right">{formatCurrency(orderItemUnitPrice(item))}</TableCell>
                     <TableCell className="text-right font-medium">{formatCurrency(orderItemTotal(item))}</TableCell>
                     <TableCell>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon-sm" onClick={() => { setEditingItem(item); setShowItemForm(true) }}>
-                          <Pencil className="size-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => handleDeleteItem(item.id)}>
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </div>
+                      {canEditOrderData && (
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon-sm" onClick={() => { setEditingItem(item); setShowItemForm(true) }}>
+                            <Pencil className="size-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon-sm" onClick={() => handleDeleteItem(item.id)}>
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
+                      )}
                     </TableCell>
                   </TableRow>
                   <TableRow className="hover:bg-transparent">
                     <TableCell />
                     <TableCell colSpan={anyStitchItem ? 9 : 7} className="pb-3 pt-0">
                       <ItemCosts
+                        readOnly={!canEditOrderData}
                         costs={additionalCosts.filter((c) => c.order_item_id === item.id)}
                         onAdd={() => setCostForm({ itemId: item.id, cost: null })}
                         onEdit={(c) => setCostForm({ itemId: item.id, cost: c })}
@@ -1471,11 +1485,13 @@ function ShareToCustomerDialog({
 /** An item's additional costs: one line each, with a way to add more. */
 function ItemCosts({
   costs,
+  readOnly,
   onAdd,
   onEdit,
   onDelete,
 }: {
   costs: OrderAdditionalCost[]
+  readOnly?: boolean
   onAdd: () => void
   onEdit: (cost: OrderAdditionalCost) => void
   onDelete: (cost: OrderAdditionalCost) => void
@@ -1487,22 +1503,28 @@ function ItemCosts({
           <span className="min-w-0 truncate text-muted-foreground">{c.cost_type}</span>
           <span className="flex shrink-0 items-center gap-1">
             <span className="font-medium">{formatCurrency(c.amount)}</span>
-            <Button variant="ghost" size="icon-xs" onClick={() => onEdit(c)}>
-              <Pencil className="size-3" />
-            </Button>
-            <Button variant="ghost" size="icon-xs" onClick={() => onDelete(c)}>
-              <Trash2 className="size-3" />
-            </Button>
+            {!readOnly && (
+              <>
+                <Button variant="ghost" size="icon-xs" onClick={() => onEdit(c)}>
+                  <Pencil className="size-3" />
+                </Button>
+                <Button variant="ghost" size="icon-xs" onClick={() => onDelete(c)}>
+                  <Trash2 className="size-3" />
+                </Button>
+              </>
+            )}
           </span>
         </div>
       ))}
-      <button
-        type="button"
-        onClick={onAdd}
-        className="flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-      >
-        <Plus className="size-3" /> Add cost
-      </button>
+      {!readOnly && (
+        <button
+          type="button"
+          onClick={onAdd}
+          className="flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <Plus className="size-3" /> Add cost
+        </button>
+      )}
     </div>
   )
 }
