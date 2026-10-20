@@ -61,3 +61,6 @@ desktop/node_modules
 desktop/app
 desktop/release
 desktop/signing
+
+# Installers handed out for testing
+installers/
