@@ -38,6 +38,7 @@ import { usePlatformAdmin } from "@/lib/platform-admin"
 import { useVocabulary } from "@/lib/shop-type"
 import { allowedRouteNames } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
+import { APP_NAME, APP_TAGLINE } from "@/lib/app-info"
 
 interface NavItem {
   label: string
@@ -135,7 +136,7 @@ export function AppSidebar() {
           </div>
           <div className="flex flex-col">
             <span className="text-sm font-bold text-sidebar-foreground">{companyName}</span>
-            <span className="text-xs text-sidebar-foreground/60">Business Management System</span>
+            <span className="text-xs text-sidebar-foreground/60">{companyName === APP_NAME ? APP_TAGLINE : APP_NAME}</span>
           </div>
         </div>
       </SidebarHeader>

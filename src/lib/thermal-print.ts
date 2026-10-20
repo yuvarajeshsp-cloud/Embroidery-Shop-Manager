@@ -18,6 +18,7 @@ import {
   derivePaymentStatus,
 } from "./helpers"
 import type { Order, OrderItem, OrderAdditionalCost, Payment, Customer } from "./types"
+import { APP_NAME } from "./app-info"
 
 export interface ThermalInvoiceData {
   order: Order
@@ -138,7 +139,7 @@ function drawThermalRow(doc: jsPDF, label: string, value: string, y: number, bol
 type BusinessSettings = Record<string, string>
 
 function drawThermalHeader(doc: jsPDF, y: number, settings: BusinessSettings): number {
-  const name = (settings.company_name || "Business Management System").trim()
+  const name = (settings.company_name || APP_NAME).trim()
   const tagline = (settings.company_tagline || "").trim()
   const phone = (settings.company_phone || "").trim()
   const email = (settings.company_email || "").trim()
@@ -366,7 +367,7 @@ async function generateThermalOrderTagPdf(order: Order, customer: Customer | nul
 
 async function businessHeaderHtml(): Promise<string> {
   const settings = await fetchBusinessSettings()
-  const name = (settings.company_name || "Business Management System").trim()
+  const name = (settings.company_name || APP_NAME).trim()
   const tagline = (settings.company_tagline || "").trim()
   const phone = (settings.company_phone || "").trim()
   const email = (settings.company_email || "").trim()

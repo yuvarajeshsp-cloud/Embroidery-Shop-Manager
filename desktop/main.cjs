@@ -47,7 +47,7 @@ protocol.registerSchemesAsPrivileged([
   { scheme: SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
 ])
 
-app.setName("Shop Manager")
+app.setName("Thiyal Desk")
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
@@ -163,7 +163,7 @@ function announceUpdate() {
       defaultId: 0,
       cancelId: 1,
       message: "An update is ready",
-      detail: "Restart Shop Manager to start using the latest version.",
+      detail: "Restart Thiyal Desk to start using the latest version.",
     })
     .then(({ response }) => {
       if (response === 0) {
@@ -322,7 +322,7 @@ function createWindow() {
     minHeight: 600,
     backgroundColor: "#f5f6fa",
     autoHideMenuBar: true,
-    title: "Shop Manager",
+    title: "Thiyal Desk",
     webPreferences: { contextIsolation: true, sandbox: true, spellcheck: false },
   })
   setupBluetooth(mainWindow)

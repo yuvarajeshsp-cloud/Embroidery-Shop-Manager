@@ -1,4 +1,4 @@
-# Shop Manager — desktop app (Windows and Mac)
+# Thiyal Desk — desktop app (Windows and Mac)
 
 An Electron shell around the built web app. It is Chromium inside, so direct
 receipt printing (USB, paired Bluetooth, Bluetooth Low Energy) works the same as
@@ -10,7 +10,7 @@ in Chrome, and the offline mode works too.
 cd desktop
 npm install
 npm run dist:mac    # release/*.dmg (Apple Silicon and Intel) and *.zip
-npm run dist:win    # release/Shop Manager Setup <version>.exe (64-bit)
+npm run dist:win    # release/Thiyal Desk Setup <version>.exe (64-bit)
 ```
 
 `prepare-app` rebuilds the web app first and copies it into `desktop/app`.

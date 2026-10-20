@@ -1,4 +1,4 @@
-package com.paavaiembroidery.shopmanager;
+package com.rkapps.thiyaldesk;
 
 import com.getcapacitor.BridgeActivity;
 

@@ -13,6 +13,7 @@ import { SHOP_TYPES, DEFAULT_SHOP_TYPE, type ShopType } from "@/lib/shop-type"
 import { cn } from "@/lib/utils"
 import { authenticateWithBiometry, getBiometryAvailability, isBiometricUnlockEnabled, setBiometricUnlockEnabled } from "@/lib/biometric-unlock"
 import { getBiometricCredentials, hasBiometricCredentials, saveBiometricCredentials, clearBiometricCredentials } from "@/lib/biometric-credentials"
+import { APP_NAME, APP_TAGLINE } from "@/lib/app-info"
 
 // Passkeys (WebAuthn) are a desktop/mobile *browser* feature, not something
 // the app's embedded native WebView reliably supports — same split the
@@ -175,7 +176,10 @@ export function AuthScreen() {
       <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center gap-2">
           <img src="/favicon.svg" alt="" className="size-14 rounded-xl shadow-lg" />
-          <h1 className="text-2xl font-bold tracking-tight">Business Management System</h1>
+          <div className="flex flex-col items-center">
+            <h1 className="text-2xl font-bold tracking-tight">{APP_NAME}</h1>
+            <p className="text-sm text-muted-foreground">{APP_TAGLINE}</p>
+          </div>
         </div>
 
         <Card>

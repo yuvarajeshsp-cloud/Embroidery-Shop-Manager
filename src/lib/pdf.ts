@@ -20,6 +20,7 @@ import {
 } from "./helpers"
 import { fetchBusinessSettings } from "./config"
 import { DEFAULT_SHOP_TYPE, isShopType, pricingModeOf, vocabularyFor } from "./shop-type"
+import { APP_NAME } from "./app-info"
 
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -91,7 +92,7 @@ export async function generateOrderPdf(data: OrderPdfData): Promise<Blob> {
   const additionalCosts = data.additionalCosts || []
   const settings = await fetchBusinessSettings()
 
-  const companyName = (settings.company_name || "Business Management System").trim()
+  const companyName = (settings.company_name || APP_NAME).trim()
   const companyTagline = (settings.company_tagline || "").trim()
   const companyEmail = (settings.company_email || "").trim()
   const companyPhone = (settings.company_phone || "").trim()

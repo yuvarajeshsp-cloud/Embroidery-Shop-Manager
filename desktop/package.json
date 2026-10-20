@@ -1,8 +1,8 @@
 {
   "name": "shop-manager-desktop",
-  "productName": "Shop Manager",
+  "productName": "Thiyal Desk",
   "version": "3.1.0",
-  "description": "Shop Manager for Windows and Mac",
+  "description": "Thiyal Desk — Business Management System for Windows and Mac",
   "author": "Paavai Embroidery",
   "private": true,
   "main": "main.cjs",
@@ -15,8 +15,8 @@
     "dist:win:signed": "npm run prepare-app && CSC_LINK=\"$PWD/signing/shop-manager-test.pfx\" CSC_KEY_PASSWORD=\"$(cat signing/password.txt)\" electron-builder --win"
   },
   "build": {
-    "appId": "com.paavaiembroidery.shopmanager.desktop",
-    "productName": "Shop Manager",
+    "appId": "com.rkapps.thiyaldesk",
+    "productName": "Thiyal Desk",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -47,8 +47,8 @@
         }
       ],
       "extendInfo": {
-        "NSBluetoothAlwaysUsageDescription": "Shop Manager uses Bluetooth to connect to your receipt printer.",
-        "NSBluetoothPeripheralUsageDescription": "Shop Manager uses Bluetooth to connect to your receipt printer."
+        "NSBluetoothAlwaysUsageDescription": "Thiyal Desk uses Bluetooth to connect to your receipt printer.",
+        "NSBluetoothPeripheralUsageDescription": "Thiyal Desk uses Bluetooth to connect to your receipt printer."
       }
     },
     "win": {

@@ -1,6 +1,7 @@
 import * as React from "react"
 import { fetchBusinessSettings } from "./config"
 import { DEFAULT_SHOP_TYPE, isShopType, type ShopType } from "./shop-type-core"
+import { APP_NAME } from "./app-info"
 
 /**
  * Company name/logo, shared across the sidebar, page header, document title
@@ -13,7 +14,7 @@ import { DEFAULT_SHOP_TYPE, isShopType, type ShopType } from "./shop-type-core"
 
 const STORAGE_KEY = "business_profile_cache_v1"
 const OWNER_KEY = "business_profile_cache_owner_v1"
-const DEFAULT_NAME = "Business Management System"
+const DEFAULT_NAME = APP_NAME
 
 export interface BusinessProfile {
   companyName: string

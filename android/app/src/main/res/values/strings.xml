@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Business Management System</string>
-    <string name="title_activity_main">Business Management System</string>
-    <string name="package_name">com.paavaiembroidery.shopmanager</string>
-    <string name="custom_url_scheme">com.paavaiembroidery.shopmanager</string>
+    <string name="app_name">Thiyal Desk</string>
+    <string name="title_activity_main">Thiyal Desk</string>
+    <string name="package_name">com.rkapps.thiyaldesk</string>
+    <string name="custom_url_scheme">com.rkapps.thiyaldesk</string>
 </resources>

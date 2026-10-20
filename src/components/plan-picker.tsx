@@ -15,6 +15,7 @@ import {
 } from "@/lib/subscription"
 import type { PlatformSettings } from "@/lib/types"
 import { useAuth } from "@/lib/use-auth"
+import { APP_NAME } from "@/lib/app-info"
 
 /** Monthly/yearly plan cards with Razorpay checkout — shared between the normal Subscription page and the full-screen paywall. */
 export function PlanPicker({ onSubscribed }: { onSubscribed: () => void }) {
@@ -39,7 +40,7 @@ export function PlanPicker({ onSubscribed }: { onSubscribed: () => void }) {
       const checkout = new window.Razorpay!({
         key: razorpay_key_id,
         subscription_id: razorpay_subscription_id,
-        name: "Business Management System",
+        name: APP_NAME,
         description: cycle === "monthly" ? "Monthly subscription" : "Yearly subscription",
         prefill: { name: profile?.display_name, email: profile?.email || user?.email },
         theme: { color: "#6366f1" },
